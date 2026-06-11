@@ -1,0 +1,80 @@
+{
+  "version": 3,
+  "updated_at": null,
+  "model": "two-tier: workspace CEO coordinates; project agents run as parallel detached background processes and report up",
+  "channels": {
+    "inbox": "org/ceo/INBOX.md",
+    "handoff_per_project": "org/projects/<id>/WORKSPACE_HANDOFF.md",
+    "state": "org/state.json",
+    "queue": "org/AGENT_QUEUE.json",
+    "jobs_dir": "org/jobs/",
+    "human_queue": "org/HUMAN_QUEUE.md",
+    "approvals": "org/ceo/APPROVALS.md",
+    "receipts_dir": "org/ceo/runs/"
+  },
+  "lib": "scripts/lib/ceo-waterfall.sh",
+  "dispatch": {
+    "mechanism": "background-process",
+    "note": "Jobs spawn as detached bash processes (PID files at org/jobs/<job-id>.pid, logs at org/jobs/<job-id>.log). cmux is DISPLAY ONLY — never used to execute jobs.",
+    "completion_detection": "PID liveness check",
+    "max_parallel": 3,
+    "model_tiering": {
+      "read-only-worker": "gemini-2.5-flash",
+      "scout": "gemini-2.5-flash",
+      "implementation-worker": "claude-sonnet-4-6",
+      "project-ceo-run": "claude-sonnet-4-6"
+    }
+  },
+  "provider_waterfall": {
+    "workspace_ceo": ["claude", "gemini", "ollama"],
+    "project_ceo": ["codex", "claude", "gemini", "ollama"],
+    "note": "The workspace CEO skips codex to preserve its quota for project work. Lockout files: org/ceo/runs/.<provider>-blocked-until"
+  },
+  "workspace_ceo": {
+    "id": "workspace-ceo",
+    "cmux_workspace": "workspace:1",
+    "status_key": "ceo",
+    "prompt": "org/ceo/WORKSPACE_CONTROLLER_PROMPT.md",
+    "driver_loop": "scripts/workspace-ceo-tick.sh",
+    "dispatcher": "scripts/omp-supervisor-once.sh",
+    "agent": "scripts/workspace-ceo-agent.sh",
+    "interval_seconds": 900,
+    "force_every_ticks": 4,
+    "note": "Single top-level loop: cockpit render → dispatcher → change-gated brain. Pause: touch org/ceo/runs/STOP; resume: rm it. cmux refs drift across restarts — resolve live panes via `cmux tree`."
+  },
+  "projects": {
+    "example-app": {
+      "project_ceo": "example-app-ceo",
+      "cmux_workspace": "workspace:2",
+      "prompt": "org/projects/example-app/PROJECT_CONTROLLER_PROMPT.md",
+      "handoff": "org/projects/example-app/WORKSPACE_HANDOFF.md",
+      "agent": "scripts/project-ceo-agent.sh example-app",
+      "dispatched_via": "AGENT_QUEUE.json → omp-supervisor-once.sh → background process",
+      "display_cmd": "scripts/project-floor-watch.sh example-app",
+      "allowed_job_types": ["project-ceo-run", "read-only-worker", "implementation-worker", "scout"],
+      "external_action_gate": true
+    },
+    "workspace": {
+      "project_ceo": "workspace-maintenance",
+      "prompt": "org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md",
+      "handoff": "org/projects/workspace/WORKSPACE_HANDOFF.md",
+      "agent": "scripts/project-ceo-agent.sh workspace",
+      "dispatched_via": "AGENT_QUEUE.json → omp-supervisor-once.sh → background process",
+      "allowed_job_types": ["implementation-worker", "read-only-worker", "scout"],
+      "note": "Maintenance lane for the workspace itself (housekeeping, consolidation, doc hygiene). Bootstrap it with: scripts/bootstrap-project.sh workspace",
+      "external_action_gate": true
+    }
+  },
+  "cost_control": {
+    "change_gated": true,
+    "model_tiering": true,
+    "note": "The CEO brain fires only when watched inputs changed (content hash, not mtime). Max 3 parallel jobs. Scout/read-only jobs use a cheap fast model."
+  },
+  "safety_gates": [
+    "No emails, DMs, forms, public posts, deploys, pushes, wallet actions, or transactions without explicit human approval.",
+    "Preserve dirty product-repo state unless the human explicitly asks to clean it.",
+    "Prefer read-only worker jobs until a project-specific edit scope is approved.",
+    "The CEO must draft (*.draft.md) + queue human approval before overwriting any PROJECT_CONTROLLER_PROMPT.md.",
+    "Email tooling may draft/append ONLY — never a send verb from any agent."
+  ]
+}

@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# ceo — talk to the Workspace CEO from any terminal pane.
+#
+#   ceo                  show status: projects, what's waiting on you, recent activity
+#   ceo watch            LIVE dashboard — all agents/jobs + what's waiting, refreshing
+#   ceo chat             TALK to the Workspace CEO live (conversational agent)
+#   ceo jobs             one-shot view of running/queued/recent jobs
+#   ceo approve "<x>"    approve something  (e.g. ceo approve "built-by-ai send Draft 1")
+#   ceo decline "<x>"    decline / hold something
+#   ceo ask "<q>"        ask the CEO a question (async — picked up next tick)
+#   ceo log              follow the CEO's live activity log
+#   ceo start            start the CEO driver loop (nohup daemon)
+#   ceo stop             pause the CEO driver loop (sets STOP flag)
+#   ceo help             this help
+#
+# `ceo chat` is the live interface — talk to it like a person, it reads state and acts.
+# approve/decline/ask are the quick async path (the loop picks them up next tick).
+
+set -uo pipefail
+ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ORG="$ROOT/org"
+APPROVALS="$ORG/ceo/APPROVALS.md"
+STATE="$ORG/state.json"
+HQ="$ORG/HUMAN_QUEUE.md"
+INBOX="$ORG/ceo/INBOX.md"
+RUN_DIR="$ORG/ceo/runs"
+
+c_bold=$'\e[1m'; c_dim=$'\e[2m'; c_grn=$'\e[32m'; c_yel=$'\e[33m'; c_cyn=$'\e[36m'; c_off=$'\e[0m'
+
+cmd="${1:-status}"; shift || true
+
+case "$cmd" in
+  chat|talk)
+    PROMPT_FILE="$ORG/ceo/CEO_CHAT_PROMPT.md"
+    if ! command -v claude >/dev/null 2>&1; then echo "claude CLI not found"; exit 1; fi
+    echo "${c_cyn}Connecting you to the Workspace CEO…${c_off}  ${c_dim}(Ctrl-C or 'exit' to leave)${c_off}"
+    echo "${c_dim}Talk normally: \"what's going on?\", \"have built-by-ai prep 3 more leads\", \"hold the fidget deploy\"…${c_off}"
+    echo
+    # Interactive Claude session, pre-loaded as the CEO operator, with org write access.
+    exec claude \
+      --append-system-prompt "$(cat "$PROMPT_FILE")" \
+      --add-dir "$ROOT" \
+      --dangerously-skip-permissions \
+      --model "${CEO_CHAT_MODEL:-claude-sonnet-4-6}" \
+      "Give me a quick status of the org."
+    ;;
+  approve|yes|ok)   exec "$ROOT/scripts/approve.sh" "APPROVE: $*" ;;
+  decline|no|hold)  exec "$ROOT/scripts/approve.sh" "DECLINE: $*" ;;
+  ask)              exec "$ROOT/scripts/approve.sh" "ASK: $*" ;;
+  log)              exec tail -f "$RUN_DIR/workspace-ceo-driver.log" ;;
+  watch)
+    trap 'tput cnorm 2>/dev/null; exit 0' INT TERM
+    tput civis 2>/dev/null || true   # hide cursor while live
+    while true; do
+      clear
+      node "$ROOT/scripts/ceo-dashboard.js" "$ROOT" 2>/dev/null || echo "(dashboard render error)"
+      sleep "${CEO_WATCH_INTERVAL:-5}"
+    done
+    ;;
+  start)
+    STOP_FILE="$RUN_DIR/STOP"
+    if [[ -f "$STOP_FILE" ]]; then
+      rm -f "$STOP_FILE"
+      echo "${c_grn}STOP flag cleared.${c_off}"
+    fi
+    LOCK="$RUN_DIR/.workspace-ceo-tick.lock"
+    if [[ -f "$LOCK" ]] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+      echo "${c_yel}CEO driver already running (PID $(cat "$LOCK")).${c_off}"; exit 0
+    fi
+    nohup "$ROOT/scripts/workspace-ceo-tick.sh" \
+      >> "$RUN_DIR/workspace-ceo-driver.log" 2>&1 &
+    echo "${c_grn}CEO driver started (PID $!). Follow: ceo log${c_off}"
+    exit 0
+    ;;
+  stop)
+    touch "$RUN_DIR/STOP"
+    echo "${c_yel}STOP flag set. Driver will pause after the current tick. Remove: rm $RUN_DIR/STOP${c_off}"
+    exit 0
+    ;;
+  jobs)
+    JOBS_DIR="$ROOT/org/jobs"
+    QUEUE="$ORG/AGENT_QUEUE.json"
+    echo "${c_bold}═══ Active Jobs ═══${c_off}  ${c_dim}$(date '+%H:%M:%S')${c_off}"
+    echo
+    # Running PIDs
+    echo "${c_bold}Running${c_off}"
+    found_running=0
+    for pid_file in "$JOBS_DIR"/*.pid; do
+      [[ -f "$pid_file" ]] || continue
+      JOB="$(basename "$pid_file" .pid)"
+      PID="$(cat "$pid_file")"
+      LOG="$JOBS_DIR/$JOB.log"
+      if kill -0 "$PID" 2>/dev/null; then
+        echo "  ${c_grn}● $JOB${c_off}  (pid=$PID)"
+        [[ -f "$LOG" ]] && tail -3 "$LOG" | sed 's/^/    /'
+        found_running=1
+      fi
+    done
+    [[ $found_running -eq 0 ]] && echo "  ${c_dim}none${c_off}"
+    echo
+    # Queue summary from AGENT_QUEUE.json
+    echo "${c_bold}Queue${c_off}"
+    node -e '
+      const q=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+      const jobs=q.jobs||[];
+      const queued=jobs.filter(j=>j.status==="queued");
+      const completed=jobs.filter(j=>j.status==="completed").slice(-3);
+      if(queued.length===0) console.log("  (no queued jobs)");
+      for(const j of queued) console.log("  ⏳ "+j.id+"  "+j.type+"  — "+j.description.slice(0,60));
+      if(completed.length) {
+        console.log("\nRecently completed:");
+        for(const j of completed) console.log("  ✓ "+j.id);
+      }
+    ' "$QUEUE" 2>/dev/null || echo "  (queue unreadable)"
+    echo
+    echo "${c_dim}job logs: $JOBS_DIR/${c_off}"
+    exit 0
+    ;;
+  help|-h|--help)
+    grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed '1d'; exit 0 ;;
+  status|"") : ;;  # fall through to status below
+  *) echo "Unknown: $cmd  (try: ceo, ceo jobs, ceo approve \"...\", ceo stop/start, ceo log)"; exit 1 ;;
+esac
+
+# ---- status view ----
+echo "${c_bold}═══ Workspace CEO ═══${c_off}  ${c_dim}$(date '+%a %H:%M')${c_off}"
+echo
+
+# driver alive?
+lock="$RUN_DIR/.workspace-ceo-tick.lock"
+if [[ -f "$lock" ]] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
+  echo "${c_grn}● running${c_off} (PID $(cat "$lock"))"
+else
+  echo "${c_yel}○ not running${c_off} — start it in the CEO pane"
+fi
+
+# projects
+echo; echo "${c_bold}Projects${c_off}"
+node -e '
+  const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+  for (const p of s.project_orchestrators||[]) {
+    if(!String(p.status).startsWith("active")) continue;
+    console.log("  • "+p.project+"  "+(p.next_action? "— "+p.next_action.slice(0,80):""));
+  }
+' "$STATE" 2>/dev/null || echo "  (state unreadable)"
+
+# what's waiting on you
+echo; echo "${c_bold}${c_yel}Waiting on you${c_off}"
+pending=$(awk '/^## Pending/{f=1;next}/^## Processed/{f=0}f&&/^- \[/' "$APPROVALS" 2>/dev/null)
+hq=$(awk '/^## Waiting On Human/{f=1;next}/^## /{if(f)f=0}f&&/^- /' "$HQ" 2>/dev/null)
+if [[ -n "$hq" ]]; then
+  echo "$hq" | sed 's/^- /  ⏳ /'
+  echo "  ${c_dim}approve with:  ceo approve \"<project> <what>\"   (or: ceo decline \"...\")${c_off}"
+else
+  echo "  ${c_grn}nothing — you're clear${c_off}"
+fi
+[[ -n "$pending" ]] && { echo; echo "  ${c_dim}already submitted (CEO will process next tick):${c_off}"; echo "$pending" | sed 's/^- /  → /'; }
+
+# recent activity
+echo; echo "${c_bold}Recent CEO activity${c_off}"
+latest=$(ls -t "$RUN_DIR"/workspace-ceo-agent-*.md 2>/dev/null | head -1)
+if [[ -n "$latest" ]]; then
+  awk '/## Decision/{f=1;next}/## /{if(f)exit}f' "$latest" | sed 's/^/  /' | head -6
+else
+  echo "  (no receipts yet)"
+fi
+echo
+echo "${c_dim}more: ceo log  ·  ceo ask \"...\"  ·  ceo help${c_off}"
