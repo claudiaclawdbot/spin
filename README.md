@@ -11,7 +11,7 @@ A Workspace CEO loop coordinates per-project agent "floors" inside [cmux](https:
 
 ```
 you ──ceo approve──▶ APPROVALS.md ──▶ ┌─────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
-                                      │  Workspace CEO   │                          (claude / codex / …)
+                                      │  Workspace CEO   │                          (run by an agent CLI)
 you ◀── ceo status ◀── HUMAN_QUEUE ◀──│  tick loop       │ ◀── INBOX.md ◀────────── project receipts
                                       └─────────────────┘
 ```
