@@ -8,12 +8,18 @@
 set -uo pipefail
 ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
-# floor map: "<workspace-ref> <floor-target>"
-FLOORS=(
-  "workspace:1 ceo"
-  "workspace:2 fidget-play"
-  "workspace:3 built-by-ai"
-)
+# floor map: "<workspace-ref> <floor-target>", derived from org/OMP_HARNESS.json —
+# the registry is the single source of truth (this list drifted when hardcoded).
+# Candidate projects (status candidate*) don't get floors until activated.
+FLOORS=()
+while IFS= read -r line; do [[ -n "$line" ]] && FLOORS+=("$line"); done < <(node -e '
+const h = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+if (h.workspace_ceo?.cmux_workspace) console.log(h.workspace_ceo.cmux_workspace + " ceo");
+for (const [id, p] of Object.entries(h.projects || {}))
+  if (p.cmux_workspace && !String(p.status || "").startsWith("candidate"))
+    console.log(p.cmux_workspace + " " + id);
+' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null)
+[[ ${#FLOORS[@]} -eq 0 ]] && { echo "no floors found in org/OMP_HARNESS.json" >&2; exit 1; }
 
 term_surface() {  # first terminal surface in a workspace (robust to ID drift)
   cmux tree --workspace "$1" 2>/dev/null \

@@ -1,5 +1,12 @@
 # workspace-ceo
 
+<!-- Restore once ci/ci.yml is moved to .github/workflows/ (needs a workflow-scoped token — see CONTRIBUTING):
+[![ci](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml)
+-->
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
+![deps](https://img.shields.io/badge/deps-bash%20%2B%20node-success)
+
 **A file-based AI organization that runs your projects while you sleep — with a human-approval gate on anything that leaves the machine.**
 
 A Workspace CEO loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background agents (Claude / Codex / Gemini / Ollama via an automatic fallback waterfall), and talks to you through a single `ceo` command. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
@@ -72,7 +79,51 @@ ceo approve "my-app …"    # answer an approval ask
 ceo log                   # watch the brain's receipts live
 ```
 
-**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` (`claude`, `codex`, `gemini`, or `ollama`). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://github.com/sst/opencode) for interactive floor agents.
+**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` (`claude`, `codex`, `gemini`, or `ollama`). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for interactive floor agents.
+
+## Isn't a coding-agent CLI already this?
+
+No — and the distinction is the whole point. `claude`, `codex`, `omp`, `gemini` are **engines**: one brilliant session, one working directory, tools, even subagent fan-out *within that session*. This kit is the **plant around the engines**. It adds the layer the CLIs deliberately don't have:
+
+| Need | A coding-agent CLI alone | workspace-ceo |
+|---|---|---|
+| Something happens while you're away | only while a session runs (and an always-on session burns tokens idling) | tick loop; **change-gated** brain — an idle org costs a few LLM calls a day |
+| State that outlives a context window | session resume, until compaction eats it | plain files (`STATE.json`, receipts, handoffs) — greppable forever |
+| Several projects at once | one cwd per session; you are the router | CEO routes via queue + per-project handoffs; parallel detached jobs |
+| Provider hits its usage limit | session stops; you switch tools manually | waterfall auto-benches the provider and advances (codex → claude → gemini → ollama) |
+| "Don't email anyone without asking" | a prompt instruction you hope holds, re-stated per session | standing gates + an approval queue (`ceo approve`) + audit receipts |
+| A job hangs / duplicates / dies silently | you notice, eventually | PID-lifecycle jobs with timeouts, singleton locks, silent-exit retry, watchdog |
+
+Put differently: the agent CLIs are excellent *employees*; this is the *org chart, the inbox, the approval chain, and the time clock*. The two compose — each dispatched job IS one of those CLIs, and interactive floor agents are plain `omp` sessions you can talk to directly.
+
+## What it looks like
+
+The `ceo` command, from any terminal:
+
+```
+═══ Workspace CEO ═══  Wed 23:30
+● running (PID 35715)
+
+Projects
+  • my-app       — landing page shipped; tests green; drafting launch copy
+  • my-contract  — all local work done, deploy gated on your approval
+
+Waiting on you
+  ⏳ my-app outreach send approval — 16 drafts staged, top 5 ranked
+  ⏳ my-contract testnet deploy — needs faucet ETH + --broadcast approval
+
+approve with:  ceo approve "<project> <what>"   (or: ceo decline "...")
+```
+
+And the driver pane ticking in cmux:
+
+```
+[dispatch] running queue tick…
+  dispatched my-app-fix-pricing-20260611 (implementation-worker)  →  pid=75454
+[ceo] invoking agent brain (content changed)…
+[ceo] agent run complete.
+Next tick in 900s  (Ctrl-C to stop)
+```
 
 ## What runs where
 
@@ -118,6 +169,7 @@ org/
 docs/
   ARCHITECTURE.md        the five layers + one tick, in detail
   LESSONS.md             v1 → v3: what broke and what fixed it
+  ROADMAP.md             known weaknesses, honestly ranked
 ```
 
 ## License
