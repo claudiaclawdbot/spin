@@ -53,7 +53,11 @@ Model tiering is automatic: `read-only-worker`/`scout` jobs start on a cheap
 fast model (gemini-flash); `implementation-worker`/`project-ceo-run` start on
 claude-sonnet. The waterfall handles fallback either way.
 
-## The provider waterfall (`scripts/lib/ceo-waterfall.sh`)
+## The CLI waterfall (`scripts/lib/ceo-waterfall.sh`)
+
+These are all *command-line tools on PATH*, not bare model names — each wraps
+its own vendor's models: `codex` = OpenAI Codex CLI, `claude` = Claude Code,
+`gemini` = Google Gemini CLI, `ollama` = local model runtime.
 
 ```
 codex → claude → gemini → ollama        (workspace CEO skips codex by default
