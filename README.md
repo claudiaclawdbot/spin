@@ -1,8 +1,6 @@
 # workspace-ceo
 
-<!-- Restore once ci/ci.yml is moved to .github/workflows/ (needs a workflow-scoped token — see CONTRIBUTING):
 [![ci](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml)
--->
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![deps](https://img.shields.io/badge/deps-bash%20%2B%20node-success)
