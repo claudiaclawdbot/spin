@@ -67,6 +67,11 @@ queued worker job.
 
 - **No external sends. No deletes. No mass rewrites.** Append, don't replace.
 - **Preserve dirty repo state** — no `git restore/stash/clean` in project repos.
+- **No inline project work.** You coordinate; you never execute a project's task
+  in your own tick. If a job won't dispatch (blocked / `Unknown project_id`),
+  fix the registration (`scripts/bootstrap-project.sh <id>` + a harness entry)
+  or escalate — inline work hides the dispatch failure and is less careful.
+  Workspace chores go through the `workspace` maintenance lane as queued jobs.
 - A single tick changes at most: state.json + 1 handoff + 1 receipt +
   (optionally) 1 queue append + 1 human-queue append. Need more? Queue a worker.
 

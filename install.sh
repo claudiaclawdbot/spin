@@ -20,7 +20,13 @@ agents=0
 for a in claude codex gemini ollama; do
   command -v "$a" >/dev/null 2>&1 && { echo "  ✓ $a"; agents=$((agents+1)); } || echo "  – $a (not found)"
 done
-(( agents == 0 )) && { echo "  ✗ no agent CLI found — install claude, codex, gemini, or ollama"; missing=1; }
+if (( agents == 0 )); then
+  if [[ "${OMP_INSTALL_SKIP_AGENT_CHECK:-}" == "1" ]]; then
+    echo "  ! no agent CLI found — continuing anyway (OMP_INSTALL_SKIP_AGENT_CHECK=1)"
+  else
+    echo "  ✗ no agent CLI found — install claude, codex, gemini, or ollama"; missing=1
+  fi
+fi
 echo "Optional:"
 for a in cmux omp; do
   command -v "$a" >/dev/null 2>&1 && echo "  ✓ $a" || echo "  – $a (optional: visual floors / interactive agents)"

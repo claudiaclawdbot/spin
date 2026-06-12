@@ -50,9 +50,24 @@ function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+// ── helper: kill a job's whole process group (jobs spawn detached, so the
+// bash PID is the group leader; -pid reaches the agent CLI grandchildren) ───
+function killJobGroup(pid) {
+  for (const sig of ['SIGTERM', 'SIGKILL']) {
+    try { process.kill(-pid, sig); } catch { try { process.kill(pid, sig); } catch {} }
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline && pidAlive(pid)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    if (!pidAlive(pid)) return true;
+  }
+  return !pidAlive(pid);
+}
+
 // ── 1. Mark completed jobs ──────────────────────────────────────────────────
 // A "running" job is done when its PID file exists but the process is gone,
-// or when there is no PID file at all (legacy / lost).
+// or when there is no PID file at all (legacy / lost). A job that exceeds its
+// max runtime is killed (whole process group) and marked failed — a hung agent
+// must never hold its project lane forever.
+const JOB_MAX_RUNTIME = parseInt(process.env.OMP_JOB_MAX_RUNTIME || '3600', 10); // seconds
 function markRunningJobs() {
   for (const job of queue.jobs || []) {
     if (job.status !== 'running') continue;
@@ -67,7 +82,23 @@ function markRunningJobs() {
     }
 
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-    if (!isNaN(pid) && pidAlive(pid)) continue;  // still running
+    if (!isNaN(pid) && pidAlive(pid)) {
+      // Still running — enforce per-job timeout (job.max_runtime_seconds wins).
+      const limit = parseInt(job.max_runtime_seconds || JOB_MAX_RUNTIME, 10);
+      const started = Date.parse(job.started_at || now) || Date.parse(now);
+      const ageSec = (Date.now() - started) / 1000;
+      if (ageSec > limit) {
+        const killed = killJobGroup(pid);
+        job.status     = 'failed';
+        job.failed_at  = now;
+        job.result     = `Timed out after ${Math.round(ageSec)}s (limit ${limit}s); ` +
+                         (killed ? 'process group killed.' : 'KILL FAILED — check manually.') +
+                         ` Log: org/jobs/${job.id}.log`;
+        console.log(`  TIMEOUT ${job.id} (${Math.round(ageSec)}s > ${limit}s) — ${killed ? 'killed' : 'kill failed'}`);
+        try { fs.unlinkSync(pidFile); } catch {}
+      }
+      continue;
+    }
 
     // Process dead → done
     job.status       = 'completed';

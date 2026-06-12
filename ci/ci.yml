@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    name: syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n every script
+        run: |
+          set -e
+          for f in scripts/*.sh scripts/lib/*.sh install.sh; do
+            bash -n "$f"
+            echo "ok: $f"
+          done
+      - name: node --check the dashboard
+        run: node --check scripts/ceo-dashboard.js
+      - name: validate shipped JSON
+        run: |
+          set -e
+          for f in org/OMP_HARNESS.example.json org/projects/example-app/STATE.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))"
+            echo "ok: $f"
+          done
+
+  install-smoke:
+    name: install.sh smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run installer (no agent CLIs in CI)
+        run: OMP_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+      - name: assert runtime files exist
+        run: |
+          set -e
+          for f in org/ceo/APPROVALS.md org/ceo/INBOX.md org/HUMAN_QUEUE.md \
+                   org/AGENT_QUEUE.json org/state.json org/OMP_HARNESS.json \
+                   org/ceo/WORKSPACE_CONTROLLER_PROMPT.md; do
+            test -f "$f" && echo "ok: $f"
+          done
+      - name: bootstrap a project
+        run: |
+          bash scripts/bootstrap-project.sh smoke-test-app
+          test -f org/projects/smoke-test-app/PROJECT_CONTROLLER_PROMPT.md
+          test -f org/projects/smoke-test-app/STATE.json
+      - name: dispatcher runs clean on an empty queue
+        run: bash scripts/omp-supervisor-once.sh
+      - name: installer is idempotent
+        run: OMP_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+
+  shellcheck:
+    name: shellcheck (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (errors only)
+        run: |
+          sudo apt-get install -y shellcheck >/dev/null
+          shellcheck --severity=error scripts/*.sh scripts/lib/*.sh install.sh
