@@ -7,7 +7,7 @@
 
 **A file-based AI organization that runs your projects while you sleep — with a human-approval gate on anything that leaves the machine.**
 
-A Workspace CEO loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background agents (Claude / Codex / Gemini / Ollama via an automatic fallback waterfall), and talks to you through a single `ceo` command. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+A Workspace CEO loop coordinates per-project agent "floors" inside [cmux](https://cmux.io) (each floor is an interactive [omp](https://omp.sh) session you can talk to), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → Ollama, with automatic fallback), and talks to you through a single `ceo` command. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
 
 ```
 you ──ceo approve──▶ APPROVALS.md ──▶ ┌─────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
@@ -25,6 +25,20 @@ Running multiple AI-driven projects from chat sessions doesn't scale: context ev
 - **Detached background jobs** for real work — cmux is *display only* (a hard-won lesson; see [docs/LESSONS.md](docs/LESSONS.md)).
 - **Four hard gates** — the org acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
 - **Receipts for everything** — every brain run and job writes an append-only audit trail.
+
+## The cast (read this first — the names overlap confusingly)
+
+Several of these names are both a product and a model family. In this README they always mean the **CLI tool on your PATH**:
+
+| Name | What it actually is | Role in this kit |
+|---|---|---|
+| **workspace-ceo** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
+| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI (any model behind it) | the **floor agents** — the idle REPLs sitting in each cmux floor that you (or the CEO) can hand work to directly |
+| **`codex`** (OpenAI Codex CLI), **`claude`** (Claude Code), **`gemini`** (Google Gemini CLI) | headless-capable coding-agent CLIs, each wrapping its vendor's models | the **job workers** — the dispatcher spawns one per queued job, trying them in waterfall order |
+| **`ollama`** | a local model runtime (not an agent harness) | last-resort fallback when every cloud CLI is rate-limit benched |
+| [**cmux**](https://cmux.io) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
+
+Two naming notes: the registry file is `OMP_HARNESS.json` and the dispatcher is `omp-supervisor-once.sh` because "OMP" is this org's internal name, inherited from the omp-centric setup it grew out of — the files keep that name so the engine matches real deployments. And "the brain"/"the CEO" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context.
 
 ## The five layers
 
@@ -77,11 +91,11 @@ ceo approve "my-app …"    # answer an approval ask
 ceo log                   # watch the brain's receipts live
 ```
 
-**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` (`claude`, `codex`, `gemini`, or `ollama`). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for interactive floor agents.
+**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` — `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for the interactive floor agents.
 
 ## Isn't a coding-agent CLI already this?
 
-No — and the distinction is the whole point. `claude`, `codex`, `omp`, `gemini` are **engines**: one brilliant session, one working directory, tools, even subagent fan-out *within that session*. This kit is the **plant around the engines**. It adds the layer the CLIs deliberately don't have:
+No — and the distinction is the whole point. Claude Code, Codex CLI, Gemini CLI, and omp are **engines**: one brilliant session, one working directory, tools, even subagent fan-out *within that session*. This kit is the **plant around the engines**. It adds the layer the agent CLIs deliberately don't have:
 
 | Need | A coding-agent CLI alone | workspace-ceo |
 |---|---|---|
@@ -139,7 +153,7 @@ Next tick in 900s  (Ctrl-C to stop)
 ## Cost & reliability design
 
 - **Change-gated brain** — the LLM only runs when watched inputs (INBOX, approvals, project STATE) actually changed (content hash, not mtime), or every Nth tick as a heartbeat. An idle org costs ~3 brain runs a day.
-- **Provider waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — `codex → claude → gemini → ollama`; any provider that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An explicit provider override is *ignored* while that provider is benched — a stale caller can't resurrect a rate-limited CLI.
+- **CLI waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — jobs try `codex → claude → gemini → ollama` (the four CLIs from [the cast](#the-cast-read-this-first--the-names-overlap-confusingly), each using its own vendor's models); any CLI that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An explicit override is *ignored* while that CLI is benched — a stale caller can't resurrect a rate-limited tool.
 - **Singleton locks everywhere** — the driver, the watchers: duplicate loops are the #1 silent quota killer (ask us how we know).
 - **Silent-exit retry** — if a job exits 0 but changed no files, it's retried once on claude. Catches agents that "succeed" without doing anything.
 - **Kill switch** — `touch org/ceo/runs/STOP` pauses the whole org; `rm` it to resume. The watchdog paints a red chip + notification if the driver dies *without* a STOP file.
