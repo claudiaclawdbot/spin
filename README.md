@@ -20,7 +20,7 @@ you ◀── ceo status ◀── HUMAN_QUEUE ◀──│  tick loop       │
 
 Running multiple AI-driven projects from chat sessions doesn't scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. This kit replaces that with a small, inspectable org:
 
-- **One driver loop** (`workspace-ceo-tick.sh`) — singleton-locked so duplicates can't silently burn quota.
+- **One driver loop** (`workspace-ceo-tick.sh`) — it claims a lock file at startup, so a second accidental launch just prints "already running" and exits instead of silently doubling your LLM spend.
 - **An LLM "brain" that only runs when something changed** — idle ticks are free.
 - **Detached background jobs** for real work — cmux is *display only* (a hard-won lesson; see [docs/LESSONS.md](docs/LESSONS.md)).
 - **Four hard gates** — the org acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
@@ -104,7 +104,7 @@ No — and the distinction is the whole point. Claude Code, Codex CLI, Gemini CL
 | Several projects at once | one cwd per session; you are the router | CEO routes via queue + per-project handoffs; parallel detached jobs |
 | Provider hits its usage limit | session stops; you switch tools manually | waterfall auto-benches the provider and advances (codex → claude → gemini → ollama) |
 | "Don't email anyone without asking" | a prompt instruction you hope holds, re-stated per session | standing gates + an approval queue (`ceo approve`) + audit receipts |
-| A job hangs / duplicates / dies silently | you notice, eventually | PID-lifecycle jobs with timeouts, singleton locks, silent-exit retry, watchdog |
+| A job hangs / duplicates / dies silently | you notice, eventually | jobs tracked by PID with timeouts, only-one-of-me lock files, silent-exit retry, watchdog |
 
 Put differently: the agent CLIs are excellent *employees*; this is the *org chart, the inbox, the approval chain, and the time clock*. The two compose — each dispatched job IS one of those CLIs, and interactive floor agents are plain `omp` sessions you can talk to directly.
 
@@ -154,7 +154,7 @@ Next tick in 900s  (Ctrl-C to stop)
 
 - **Change-gated brain** — the LLM only runs when watched inputs (INBOX, approvals, project STATE) actually changed (content hash, not mtime), or every Nth tick as a heartbeat. An idle org costs ~3 brain runs a day.
 - **CLI waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — jobs try `codex → claude → gemini → ollama` (the four CLIs from [the cast](#the-cast-read-this-first--the-names-overlap-confusingly), each using its own vendor's models); any CLI that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An explicit override is *ignored* while that CLI is benched — a stale caller can't resurrect a rate-limited tool.
-- **Singleton locks everywhere** — the driver, the watchers: duplicate loops are the #1 silent quota killer (ask us how we know).
+- **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file on startup and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer (ask us how we know).
 - **Silent-exit retry** — if a job exits 0 but changed no files, it's retried once on claude. Catches agents that "succeed" without doing anything.
 - **Kill switch** — `touch org/ceo/runs/STOP` pauses the whole org; `rm` it to resume. The watchdog paints a red chip + notification if the driver dies *without* a STOP file.
 

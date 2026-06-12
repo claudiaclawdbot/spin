@@ -64,7 +64,7 @@ overrides still come from job *type* tiering only. Let the CEO request
 
 - ~~Job timeouts~~ — hung jobs killed (process group) and marked failed; per-job
   `max_runtime_seconds`, default 1 h.
-- ~~Dispatcher singleton lock~~ — manual run + tick can no longer double-dispatch.
+- ~~Dispatcher lock file~~ — a manual supervisor run and the tick can no longer double-dispatch the same job.
 - ~~Hardcoded floor map~~ — `workstation.sh` derives floors from the harness.
 - ~~Driver watchdog~~ — red chip + notification when the loop dies without a STOP.
 - ~~"No inline project work" hard rule~~ — dispatch failures get fixed, not

@@ -5,9 +5,9 @@ Small project, simple rules.
 - **Keep the dependency budget**: bash + node, no npm packages, no build step.
   If a change needs a package, it probably belongs in a separate tool the org
   *calls*, not in the engine.
-- **Every long-running process takes a singleton lock** (see the noclobber
-  pattern in `workspace-ceo-tick.sh`) and writes something a human can read
-  when it acts.
+- **Every long-running process must refuse to run twice** (copy the lock-file
+  pattern at the top of `workspace-ceo-tick.sh`) and writes something a human
+  can read when it acts.
 - **Never let an agent mutate shared state destructively** — append, don't
   replace; receipts are append-only; gates stay gates.
 - Run the checks CI runs before pushing:
