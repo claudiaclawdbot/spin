@@ -22,16 +22,3 @@ Small project, simple rules.
   things are the way they are: [docs/LESSONS.md](docs/LESSONS.md). What's
   known-weak: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Enabling CI
-
-The GitHub Actions workflow ships at [`ci/ci.yml`](ci/ci.yml) because pushing
-into `.github/workflows/` requires a `workflow`-scoped token. Once, with a
-token that has it (`gh auth refresh -s workflow`):
-
-```bash
-mkdir -p .github/workflows
-git mv ci/ci.yml .github/workflows/ci.yml
-git commit -m "enable CI" && git push
-```
-
-Then un-comment the CI badge at the top of the README.
