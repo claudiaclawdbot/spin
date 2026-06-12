@@ -10,7 +10,8 @@ this describes the system you're part of.
 2. **Chat assistant (optional).** Your conversational front door. It reads and
    writes the same org files as everything else — it is *not* the autonomous loop.
 3. **Workspace CEO.** The single driver loop (`scripts/workspace-ceo-tick.sh`).
-   Coordinates, never codes. Singleton-locked.
+   Coordinates, never codes. Only one instance can run: it claims a lock file
+   at startup and a second launch exits immediately.
 4. **Project orchestrators.** One per registered project. Run as dispatched
    background jobs (`scripts/project-ceo-agent.sh <id>`); read their handoff, do
    the work, update `STATE.json` + `RECEIPTS.md`, report up to `org/ceo/INBOX.md`.
@@ -75,7 +76,7 @@ codex → claude → gemini → ollama        (workspace CEO skips codex by defa
 
 | Failure | Defense |
 |---|---|
-| duplicate driver loops (quota burn) | atomic noclobber lock; second instance exits |
+| duplicate driver loops (quota burn) | lock file claimed atomically at startup; a second copy sees it and exits |
 | hung brain | per-run `timeout`, loop continues |
 | agent exits 0 having done nothing | post-run content diff → one retry on claude |
 | driver dies / forgotten STOP file | status-watch daemon paints a red chip + notification; `ceo` shows ● / ○ |

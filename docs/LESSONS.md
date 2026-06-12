@@ -20,8 +20,11 @@ One stale loop from a day earlier + a launchd copy + an old supervisor all
 firing agents every ~5 minutes burned a full weekly codex quota in a weekend.
 Nothing crashed; everything just "ran".
 
-**v3:** every long-runner takes an **atomic singleton lock** (noclobber + PID
-check); a second instance exits immediately. Pair this with a process census
+**v3:** every long-runner **refuses to run twice**. At startup it writes its
+PID into a lock file using bash's noclobber mode — an atomic "create only if
+absent", so two simultaneous launches can't both win — and if the lock already
+exists with a still-alive PID inside, the new copy exits immediately. (This
+pattern is sometimes called a singleton lock.) Pair it with a process census
 when debugging: `pgrep -fl tick`.
 
 ## 3. Bench rate-limited providers — and ignore overrides while benched
