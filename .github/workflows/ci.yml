@@ -14,12 +14,14 @@ jobs:
       - name: bash -n every script
         run: |
           set -e
-          for f in scripts/*.sh scripts/lib/*.sh install.sh; do
+          for f in scripts/*.sh scripts/lib/*.sh install.sh spin-bootstrap.sh; do
             bash -n "$f"
             echo "ok: $f"
           done
-      - name: node --check the dashboard
-        run: node --check scripts/ceo-dashboard.js
+      - name: node --check the node scripts
+        run: |
+          node --check scripts/ceo-dashboard.js
+          node --check scripts/org
       - name: validate shipped JSON
         run: |
           set -e
@@ -34,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: run installer (no agent CLIs in CI)
-        run: OMP_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+        run: SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
       - name: assert runtime files exist
         run: |
           set -e
@@ -48,10 +50,38 @@ jobs:
           bash scripts/bootstrap-project.sh smoke-test-app
           test -f org/projects/smoke-test-app/PROJECT_CONTROLLER_PROMPT.md
           test -f org/projects/smoke-test-app/STATE.json
-      - name: dispatcher runs clean on an empty queue
+      - name: org CLI — validation + queue a job
+        run: |
+          set -e
+          # register smoke-test-app in the harness so queue-job accepts it
+          node -e 'const f="org/OMP_HARNESS.json";const h=JSON.parse(require("fs").readFileSync(f));h.projects["smoke-test-app"]={allowed_job_types:["scout"]};require("fs").writeFileSync(f,JSON.stringify(h,null,2))'
+          node scripts/org queue-job smoke-test-app scout "ci smoke job"
+          # unknown project must be rejected (exit 2)
+          if node scripts/org queue-job ghost scout "nope" 2>/dev/null; then echo "FAIL: bad project accepted"; exit 1; fi
+          # disallowed type must be rejected
+          if node scripts/org queue-job smoke-test-app banana "nope" 2>/dev/null; then echo "FAIL: bad type accepted"; exit 1; fi
+          node scripts/org show
+      - name: dispatcher runs clean on the queue
         run: bash scripts/omp-supervisor-once.sh
       - name: installer is idempotent
-        run: OMP_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+        run: SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+
+  bootstrap-selfextract:
+    name: single-file installer self-extracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: rebuild then self-extract into a fresh dir
+        run: |
+          set -e
+          # rebuild from source (the committed copy is platform-built; tar mtimes
+          # make byte-equality across OSes impossible, so we test the fresh build)
+          bash scripts/build-bootstrap.sh
+          SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-bootstrap.sh "$RUNNER_TEMP/spin-fresh"
+          test -f "$RUNNER_TEMP/spin-fresh/scripts/org"
+          test -f "$RUNNER_TEMP/spin-fresh/scripts/spin"
+          test -f "$RUNNER_TEMP/spin-fresh/org/state.json"
+          echo "ok: self-extracted and installed"
 
   shellcheck:
     name: shellcheck (advisory)
