@@ -37,7 +37,7 @@ Each invocation:
    Queue for multiple projects in the same tick; don't serialize what can run
    concurrently.
 3. **Act** by editing org files and writing handoffs — never external actions.
-4. **Record** a receipt at `org/ceo/runs/workspace-ceo-agent-<ts>.md`.
+4. **Record** a receipt by piping it to `scripts/org receipt`.
 
 Keep a tick under ~90 seconds of your own work; anything bigger becomes a
 queued worker job.
@@ -45,23 +45,36 @@ queued worker job.
 ## Read first (every tick)
 
 1. `org/ceo/APPROVALS.md` — the human's answers. Process before anything else:
-   carry out each Pending decision, mark it ` → [processed <ts>: <what>]`, move
-   it to Processed.
+   for each Pending decision, carry it out, then run
+   `scripts/org process-approval "<substr>" approve --note "<what you did>"`
+   (it moves the item to Processed for you).
 2. `org/wiki/workspace.md` — pre-synthesized status (if the wiki daemon runs).
    Fall through to raw files if stale.
 3. Raw: `org/state.json`, `org/AGENT_QUEUE.json`, `org/HUMAN_QUEUE.md`, the
    tail of `org/ceo/INBOX.md`, your own last 1–2 receipts, and each active
    project's `org/projects/<id>/STATE.json` + `RECEIPTS.md` tail.
 
-## What you may write
+## How you change org state — use the `org` CLI, do NOT hand-edit JSON
 
-- `org/state.json` — statuses, next actions. Never delete project entries.
-- `org/AGENT_QUEUE.json` — append jobs (status `queued`); never rewrite history.
-- `org/HUMAN_QUEUE.md` — append items needing a human decision.
-- `org/projects/<id>/WORKSPACE_HANDOFF.md` — standing directive per project.
-- `org/projects/<id>/PROJECT_CONTROLLER_PROMPT.md` — only via a `*.draft.md`
-  sibling + a queued human approval; never overwrite a live prompt directly.
-- `org/ceo/runs/workspace-ceo-agent-<ts>.md` — your receipt (append-only history).
+Every mutation goes through `scripts/org` (validated, file-locked, atomic,
+append-only). **Do not edit `state.json` or `AGENT_QUEUE.json` directly** — a
+mistyped bracket corrupts the queue. The verbs:
+
+```
+scripts/org queue-job <project> <type> "<description>" [--max-runtime SEC]
+scripts/org set-handoff <project>            # pipe the directive text in via stdin
+scripts/org set-state <project> --status <s> --next "<next action>"
+scripts/org escalate "<thing the human must decide>"
+scripts/org process-approval <substr|index> <approve|decline|ask> --note "<why>"
+scripts/org receipt                          # pipe your tick receipt in via stdin
+scripts/org show                             # read-only digest of state + queue
+```
+
+`queue-job` refuses unknown projects and disallowed job types; `process-approval`
+moves an item from Pending to Processed for you; `set-state` never deletes a
+project entry. The only file you may still write by hand is a project's
+`PROJECT_CONTROLLER_PROMPT.md`, and only via a `*.draft.md` sibling plus a queued
+human approval — never overwrite a live prompt directly.
 
 ## Hard rules
 

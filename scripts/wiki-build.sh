@@ -13,7 +13,7 @@
 # Run after cloning a new project, or call from wiki-watch.sh on file changes.
 
 set -uo pipefail
-ROOT="${WORKSPACE_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+ROOT="${WORKSPACE_ROOT:-${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}"
 
 # ── args ─────────────────────────────────────────────────────────────────────
 PROJECT="${1:-}"

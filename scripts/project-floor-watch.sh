@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 PROJECT_ID="${1:?usage: project-floor-watch.sh <project-id>}"
 JOBS_DIR="$ROOT/org/jobs"
 STATE="$ROOT/org/projects/$PROJECT_ID/STATE.json"

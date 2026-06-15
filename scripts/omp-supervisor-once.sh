@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 HARNESS="$ROOT/org/OMP_HARNESS.json"
 QUEUE="$ROOT/org/AGENT_QUEUE.json"
 

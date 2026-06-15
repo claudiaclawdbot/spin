@@ -11,7 +11,7 @@
 #   cmux-floor.sh <project-id>   # a project orchestrator (fidget-play, built-by-ai, ...)
 
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$HOME/.config/omp.env" 2>/dev/null || true
 TARGET="${1:?usage: cmux-floor.sh ceo|<project-id>}"
 MODEL=(--model anthropic/claude-sonnet-4-6 --smol anthropic/claude-haiku-4-5)

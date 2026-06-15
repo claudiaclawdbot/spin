@@ -9,7 +9,7 @@
 # Writes: org/wiki/workspace.md (overwrites — it's generated, not hand-edited)
 
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 OUT="$ROOT/org/wiki/workspace.md"
 TS="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 

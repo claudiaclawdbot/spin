@@ -7,7 +7,7 @@
 #   start:  nohup scripts/workspace-status-watch.sh >/dev/null 2>&1 &
 #   stop:   touch org/ceo/runs/STATUS_WATCH_STOP   (or: pkill -f workspace-status-watch)
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 RUN_DIR="$ROOT/org/ceo/runs"
 LOCK="$RUN_DIR/.status-watch.lock"
 STOP="$RUN_DIR/STATUS_WATCH_STOP"

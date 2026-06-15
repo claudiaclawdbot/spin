@@ -1,0 +1,237 @@
+#!/usr/bin/env node
+/**
+ * org — the SPIN state CLI.
+ *
+ * The CEO/project agents call these verbs instead of hand-editing JSON. Every
+ * mutation is validated, file-locked, atomic (write-temp-rename), and
+ * append-only where history matters — so an LLM can change org state without
+ * the risk of corrupting AGENT_QUEUE.json or clobbering a receipts file.
+ *
+ * Verbs:
+ *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID]
+ *   org set-handoff <project> [--file F]            (else reads stdin)
+ *   org set-state <project> [--status S] [--next "…"]
+ *   org escalate "<human-queue item>"
+ *   org process-approval <index|substr> <approve|decline|ask> [--note "…"]
+ *   org receipt [--file F]                          (else reads stdin) — appends a tick receipt
+ *   org inbox <project> "<message>"                 (project → CEO report line)
+ *   org show [--json]                               (read-only digest)
+ *
+ * Root resolution: $SPIN_ROOT, else $OMP_ROOT, else the dir above this script.
+ * Exit codes: 0 ok · 1 usage · 2 validation · 3 lock/IO.
+ */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = process.env.SPIN_ROOT || process.env.OMP_ROOT ||
+             path.resolve(__dirname, '..');
+const ORG = path.join(ROOT, 'org');
+const F = {
+  harness:   path.join(ORG, 'OMP_HARNESS.json'),
+  queue:     path.join(ORG, 'AGENT_QUEUE.json'),
+  state:     path.join(ORG, 'state.json'),
+  human:     path.join(ORG, 'HUMAN_QUEUE.md'),
+  approvals: path.join(ORG, 'ceo', 'APPROVALS.md'),
+  inbox:     path.join(ORG, 'ceo', 'INBOX.md'),
+  runs:      path.join(ORG, 'ceo', 'runs'),
+};
+
+const nowISO = () => new Date().toISOString();
+const die = (code, msg) => { process.stderr.write(`org: ${msg}\n`); process.exit(code); };
+const ok  = (msg) => { process.stdout.write(msg + '\n'); };
+
+// ── tiny arg parser: positionals + --flags (value or boolean) ───────────────
+function parse(argv) {
+  const pos = [], flags = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--')) {
+      const key = a.slice(2);
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) flags[key] = true;
+      else { flags[key] = next; i++; }
+    } else pos.push(a);
+  }
+  return { pos, flags };
+}
+
+// ── exclusive lock via atomic create (the node equivalent of noclobber) ─────
+function withLock(name, fn) {
+  const lock = path.join(F.runs, `.org-${name}.lock`);
+  fs.mkdirSync(F.runs, { recursive: true });
+  let fd, tries = 0;
+  for (;;) {
+    try { fd = fs.openSync(lock, 'wx'); break; }
+    catch (e) {
+      if (e.code !== 'EEXIST') die(3, `lock error: ${e.message}`);
+      // stale-lock break-in: if the holder PID is dead, clear and retry
+      const holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10);
+      let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
+      if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
+      if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
+      const until = Date.now() + 100; while (Date.now() < until) {} // ~100ms spin
+    }
+  }
+  try { fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); }
+  catch (e) { die(3, `lock write: ${e.message}`); }
+  try { return fn(); }
+  finally { try { fs.unlinkSync(lock); } catch {} }
+}
+
+function readJSON(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) { if (fallback !== undefined) return fallback; die(3, `cannot read ${path.basename(file)}: ${e.message}`); }
+}
+function writeJSONatomic(file, obj) {
+  const tmp = `${file}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n');
+  fs.renameSync(tmp, file);
+}
+function appendLine(file, line) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, line.endsWith('\n') ? line : line + '\n');
+}
+function readStdin() {
+  try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
+}
+function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+
+// ── verbs ───────────────────────────────────────────────────────────────────
+const verbs = {
+  'queue-job'(p) {
+    const [project, type, ...rest] = p.pos;
+    const description = p.flags.description || rest.join(' ');
+    if (!project || !type || !description)
+      die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC]');
+    const harness = readJSON(F.harness);
+    const proj = harness.projects && harness.projects[project];
+    if (!proj) die(2, `unknown project_id "${project}" — register it in OMP_HARNESS.json (or run bootstrap-project.sh)`);
+    if (proj.allowed_job_types && !proj.allowed_job_types.includes(type))
+      die(2, `job type "${type}" not in allowed_job_types for ${project}: [${proj.allowed_job_types.join(', ')}]`);
+    return withLock('queue', () => {
+      const q = readJSON(F.queue, { jobs: [] });
+      q.jobs = q.jobs || [];
+      const id = p.flags.id || `${project}-${slug(type)}-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`;
+      if (q.jobs.some(j => j.id === id)) die(2, `job id "${id}" already exists`);
+      const job = { id, project_id: project, type, status: 'queued', description, created_at: nowISO() };
+      if (p.flags['max-runtime']) job.max_runtime_seconds = parseInt(p.flags['max-runtime'], 10);
+      q.jobs.push(job);
+      q.updated_at = nowISO();
+      writeJSONatomic(F.queue, q);
+      ok(`queued ${id}  (${type} → ${project})`);
+    });
+  },
+
+  'set-handoff'(p) {
+    const project = p.pos[0];
+    if (!project) die(1, 'usage: org set-handoff <project> [--file F]   (else stdin)');
+    const dir = path.join(ORG, 'projects', project);
+    if (!fs.existsSync(dir)) die(2, `no such project dir: org/projects/${project}`);
+    const body = p.flags.file ? fs.readFileSync(p.flags.file, 'utf8') : readStdin();
+    if (!body.trim()) die(1, 'empty handoff body (pipe text in, or pass --file)');
+    const header = `# Workspace Handoff — ${project}\n_Updated ${nowISO()} by the Workspace CEO._\n\n`;
+    const tmp = path.join(dir, `.handoff.tmp.${process.pid}`);
+    fs.writeFileSync(tmp, header + body.trim() + '\n');
+    fs.renameSync(tmp, path.join(dir, 'WORKSPACE_HANDOFF.md'));
+    ok(`handoff updated for ${project} (${body.trim().length} chars)`);
+  },
+
+  'set-state'(p) {
+    const project = p.pos[0];
+    if (!project) die(1, 'usage: org set-state <project> [--status S] [--next "…"]');
+    return withLock('state', () => {
+      const s = readJSON(F.state, { project_orchestrators: [] });
+      s.project_orchestrators = s.project_orchestrators || [];
+      let e = s.project_orchestrators.find(x => x.id === project || x.project === project);
+      if (!e) { e = { id: project, project }; s.project_orchestrators.push(e); }
+      if (p.flags.status) e.status = p.flags.status;
+      if (p.flags.next) e.next_action = p.flags.next;
+      s.updated_at = nowISO();
+      writeJSONatomic(F.state, s);
+      ok(`state updated for ${project}${p.flags.status ? ` [${p.flags.status}]` : ''}`);
+    });
+  },
+
+  escalate(p) {
+    const text = p.pos.join(' ').trim();
+    if (!text) die(1, 'usage: org escalate "<human-queue item>"');
+    appendLine(F.human, `- [ ] ${nowISO().slice(0, 16).replace('T', ' ')} — ${text}`);
+    ok('escalated to HUMAN_QUEUE.md');
+  },
+
+  'process-approval'(p) {
+    const [selector, action] = p.pos;
+    if (!selector || !['approve', 'decline', 'ask'].includes(action))
+      die(1, 'usage: org process-approval <index|substr> <approve|decline|ask> [--note "…"]');
+    const note = p.flags.note ? ` — ${p.flags.note}` : '';
+    return withLock('approvals', () => {
+      const txt = fs.readFileSync(F.approvals, 'utf8');
+      const lines = txt.split('\n');
+      // find the Pending block (between "## Pending" and "## Processed")
+      const pi = lines.findIndex(l => /^##\s+Pending/i.test(l));
+      const xi = lines.findIndex(l => /^##\s+Processed/i.test(l));
+      if (pi < 0) die(2, 'APPROVALS.md has no "## Pending" section');
+      const end = xi < 0 ? lines.length : xi;
+      const candidates = [];
+      for (let i = pi + 1; i < end; i++) if (/\S/.test(lines[i]) && !lines[i].startsWith('<!--')) candidates.push(i);
+      let target;
+      if (/^\d+$/.test(selector)) target = candidates[parseInt(selector, 10)];
+      else target = candidates.find(i => lines[i].toLowerCase().includes(selector.toLowerCase()));
+      if (target === undefined) die(2, `no pending approval matches "${selector}"`);
+      const moved = lines[target].replace(/^\s*-?\s*/, '') +
+        ` → [${action.toUpperCase()} ${nowISO()}${note}]`;
+      lines.splice(target, 1);                 // remove from Pending
+      const xi2 = lines.findIndex(l => /^##\s+Processed/i.test(l));
+      if (xi2 < 0) { lines.push('', '## Processed', ''); }
+      lines.splice((xi2 < 0 ? lines.length : xi2 + 1), 0, `- ${moved}`);
+      const tmp = `${F.approvals}.tmp.${process.pid}`;
+      fs.writeFileSync(tmp, lines.join('\n'));
+      fs.renameSync(tmp, F.approvals);
+      ok(`approval ${action}d: ${moved.slice(0, 70)}…`);
+    });
+  },
+
+  receipt(p) {
+    const body = p.flags.file ? fs.readFileSync(p.flags.file, 'utf8') : readStdin();
+    if (!body.trim()) die(1, 'empty receipt (pipe text in, or pass --file)');
+    fs.mkdirSync(F.runs, { recursive: true });
+    const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    const file = path.join(F.runs, `workspace-ceo-agent-${ts}.md`);
+    fs.writeFileSync(file, body.trim() + '\n');
+    ok(`receipt → org/ceo/runs/${path.basename(file)}`);
+  },
+
+  inbox(p) {
+    const [project, ...rest] = p.pos;
+    const msg = rest.join(' ').trim();
+    if (!project || !msg) die(1, 'usage: org inbox <project> "<message>"');
+    appendLine(F.inbox, `[${nowISO().slice(0, 16)}Z] ${project}: ${msg}`);
+    ok('appended to INBOX.md');
+  },
+
+  show(p) {
+    const s = readJSON(F.state, {});
+    const q = readJSON(F.queue, { jobs: [] });
+    const byStatus = {};
+    for (const j of q.jobs || []) byStatus[j.status] = (byStatus[j.status] || 0) + 1;
+    if (p.flags.json) { ok(JSON.stringify({ state: s, queue: byStatus }, null, 2)); return; }
+    ok(`SPIN org @ ${ROOT}`);
+    ok(`projects: ${(s.project_orchestrators || []).length}   jobs: ${JSON.stringify(byStatus)}`);
+    for (const e of s.project_orchestrators || [])
+      ok(`  • ${e.id || e.project}  [${e.status || '?'}]  ${(e.next_action || '').slice(0, 60)}`);
+  },
+};
+
+// ── dispatch ─────────────────────────────────────────────────────────────────
+const [, , verb, ...rest] = process.argv;
+if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
+  ok('org — SPIN state CLI. Verbs:');
+  ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC]');
+  ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
+  ok('  escalate "<item>"                       process-approval <sel> <approve|decline|ask> [--note "…"]');
+  ok('  receipt [--file F]                      inbox <project> "<msg>"                show [--json]');
+  process.exit(verb ? 0 : 1);
+}
+if (!verbs[verb]) die(1, `unknown verb "${verb}" (try: org help)`);
+verbs[verb](parse(rest));

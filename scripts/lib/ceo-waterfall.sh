@@ -14,7 +14,7 @@
 # Single source of truth for: lockout file path, lockout duration, model defaults,
 # CLI flags. Edit here, every CEO script inherits it.
 
-CEO_ROOT="${CEO_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}"
+CEO_ROOT="${CEO_ROOT:-${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}}"
 CEO_RUN_DIR="${CEO_RUN_DIR:-$CEO_ROOT/org/ceo/runs}"
 CEO_LOCKOUT_FILE="${CEO_LOCKOUT_FILE:-$CEO_RUN_DIR/codex-blocked-until}"
 CEO_LOCKOUT_SECS="${CEO_LOCKOUT_SECS:-86400}"   # 24h

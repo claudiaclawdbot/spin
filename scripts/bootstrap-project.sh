@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 PROJECT_ID="${1:?usage: bootstrap-project.sh <project-id>}"
 PROJECT_DIR="$ROOT/org/projects/$PROJECT_ID"
 

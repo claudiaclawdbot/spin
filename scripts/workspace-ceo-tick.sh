@@ -15,7 +15,7 @@
 
 set -uo pipefail   # not -e: a single bad tick must not kill the loop
 
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
 
 # --- kill switch ----------------------------------------------------------

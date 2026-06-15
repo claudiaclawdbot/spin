@@ -13,7 +13,7 @@
 # read-only analysis, pass an explicit task that says so.
 
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$HOME/.config/omp.env" 2>/dev/null || true   # optional extra keys
 
 PID="${1:?usage: run-project-omp.sh <project-id> [task]}"

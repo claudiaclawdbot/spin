@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
 
 PROJECT_ID="${1:?usage: project-ceo-agent.sh <project-id>}"
