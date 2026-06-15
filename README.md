@@ -1,166 +1,145 @@
-# workspace-ceo
+<div align="center">
 
-[![ci](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/workspace-ceo/actions/workflows/ci.yml)
+# 🌀 SPIN
+
+### Super Pi Interoperable Navigator
+
+**A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.**
+
+<!-- Restore once ci.yml is pushed under .github/workflows (needs workflow-scoped token — see CONTRIBUTING):
+[![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
+-->
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![deps](https://img.shields.io/badge/deps-bash%20%2B%20node-success)
+![agents](https://img.shields.io/badge/agents-claude%20·%20codex%20·%20gemini%20·%20ollama-8a2be2)
 
-**A file-based AI organization that runs your projects while you sleep — with a human-approval gate on anything that leaves the machine.**
+</div>
 
-A Workspace CEO loop coordinates per-project agent "floors" inside [cmux](https://cmux.io) (each floor is an interactive [omp](https://omp.sh) session you can talk to), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → Ollama, with automatic fallback), and talks to you through a single `ceo` command. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+---
+
+SPIN is the **plant around your coding-agent CLIs.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
 
 ```
-you ──ceo approve──▶ APPROVALS.md ──▶ ┌─────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
-                                      │  Workspace CEO   │                          (run by an agent CLI)
-you ◀── ceo status ◀── HUMAN_QUEUE ◀──│  tick loop       │ ◀── INBOX.md ◀────────── project receipts
-                                      └─────────────────┘
+you ──spin approve──▶ APPROVALS.md ──▶ ┌──────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
+                                       │   SPIN Navigator  │                          (run by an agent CLI)
+you ◀── spin status ◀── HUMAN_QUEUE ◀──│   tick loop       │ ◀── INBOX.md ◀────────── project receipts
+                                       └──────────────────┘
 ```
 
-## Why this exists
+## Install in 30 seconds
 
-Running multiple AI-driven projects from chat sessions doesn't scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. This kit replaces that with a small, inspectable org:
+```bash
+git clone https://github.com/claudiaclawdbot/spin.git ~/spin
+cd ~/spin && ./install.sh          # checks deps, seeds runtime files, links `spin` + `org`
 
-- **One driver loop** (`workspace-ceo-tick.sh`) — it claims a lock file at startup, so a second accidental launch just prints "already running" and exits instead of silently doubling your LLM spend.
-- **An LLM "brain" that only runs when something changed** — idle ticks are free.
+spin doctor                        # confirm your setup
+scripts/bootstrap-project.sh my-app    # register your first project
+spin start                         # launch the Navigator loop
+spin                               # check on it any time
+```
+
+One-liner (review the script first, like any `curl | bash`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash
+```
+
+**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` — `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for the interactive floor agents.
+
+## Why SPIN exists
+
+Running multiple AI-driven projects from chat sessions doesn't scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. SPIN replaces that with a small, inspectable org:
+
+- **One Navigator loop** — it claims a lock file at startup, so a second accidental launch just prints "already running" and exits instead of silently doubling your LLM spend.
+- **A brain that only thinks when something changed** — the LLM runs only when watched inputs move (content hash, not mtime). An idle org costs a couple of LLM calls a day.
 - **Detached background jobs** for real work — cmux is *display only* (a hard-won lesson; see [docs/LESSONS.md](docs/LESSONS.md)).
-- **Four hard gates** — the org acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
+- **State changed through a CLI, never hand-edited** — agents call `org queue-job …`, `org set-state …`; the verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.
+- **Four hard gates** — SPIN acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
 - **Receipts for everything** — every brain run and job writes an append-only audit trail.
 
 ## The cast (read this first — the names overlap confusingly)
 
-Several of these names are both a product and a model family. In this README they always mean the **CLI tool on your PATH**:
+Several of these are both a product and a model family. Here they always mean the **CLI tool on your PATH**:
 
-| Name | What it actually is | Role in this kit |
+| Name | What it actually is | Role in SPIN |
 |---|---|---|
-| **workspace-ceo** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
-| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI (any model behind it) | the **floor agents** — the idle REPLs sitting in each cmux floor that you (or the CEO) can hand work to directly |
-| **`codex`** (OpenAI Codex CLI), **`claude`** (Claude Code), **`gemini`** (Google Gemini CLI) | headless-capable coding-agent CLIs, each wrapping its vendor's models | the **job workers** — the dispatcher spawns one per queued job, trying them in waterfall order |
-| **`ollama`** | a local model runtime (not an agent harness) | last-resort fallback when every cloud CLI is rate-limit benched |
+| **SPIN** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
+| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI | the **floor agents** — idle REPLs in each cmux floor you (or the Navigator) hand work to |
+| **`codex`** / **`claude`** / **`gemini`** | headless-capable coding-agent CLIs, each wrapping its vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
+| **`ollama`** | a local model runtime | last-resort fallback when every cloud CLI is rate-limit benched |
 | [**cmux**](https://cmux.io) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
 
-Two naming notes: the registry file is `OMP_HARNESS.json` and the dispatcher is `omp-supervisor-once.sh` because "OMP" is this org's internal name, inherited from the omp-centric setup it grew out of — the files keep that name so the engine matches real deployments. And "the brain"/"the CEO" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context.
+The Navigator's "brain" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
 
 ## The five layers
 
 ```mermaid
 flowchart TD
-    H["1 · HUMAN<br/>sets direction · approves the 4 gated actions<br/>interface: the ceo command + cmux floors"]
+    H["1 · HUMAN (you)<br/>sets direction · approves the 4 gated actions<br/>interface: the spin command + cmux floors"]
     C["2 · CHAT ASSISTANT (optional)<br/>your conversational front door — reads/writes the same org files"]
-    W["3 · WORKSPACE CEO<br/>tick loop: render cockpit → dispatch queue → change-gated LLM brain<br/>coordinates, never codes"]
+    W["3 · SPIN NAVIGATOR<br/>tick loop: render cockpit → dispatch queue → change-gated LLM brain<br/>coordinates, never codes"]
     P["4 · PROJECT ORCHESTRATORS<br/>one per project — execute jobs, update STATE/RECEIPTS, report to INBOX"]
-    S["5 · WORKERS / SUBAGENTS<br/>per-task LLM invocations: code edits, research, drafts, builds"]
-    H -->|"ceo approve / decline / ask"| W
+    S["5 · WORKERS / SUBAGENTS<br/>per-task agent-CLI invocations: code edits, research, drafts, builds"]
+    H -->|"spin approve / decline / ask"| W
     C --> W
-    W -->|"AGENT_QUEUE.json + WORKSPACE_HANDOFF.md"| P
-    P -->|"INBOX.md + STATE.json"| W
+    W -->|"org queue-job + set-handoff"| P
+    P -->|"org inbox + STATE.json"| W
     P --> S
-    W -->|"HUMAN_QUEUE.md (only the 4 gated things)"| H
+    W -->|"org escalate (only the 4 gated things)"| H
 ```
 
 ## Communication is just files
 
 | File | Direction | Purpose |
 |---|---|---|
-| `org/projects/<p>/WORKSPACE_HANDOFF.md` | CEO → project | current directive |
-| `org/ceo/INBOX.md` | project → CEO | progress reports, escalations |
-| `org/HUMAN_QUEUE.md` | CEO → you | the *only* things needing a decision |
-| `org/ceo/APPROVALS.md` | you → CEO | your approve/decline/ask answers |
+| `org/projects/<p>/WORKSPACE_HANDOFF.md` | Navigator → project | current directive |
+| `org/ceo/INBOX.md` | project → Navigator | progress reports, escalations |
+| `org/HUMAN_QUEUE.md` | Navigator → you | the *only* things needing a decision |
+| `org/ceo/APPROVALS.md` | you → Navigator | your approve/decline/ask answers |
 | `org/state.json` | shared | org truth (projects, statuses) |
-| `org/AGENT_QUEUE.json` | CEO → dispatcher | the job queue |
+| `org/AGENT_QUEUE.json` | Navigator → dispatcher | the job queue |
 | `org/ceo/runs/` | append-only | receipts (audit trail) |
 
 No database, no message broker, no daemon you can't `cat`.
 
-## Quickstart
+## The two commands
 
-```bash
-git clone https://github.com/claudiaclawdbot/workspace-ceo.git ~/workspace
-cd ~/workspace && ./install.sh        # creates runtime org files, checks deps, links the `ceo` command
-
-# register your first project
-scripts/bootstrap-project.sh my-app    # creates org/projects/my-app/ (prompt, STATE, receipts)
-$EDITOR org/projects/my-app/PROJECT_CONTROLLER_PROMPT.md   # give it a real charter
-$EDITOR org/OMP_HARNESS.json                               # add my-app to "projects" (copy example-app)
-
-# start the org
-bash scripts/workspace-ceo-tick.sh     # ideally inside a cmux pane so you can watch it
-
-# talk to it (from any terminal)
-ceo                       # status: what's running, what's waiting on you
-ceo approve "my-app …"    # answer an approval ask
-ceo log                   # watch the brain's receipts live
-```
-
-**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` — `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for the interactive floor agents.
-
-## Isn't a coding-agent CLI already this?
-
-No — and the distinction is the whole point. Claude Code, Codex CLI, Gemini CLI, and omp are **engines**: one brilliant session, one working directory, tools, even subagent fan-out *within that session*. This kit is the **plant around the engines**. It adds the layer the agent CLIs deliberately don't have:
-
-| Need | A coding-agent CLI alone | workspace-ceo |
-|---|---|---|
-| Something happens while you're away | only while a session runs (and an always-on session burns tokens idling) | tick loop; **change-gated** brain — an idle org costs a few LLM calls a day |
-| State that outlives a context window | session resume, until compaction eats it | plain files (`STATE.json`, receipts, handoffs) — greppable forever |
-| Several projects at once | one cwd per session; you are the router | CEO routes via queue + per-project handoffs; parallel detached jobs |
-| Provider hits its usage limit | session stops; you switch tools manually | waterfall auto-benches the provider and advances (codex → claude → gemini → ollama) |
-| "Don't email anyone without asking" | a prompt instruction you hope holds, re-stated per session | standing gates + an approval queue (`ceo approve`) + audit receipts |
-| A job hangs / duplicates / dies silently | you notice, eventually | jobs tracked by PID with timeouts, only-one-of-me lock files, silent-exit retry, watchdog |
-
-Put differently: the agent CLIs are excellent *employees*; this is the *org chart, the inbox, the approval chain, and the time clock*. The two compose — each dispatched job IS one of those CLIs, and interactive floor agents are plain `omp` sessions you can talk to directly.
-
-## What it looks like
-
-The `ceo` command, from any terminal:
+**`spin`** — your control surface:
 
 ```
-═══ Workspace CEO ═══  Wed 23:30
-● running (PID 35715)
-
-Projects
-  • my-app       — landing page shipped; tests green; drafting launch copy
-  • my-contract  — all local work done, deploy gated on your approval
-
-Waiting on you
-  ⏳ my-app outreach send approval — 16 drafts staged, top 5 ranked
-  ⏳ my-contract testnet deploy — needs faucet ETH + --broadcast approval
-
-approve with:  ceo approve "<project> <what>"   (or: ceo decline "...")
+spin                 status: projects, what's waiting on you, recent activity
+spin watch           live dashboard, refreshing
+spin approve "<x>"   answer an approval   ·   spin decline / spin ask
+spin start | stop    run / pause the Navigator loop
+spin up | down       launch / tear down all cmux floors + daemons
+spin doctor          health check: deps, driver, floors, watchers
 ```
 
-And the driver pane ticking in cmux:
+**`org`** — how agents change state safely (you rarely type this; the Navigator does):
 
 ```
-[dispatch] running queue tick…
-  dispatched my-app-fix-pricing-20260611 (implementation-worker)  →  pid=75454
-[ceo] invoking agent brain (content changed)…
-[ceo] agent run complete.
-Next tick in 900s  (Ctrl-C to stop)
+org queue-job <project> <type> "<desc>" [--max-runtime SEC]
+org set-handoff <project>        org set-state <project> --status S --next "…"
+org escalate "<item>"            org process-approval <sel> <approve|decline|ask> --note "…"
+org receipt                      org inbox <project> "<msg>"        org show
 ```
 
-## What runs where
-
-| Piece | Script | Runs as |
-|---|---|---|
-| Driver loop (cockpit + dispatch + brain) | `workspace-ceo-tick.sh` | one foreground loop in a cmux pane |
-| CEO brain (LLM decision pass) | `workspace-ceo-agent.sh` | invoked by the tick, change-gated |
-| Job dispatcher | `omp-supervisor-once.sh` | invoked by the tick; spawns detached jobs |
-| Project agent (one job) | `project-ceo-agent.sh <id>` | detached background process, PID + log in `org/jobs/` |
-| Interactive floor agents | `cmux-floor.sh <id>` | idle `omp` REPL per floor — costs nothing until spoken to |
-| Status roll-up + driver watchdog | `workspace-status-watch.sh` | tiny nohup daemon, no LLM |
-| Wiki (per-project knowledge pages) | `wiki-watch.sh` | tiny nohup daemon, LLM only on change |
-| Bring it all up/down | `workstation.sh up\|down\|status` | helper |
+Every `org` verb validates its input (unknown project? disallowed job type? → rejected), takes a lock, writes atomically, and never deletes history.
 
 ## Cost & reliability design
 
-- **Change-gated brain** — the LLM only runs when watched inputs (INBOX, approvals, project STATE) actually changed (content hash, not mtime), or every Nth tick as a heartbeat. An idle org costs ~3 brain runs a day.
-- **CLI waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — jobs try `codex → claude → gemini → ollama` (the four CLIs from [the cast](#the-cast-read-this-first--the-names-overlap-confusingly), each using its own vendor's models); any CLI that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An explicit override is *ignored* while that CLI is benched — a stale caller can't resurrect a rate-limited tool.
-- **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file on startup and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer (ask us how we know).
-- **Silent-exit retry** — if a job exits 0 but changed no files, it's retried once on claude. Catches agents that "succeed" without doing anything.
-- **Kill switch** — `touch org/ceo/runs/STOP` pauses the whole org; `rm` it to resume. The watchdog paints a red chip + notification if the driver dies *without* a STOP file.
+- **Change-gated brain** — the LLM runs only when real inputs (approvals, inbox, project state) changed, plus a low-frequency heartbeat.
+- **CLI waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — jobs try `codex → claude → gemini → ollama`; any CLI that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An override is *ignored* while that CLI is benched — a stale caller can't resurrect a rate-limited tool.
+- **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer.
+- **Job timeouts** — a hung job is killed (whole process group) after `max_runtime_seconds` (default 1 h) so it can't hold its project lane forever.
+- **Silent-exit retry** — a job that exits 0 having changed no files is retried once on claude.
+- **Driver watchdog** — a red chip + desktop notification when the loop dies without a STOP file.
+- **Kill switch** — `spin stop` (or `touch org/ceo/runs/STOP`) pauses the whole org; `spin start` resumes.
 
 ## The four gates (safety model)
 
-The org does local, reversible work without asking. It must stop and queue a `HUMAN_QUEUE.md` item for:
+SPIN does local, reversible work without asking. It stops and queues a `HUMAN_QUEUE.md` item for:
 
 1. **Sending anything external** — email, DM, form, public post.
 2. **Spending money** — gas, wallets, paid APIs beyond your subscriptions.
@@ -172,18 +151,22 @@ Keys stay out of the repo (`~/.config/omp.env`, chmod 600). The gate is *behavio
 ## Repo layout
 
 ```
-scripts/            the whole engine (bash + a little node, no build step)
-  lib/ceo-waterfall.sh   provider selection, benching, timeouts
+spin-bootstrap.sh    one-file self-extracting installer (clone-free)
+install.sh           setup for a git clone
+scripts/             the engine (bash + node, no build step)
+  spin                 your command
+  org                  the state CLI agents call
+  lib/ceo-waterfall.sh provider selection, benching, timeouts
 org/
-  OMP_HARNESS.json       registry: projects, job types, dispatch config
-  ceo/                   CEO prompt, approvals, inbox, runs/ (receipts)
-  projects/example-app/  what a registered project looks like
+  OMP_HARNESS.json     registry: projects, job types, dispatch config
+  ceo/                 Navigator prompt, approvals, inbox, runs/ (receipts)
+  projects/example-app/ what a registered project looks like
 docs/
-  ARCHITECTURE.md        the five layers + one tick, in detail
-  LESSONS.md             v1 → v3: what broke and what fixed it
-  ROADMAP.md             known weaknesses, honestly ranked
+  ARCHITECTURE.md      the five layers + one tick, in detail
+  LESSONS.md           v1 → v4: what broke and what fixed it
+  ROADMAP.md           known weaknesses, honestly ranked
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Built in the open; issues and PRs welcome (see [CONTRIBUTING](CONTRIBUTING.md)).

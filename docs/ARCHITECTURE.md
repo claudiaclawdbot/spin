@@ -6,10 +6,10 @@ this describes the system you're part of.
 ## The five layers
 
 1. **Human (owner).** Sets direction, answers the four gated asks, funds wallets.
-   Interface: the `ceo` command and (optionally) cmux floors.
+   Interface: the `spin` command and (optionally) cmux floors.
 2. **Chat assistant (optional).** Your conversational front door. It reads and
    writes the same org files as everything else — it is *not* the autonomous loop.
-3. **Workspace CEO.** The single driver loop (`scripts/workspace-ceo-tick.sh`).
+3. **SPIN Navigator.** The single driver loop (`scripts/workspace-ceo-tick.sh`).
    Coordinates, never codes. Only one instance can run: it claims a lock file
    at startup and a second launch exits immediately.
 4. **Project orchestrators.** One per registered project. Run as dispatched
@@ -32,17 +32,28 @@ this describes the system you're part of.
    - update cmux status chips (display only — never executes through cmux).
 3. **Brain** (`workspace-ceo-agent.sh`) — *only if* watched inputs changed
    (content hash over APPROVALS, INBOX, HUMAN_QUEUE, project STATE files, with
-   volatile timestamp fields stripped), or every Nth tick as a heartbeat:
-   - processes human approvals (moves them Pending → Processed);
-   - decides each project's next step; queues jobs; writes handoffs;
-   - escalates *only* the four gated things to `org/HUMAN_QUEUE.md`;
-   - writes a receipt to `org/ceo/runs/` — the audit trail.
+   volatile timestamp fields stripped), or every Nth tick as a heartbeat. It calls
+   the `org` CLI (never edits JSON by hand) to:
+   - process human approvals (`org process-approval` moves them Pending → Processed);
+   - decide each project's next step (`org queue-job`, `org set-handoff`, `org set-state`);
+   - escalate *only* the four gated things (`org escalate` → `org/HUMAN_QUEUE.md`);
+   - write a receipt (`org receipt` → `org/ceo/runs/`) — the audit trail.
    A timeout guard kills a hung brain so the loop never freezes.
+
+## The `org` state CLI — why agents don't touch JSON
+
+An LLM editing shared JSON is the least robust joint in any file-based org: one
+mistyped bracket corrupts the queue. So every state mutation goes through
+`scripts/org` (a small node CLI). Each verb **validates** (unknown project or
+disallowed job type is rejected), takes an **exclusive lock** (atomic create,
+stale-lock break-in by dead-PID check), writes **atomically** (temp + rename),
+and is **append-only** where history matters. The brain's prompt forbids direct
+JSON edits; its only freeform writes are receipts and project-prompt drafts.
 
 ## Job lifecycle
 
 ```
-CEO brain ──appends──▶ AGENT_QUEUE.json (status: queued)
+Navigator brain ──appends──▶ AGENT_QUEUE.json (status: queued)
 tick N+1 dispatcher ──spawns──▶ bash project-ceo-agent.sh <project>   (detached, env: OMP_JOB_*)
                                  │  log: org/jobs/<id>.log   pid: org/jobs/<id>.pid
 agent ──writes──▶ project STATE.json + RECEIPTS.md ──appends──▶ org/ceo/INBOX.md
@@ -61,7 +72,7 @@ its own vendor's models: `codex` = OpenAI Codex CLI, `claude` = Claude Code,
 `gemini` = Google Gemini CLI, `ollama` = local model runtime.
 
 ```
-codex → claude → gemini → ollama        (workspace CEO skips codex by default
+codex → claude → gemini → ollama        (the Navigator skips codex by default
                                          to preserve quota for project work)
 ```
 
@@ -79,7 +90,7 @@ codex → claude → gemini → ollama        (workspace CEO skips codex by defa
 | duplicate driver loops (quota burn) | lock file claimed atomically at startup; a second copy sees it and exits |
 | hung brain | per-run `timeout`, loop continues |
 | agent exits 0 having done nothing | post-run content diff → one retry on claude |
-| driver dies / forgotten STOP file | status-watch daemon paints a red chip + notification; `ceo` shows ● / ○ |
+| driver dies / forgotten STOP file | status-watch daemon paints a red chip + notification; `spin` shows ● / ○ |
 | owner pauses the org | `touch org/ceo/runs/STOP` (resume: `rm`) — explicit, visible state |
 | machine sleeps | ticks simply don't run; loop resumes on wake (use `caffeinate`/a server for 24/7) |
 

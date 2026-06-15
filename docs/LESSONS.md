@@ -1,6 +1,6 @@
-# Lessons — how v1/v2 broke and what v3 does instead
+# Lessons — how v1–v3 broke and what v4 (SPIN) does instead
 
-This kit is the third architecture. The first two failed in instructive ways.
+SPIN is the fourth architecture. The earlier ones failed in instructive ways.
 Everything below was paid for in burned quota and silent no-ops.
 
 ## 1. Never execute work by typing into terminal panes
@@ -89,3 +89,19 @@ Approval fatigue kills autonomy; zero gates kill trust. The stable point we
 found: agents act freely on anything **local and reversible**, and stop for
 exactly four things — external sends, money, production deploys, protected
 pushes. Big irreversible deletions ride the same gate.
+
+## 10. Don't let an LLM hand-edit your shared state (the v4 change)
+
+For three architectures the brain wrote `state.json` and `AGENT_QUEUE.json`
+directly, kept in line only by prompt discipline ("append, don't replace").
+It mostly held — until it didn't: a wrong-direction doc edit, a node crash
+mid-write, a job blocked because the model invented a `project_id`. An LLM
+editing shared JSON is the least robust joint in a file-based org.
+
+**v4:** all mutations go through the `org` CLI (`scripts/org`). Each verb
+**validates** (unknown project / disallowed job type → rejected before any
+write), takes an **exclusive lock**, writes **atomically** (temp + rename), and
+is **append-only** where history matters. The brain's prompt now forbids direct
+JSON edits; its only freeform writes are receipts and project-prompt drafts. The
+LLM still decides *what* to do — it just can no longer corrupt the ledger doing
+it. Bonus: every mutation is now a shell command you can test, log, and replay.
