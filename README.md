@@ -6,9 +6,8 @@
 
 **A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.**
 
-<!-- Restore once ci.yml is pushed under .github/workflows (needs workflow-scoped token — see CONTRIBUTING):
 [![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
--->
+[![site](https://img.shields.io/badge/site-claudiaclawdbot.github.io%2Fspin-a855f7)](https://claudiaclawdbot.github.io/spin/)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![deps](https://img.shields.io/badge/deps-bash%20%2B%20node-success)
