@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPIN — Super Pi Interoperable Navigator</title>
+<meta name="description" content="A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.">
+<meta property="og:title" content="SPIN — Super Pi Interoperable Navigator">
+<meta property="og:description" content="A file-based AI org that coordinates coding-agent CLIs across your projects, with a human-approval gate on anything that leaves the machine.">
+<style>
+  :root{
+    --bg:#0a0a12; --bg2:#0f0f1c; --panel:#15152a; --line:#262645;
+    --ink:#e8e8f4; --dim:#9a9ab8; --faint:#6a6a88;
+    --violet:#a855f7; --violet2:#7c3aed; --cyan:#22d3ee; --grn:#34d399; --amber:#fbbf24;
+    --mono:'SFMono-Regular',ui-monospace,'JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:radial-gradient(1200px 700px at 50% -10%,#1a1335 0%,var(--bg) 55%);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--violet);text-decoration:none}
+  a:hover{color:var(--cyan)}
+  .wrap{max-width:980px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0;border-top:1px solid var(--line)}
+  h2{font-size:1.7rem;margin:0 0 6px;letter-spacing:-.02em}
+  h2 .n{color:var(--faint);font-family:var(--mono);font-size:1rem;margin-right:10px}
+  .lede{color:var(--dim);max-width:64ch;margin:.2rem 0 1.6rem}
+
+  /* hero */
+  .hero{text-align:center;padding:74px 0 56px;border:none}
+  .spinner{width:128px;height:128px;margin:0 auto 26px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .wordmark{font-size:4.4rem;font-weight:800;letter-spacing:-.04em;margin:0;line-height:1;
+    background:linear-gradient(120deg,#fff 10%,var(--violet) 55%,var(--cyan) 95%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{font-family:var(--mono);color:var(--dim);letter-spacing:.18em;text-transform:uppercase;font-size:.78rem;margin:14px 0 0}
+  .tag{font-size:1.32rem;color:var(--ink);max-width:38ch;margin:22px auto 30px}
+  .tag b{color:var(--violet)}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:11px;font-weight:600;font-size:.96rem;border:1px solid var(--line);transition:.18s}
+  .btn.primary{background:linear-gradient(120deg,var(--violet2),var(--violet));color:#fff;border-color:transparent;box-shadow:0 8px 30px -8px var(--violet2)}
+  .btn.primary:hover{transform:translateY(-2px);color:#fff}
+  .btn.ghost{background:var(--panel);color:var(--ink)}
+  .btn.ghost:hover{border-color:var(--violet);color:var(--ink)}
+  .badges{margin-top:26px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--faint)}
+  .badge{border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#11111f}
+
+  /* terminal install box */
+  .term{background:#0c0c16;border:1px solid var(--line);border-radius:13px;overflow:hidden;margin:14px 0;box-shadow:0 20px 60px -30px #000}
+  .term .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;background:#13132400;border-bottom:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+  .term .title{margin-left:8px;color:var(--faint);font-family:var(--mono);font-size:.74rem}
+  .term pre{margin:0;padding:18px 18px;font-family:var(--mono);font-size:.86rem;color:var(--ink);overflow-x:auto;line-height:1.7}
+  .term .c{color:var(--grn)} .term .p{color:var(--faint)} .term .o{color:var(--dim)}
+  .copy{float:right;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--dim);
+    font-family:var(--mono);font-size:.7rem;border-radius:6px;padding:3px 9px;transition:.15s}
+  .copy:hover{border-color:var(--violet);color:var(--ink)}
+
+  /* generic grid + cards */
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+  .card h3{margin:0 0 6px;font-size:1.02rem}
+  .card .ic{font-size:1.3rem;margin-bottom:6px;display:block}
+  .card p{margin:0;color:var(--dim);font-size:.92rem}
+
+  /* flow diagram */
+  .flow{font-family:var(--mono);font-size:.82rem;background:#0c0c16;border:1px solid var(--line);border-radius:13px;padding:22px;overflow-x:auto}
+  .flow .lane{display:flex;align-items:center;gap:10px;white-space:nowrap;padding:5px 0}
+  .flow .box{border:1px solid var(--violet);color:var(--violet);border-radius:8px;padding:6px 12px;background:#160f28}
+  .flow .arrow{color:var(--faint)}
+  .flow .you{color:var(--cyan)} .flow .file{color:var(--amber)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  td code{font-family:var(--mono);color:var(--violet);font-size:.86em}
+  .dimcell{color:var(--dim)}
+
+  /* gates */
+  .gates{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .gate{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;padding:14px 16px}
+  .gate .g{font-size:1.4rem}
+  .gate b{display:block;margin-bottom:2px}
+  .gate span{color:var(--dim);font-size:.86rem}
+
+  footer{border-top:1px solid var(--line);padding:34px 0 60px;text-align:center;color:var(--faint);font-size:.85rem}
+  footer a{color:var(--dim)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:.7rem;color:var(--cyan);border:1px solid var(--line);border-radius:20px;padding:3px 12px;margin-bottom:18px;background:#0d1620}
+  @media(max-width:600px){.wordmark{font-size:3rem}.tag{font-size:1.1rem}}
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <!-- fidget-spinner motif: three lobes around a hub -->
+  <svg class="spinner" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#22d3ee"/>
+      </linearGradient>
+    </defs>
+    <g stroke="url(#g)" stroke-width="3">
+      <circle cx="50" cy="22" r="15" fill="#160f28"/>
+      <circle cx="74" cy="64" r="15" fill="#160f28"/>
+      <circle cx="26" cy="64" r="15" fill="#160f28"/>
+      <circle cx="50" cy="50" r="11" fill="#0a0a12"/>
+    </g>
+    <circle cx="50" cy="50" r="4" fill="url(#g)"/>
+  </svg>
+  <h1 class="wordmark">SPIN</h1>
+  <p class="sub">Super&nbsp;·&nbsp;Pi&nbsp;·&nbsp;Interoperable&nbsp;·&nbsp;Navigator</p>
+  <p class="tag">A file-based AI organization that runs your projects <b>while you sleep</b> — gated on the four things that actually matter.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin">⭐ Get it on GitHub</a>
+    <a class="btn ghost" href="#install">Install in 30s</a>
+  </div>
+  <div class="badges">
+    <span class="badge">MIT</span><span class="badge">bash + node</span>
+    <span class="badge">macOS · Linux</span><span class="badge">claude · codex · gemini · ollama</span>
+  </div>
+</header>
+
+<section id="what" class="wrap" style="border-top:none">
+  <h2><span class="n">01</span>The plant around your agent CLIs</h2>
+  <p class="lede">Coding-agent CLIs (Claude Code, Codex, Gemini, omp) are brilliant <em>employees</em> — one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around them: it schedules, routes, budgets, gates, and audits the work.</p>
+  <div class="grid">
+    <div class="card"><span class="ic">🌀</span><h3>One Navigator loop</h3><p>Claims a lock file at startup — a second launch just exits, instead of silently doubling your LLM spend.</p></div>
+    <div class="card"><span class="ic">🧠</span><h3>Thinks only on change</h3><p>The brain runs only when watched inputs actually move. An idle org costs a couple of LLM calls a day.</p></div>
+    <div class="card"><span class="ic">🗂️</span><h3>State via a CLI, never by hand</h3><p>Agents call <code>org queue-job …</code>; verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.</p></div>
+    <div class="card"><span class="ic">🚦</span><h3>Four hard gates</h3><p>Acts freely on local, reversible work. Stops for external sends, money, prod deploys, protected pushes.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Auto-failover</h3><p>codex → claude → gemini → ollama. A rate-limited CLI is benched; the waterfall advances. No dead-ends.</p></div>
+    <div class="card"><span class="ic">🧾</span><h3>Receipts for everything</h3><p>Every brain run and job writes an append-only audit trail you can <code>cat</code>.</p></div>
+  </div>
+</section>
+
+<section id="install" class="wrap">
+  <h2><span class="n">02</span>Install in 30 seconds</h2>
+  <p class="lede">One self-extracting file packages the whole setup — scripts, prompts, org skeleton. Review it first, like any <code>curl | bash</code>.</p>
+  <div class="term">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
+      <button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash">copy</button></div>
+    <pre><span class="p">$</span> <span class="c">curl</span> -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh <span class="p">|</span> <span class="c">bash</span></pre>
+  </div>
+  <div class="term">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">or clone</span>
+      <button class="copy" data-copy="git clone https://github.com/claudiaclawdbot/spin.git ~/spin && cd ~/spin && ./install.sh">copy</button></div>
+    <pre><span class="p">$</span> <span class="c">git</span> clone https://github.com/claudiaclawdbot/spin.git ~/spin
+<span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&&</span> <span class="c">./install.sh</span>
+<span class="o">  ✓ linked: spin, org → ~/.local/bin/</span>
+<span class="p">$</span> <span class="c">spin</span> doctor          <span class="o"># checks deps, driver, floors</span>
+<span class="p">$</span> <span class="c">spin</span> start           <span class="o"># launch the Navigator loop</span></pre>
+  </div>
+  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and at least one agent CLI on your PATH. <a href="https://cmux.io">cmux</a> + <a href="https://omp.sh">omp</a> optional, for the visual floors.</p>
+</section>
+
+<section id="how" class="wrap">
+  <h2><span class="n">03</span>It's just files</h2>
+  <p class="lede">No database, no message broker, no daemon you can't read. The whole org talks through plain files you can grep and audit.</p>
+  <div class="flow">
+    <div class="lane"><span class="you">you</span> <span class="arrow">──spin approve──▶</span> <span class="file">APPROVALS.md</span> <span class="arrow">──▶</span> <span class="box">SPIN Navigator</span> <span class="arrow">──▶</span> <span class="file">AGENT_QUEUE.json</span> <span class="arrow">──▶</span> detached agent jobs</div>
+    <div class="lane"><span class="you">you</span> <span class="arrow">◀──spin status──</span> <span class="file">HUMAN_QUEUE.md</span> <span class="arrow">◀──</span> <span class="box">tick loop</span> <span class="arrow">◀──</span> <span class="file">INBOX.md</span> <span class="arrow">◀──</span> project receipts</div>
+  </div>
+  <h3 style="margin:26px 0 0;font-size:1.05rem">The cast — names that overlap, pinned down</h3>
+  <table>
+    <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
+    <tr><td><b>SPIN</b></td><td class="dimcell">a bash+node orchestration layer</td><td class="dimcell">schedules, routes, gates, audits</td></tr>
+    <tr><td><code>omp</code></td><td class="dimcell">interactive coding-agent CLI</td><td class="dimcell">the floor agents you talk to</td></tr>
+    <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">headless agent CLIs (each wraps its vendor's models)</td><td class="dimcell">the job workers, in waterfall order</td></tr>
+    <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort fallback</td></tr>
+    <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">display only — never runs jobs</td></tr>
+  </table>
+</section>
+
+<section id="gates" class="wrap">
+  <h2><span class="n">04</span>The four gates</h2>
+  <p class="lede">SPIN does local, reversible work without asking. It stops and waits for exactly four things — enforced behaviorally by every prompt, surfaced as an approval queue.</p>
+  <div class="gates">
+    <div class="gate"><span class="g">📤</span><div><b>External sends</b><span>email, DM, form, public post</span></div></div>
+    <div class="gate"><span class="g">💸</span><div><b>Spending money</b><span>gas, wallets, paid APIs</span></div></div>
+    <div class="gate"><span class="g">🚀</span><div><b>Production deploys</b><span>anything that ships to prod</span></div></div>
+    <div class="gate"><span class="g">🔒</span><div><b>Protected pushes</b><span><code>main</code> or any human-owned repo</span></div></div>
+  </div>
+</section>
+
+<section id="docs" class="wrap">
+  <h2><span class="n">05</span>Go deeper</h2>
+  <div class="grid">
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><span class="ic">🗺️</span><h3>Roadmap →</h3><p>Known weaknesses, honestly ranked. What's solid, what still leans on luck.</p></a>
+  </div>
+</section>
+
+<footer class="wrap">
+  <div class="pill">spin · super pi interoperable navigator</div><br>
+  Built in the open · MIT · <a href="https://github.com/claudiaclawdbot/spin">github.com/claudiaclawdbot/spin</a>
+</footer>
+
+<script>
+  document.querySelectorAll('.copy').forEach(b=>{
+    b.addEventListener('click',async()=>{
+      try{await navigator.clipboard.writeText(b.dataset.copy);const t=b.textContent;b.textContent='copied ✓';setTimeout(()=>b.textContent=t,1400);}catch(e){}
+    });
+  });
+</script>
+</body>
+</html>
