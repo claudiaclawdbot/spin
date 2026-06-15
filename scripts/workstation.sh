@@ -6,7 +6,7 @@
 #
 # NOTE: run with bash (shebang) — relies on word-splitting that zsh disables.
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 
 # floor map: "<workspace-ref> <floor-target>", derived from org/OMP_HARNESS.json —
 # the registry is the single source of truth (this list drifted when hardcoded).

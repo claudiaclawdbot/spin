@@ -13,7 +13,7 @@
 #   nohup bash scripts/wiki-watch.sh >logs/wiki-watch.log 2>&1 &
 
 set -uo pipefail
-ROOT="${WORKSPACE_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+ROOT="${WORKSPACE_ROOT:-${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCK="$ROOT/org/ceo/runs/.wiki-watch.lock"
 STOP="$ROOT/org/ceo/runs/WIKI_WATCH_STOP"

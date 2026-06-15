@@ -9,7 +9,7 @@
 # The Workspace CEO reads it next tick (within ~15 min, sooner if you nudge it).
 
 set -euo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 FILE="$ROOT/org/ceo/APPROVALS.md"
 MSG="${*:?usage: approve.sh \"APPROVE: <what> — <note>\"}"
 TS="$(date -u '+%Y-%m-%dT%H:%MZ')"

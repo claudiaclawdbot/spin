@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
-# ceo — talk to the Workspace CEO from any terminal pane.
+# spin — drive SPIN (Super Pi Interoperable Navigator) from any terminal.
 #
-#   ceo                  show status: projects, what's waiting on you, recent activity
-#   ceo watch            LIVE dashboard — all agents/jobs + what's waiting, refreshing
-#   ceo chat             TALK to the Workspace CEO live (conversational agent)
-#   ceo jobs             one-shot view of running/queued/recent jobs
-#   ceo approve "<x>"    approve something  (e.g. ceo approve "built-by-ai send Draft 1")
-#   ceo decline "<x>"    decline / hold something
-#   ceo ask "<q>"        ask the CEO a question (async — picked up next tick)
-#   ceo log              follow the CEO's live activity log
-#   ceo start            start the CEO driver loop (nohup daemon)
-#   ceo stop             pause the CEO driver loop (sets STOP flag)
-#   ceo help             this help
+#   spin                 show status: projects, what's waiting on you, recent activity
+#   spin watch           LIVE dashboard — all agents/jobs + what's waiting, refreshing
+#   spin chat            TALK to the Navigator live (conversational agent)
+#   spin jobs            one-shot view of running/queued/recent jobs
+#   spin approve "<x>"   approve something  (e.g. spin approve "my-app send Draft 1")
+#   spin decline "<x>"   decline / hold something
+#   spin ask "<q>"       ask the Navigator a question (async — picked up next tick)
+#   spin log             follow the Navigator's live activity log
+#   spin start           start the driver loop (nohup daemon)
+#   spin stop            pause the driver loop (sets STOP flag)
+#   spin up              launch every cmux floor + roll-up daemons (workstation up)
+#   spin down            quit floors + stop daemons (workstation down)
+#   spin doctor          health check: deps, driver, floors, watchers
+#   spin help            this help
 #
-# `ceo chat` is the live interface — talk to it like a person, it reads state and acts.
+# `spin chat` is the live interface — talk to it like a person, it reads state and acts.
 # approve/decline/ask are the quick async path (the loop picks them up next tick).
 
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 ORG="$ROOT/org"
 APPROVALS="$ORG/ceo/APPROVALS.md"
 STATE="$ORG/state.json"
@@ -33,7 +36,7 @@ case "$cmd" in
   chat|talk)
     PROMPT_FILE="$ORG/ceo/CEO_CHAT_PROMPT.md"
     if ! command -v claude >/dev/null 2>&1; then echo "claude CLI not found"; exit 1; fi
-    echo "${c_cyn}Connecting you to the Workspace CEO…${c_off}  ${c_dim}(Ctrl-C or 'exit' to leave)${c_off}"
+    echo "${c_cyn}Connecting you to the Navigator…${c_off}  ${c_dim}(Ctrl-C or 'exit' to leave)${c_off}"
     echo "${c_dim}Talk normally: \"what's going on?\", \"have built-by-ai prep 3 more leads\", \"hold the fidget deploy\"…${c_off}"
     echo
     # Interactive Claude session, pre-loaded as the CEO operator, with org write access.
@@ -65,17 +68,35 @@ case "$cmd" in
     fi
     LOCK="$RUN_DIR/.workspace-ceo-tick.lock"
     if [[ -f "$LOCK" ]] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
-      echo "${c_yel}CEO driver already running (PID $(cat "$LOCK")).${c_off}"; exit 0
+      echo "${c_yel}SPIN driver already running (PID $(cat "$LOCK")).${c_off}"; exit 0
     fi
     nohup "$ROOT/scripts/workspace-ceo-tick.sh" \
       >> "$RUN_DIR/workspace-ceo-driver.log" 2>&1 &
-    echo "${c_grn}CEO driver started (PID $!). Follow: ceo log${c_off}"
+    echo "${c_grn}SPIN driver started (PID $!). Follow: spin log${c_off}"
     exit 0
     ;;
   stop)
     touch "$RUN_DIR/STOP"
     echo "${c_yel}STOP flag set. Driver will pause after the current tick. Remove: rm $RUN_DIR/STOP${c_off}"
     exit 0
+    ;;
+  up)    exec "$ROOT/scripts/workstation.sh" up ;;
+  down)  exec "$ROOT/scripts/workstation.sh" down ;;
+  doctor)
+    echo "${c_bold}═══ SPIN doctor ═══${c_off}"
+    echo; echo "${c_bold}Dependencies${c_off}"
+    for d in bash node cmux omp; do
+      if command -v "$d" >/dev/null 2>&1; then echo "  ${c_grn}✓${c_off} $d"; else echo "  ${c_yel}–${c_off} $d $([[ $d == bash || $d == node ]] && echo '(REQUIRED)' || echo '(optional)')"; fi
+    done
+    echo "  agent CLIs:"; ac=0
+    for a in claude codex gemini ollama; do command -v "$a" >/dev/null 2>&1 && { echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1)); }; done
+    [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"
+    echo; echo "${c_bold}Driver${c_off}"
+    if [[ -f "$RUN_DIR/STOP" ]]; then echo "  ${c_yel}⏸ paused (STOP flag) — spin start to resume${c_off}"
+    elif [[ -f "$RUN_DIR/.workspace-ceo-tick.lock" ]] && kill -0 "$(cat "$RUN_DIR/.workspace-ceo-tick.lock" 2>/dev/null)" 2>/dev/null; then
+      echo "  ${c_grn}● running${c_off} (PID $(cat "$RUN_DIR/.workspace-ceo-tick.lock"))"
+    else echo "  ${c_red:-$c_yel}○ down${c_off} — spin start"; fi
+    echo; exec "$ROOT/scripts/workstation.sh" status
     ;;
   jobs)
     JOBS_DIR="$ROOT/org/jobs"
@@ -119,11 +140,11 @@ case "$cmd" in
   help|-h|--help)
     grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed '1d'; exit 0 ;;
   status|"") : ;;  # fall through to status below
-  *) echo "Unknown: $cmd  (try: ceo, ceo jobs, ceo approve \"...\", ceo stop/start, ceo log)"; exit 1 ;;
+  *) echo "Unknown: $cmd  (try: spin, spin jobs, spin approve "...", spin stop/start, spin log)"; exit 1 ;;
 esac
 
 # ---- status view ----
-echo "${c_bold}═══ Workspace CEO ═══${c_off}  ${c_dim}$(date '+%a %H:%M')${c_off}"
+echo "${c_bold}═══ SPIN ═══${c_off}  ${c_dim}$(date '+%a %H:%M')${c_off}"
 echo
 
 # driver alive?
@@ -131,7 +152,7 @@ lock="$RUN_DIR/.workspace-ceo-tick.lock"
 if [[ -f "$lock" ]] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
   echo "${c_grn}● running${c_off} (PID $(cat "$lock"))"
 else
-  echo "${c_yel}○ not running${c_off} — start it in the CEO pane"
+  echo "${c_yel}○ not running${c_off} — run: spin start"
 fi
 
 # projects
@@ -150,14 +171,14 @@ pending=$(awk '/^## Pending/{f=1;next}/^## Processed/{f=0}f&&/^- \[/' "$APPROVAL
 hq=$(awk '/^## Waiting On Human/{f=1;next}/^## /{if(f)f=0}f&&/^- /' "$HQ" 2>/dev/null)
 if [[ -n "$hq" ]]; then
   echo "$hq" | sed 's/^- /  ⏳ /'
-  echo "  ${c_dim}approve with:  ceo approve \"<project> <what>\"   (or: ceo decline \"...\")${c_off}"
+  echo "  ${c_dim}approve with:  spin approve \"<project> <what>\"   (or: spin decline \"...\")${c_off}"
 else
   echo "  ${c_grn}nothing — you're clear${c_off}"
 fi
 [[ -n "$pending" ]] && { echo; echo "  ${c_dim}already submitted (CEO will process next tick):${c_off}"; echo "$pending" | sed 's/^- /  → /'; }
 
 # recent activity
-echo; echo "${c_bold}Recent CEO activity${c_off}"
+echo; echo "${c_bold}Recent Navigator activity${c_off}"
 latest=$(ls -t "$RUN_DIR"/workspace-ceo-agent-*.md 2>/dev/null | head -1)
 if [[ -n "$latest" ]]; then
   awk '/## Decision/{f=1;next}/## /{if(f)exit}f' "$latest" | sed 's/^/  /' | head -6
@@ -165,4 +186,4 @@ else
   echo "  (no receipts yet)"
 fi
 echo
-echo "${c_dim}more: ceo log  ·  ceo ask \"...\"  ·  ceo help${c_off}"
+echo "${c_dim}more: spin log  ·  spin ask \"...\"  ·  spin help${c_off}"

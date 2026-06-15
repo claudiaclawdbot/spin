@@ -2,7 +2,7 @@
 # workspace-status.sh — roll up every project's FLOOR.md into one workspace status
 # doc for the CEO floor. Pure file I/O, no LLM, zero usage. Run once or via the watcher.
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 OUT="$ROOT/org/ceo/WORKSPACE_STATUS.md"
 
 # Driver health (workspace-ceo-tick loop): up / paused (STOP) / DOWN

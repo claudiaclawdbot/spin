@@ -37,5 +37,5 @@ receipt after meaningful work.
 
 - Append a one-paragraph receipt (include your job ID) to `RECEIPTS.md`.
 - Update `STATE.json` (`next_action`, timestamps).
-- Report up: append ONE line to `org/ceo/INBOX.md` in the form
-  `[<UTC ISO timestamp>] example-app: <what was done / what's blocked>`.
+- Report up to the Navigator with one command:
+  `scripts/org inbox example-app "<what was done / what's blocked>"`.

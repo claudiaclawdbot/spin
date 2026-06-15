@@ -9,7 +9,7 @@
 # Usage: launch-project-omx-ceo.sh <project-id>
 
 set -euo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 PROJECT_ID="${1:?usage: launch-project-omx-ceo.sh <project-id>}"
 
 echo "[deprecated] launch-project-omx-ceo.sh → project-ceo-agent.sh $PROJECT_ID" >&2

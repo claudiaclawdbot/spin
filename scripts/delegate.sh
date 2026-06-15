@@ -6,7 +6,7 @@
 #
 # Usage: delegate.sh <project-id> "<task text>"
 set -uo pipefail
-ROOT="${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 
 PID="${1:?usage: delegate.sh <project-id> \"<task>\"}"; shift
 TASK="$*"
