@@ -30,12 +30,14 @@ REPO="https://github.com/claudiaclawdbot/spin.git"
 say(){ printf '\033[35m%s\033[0m\n' "$*"; }
 b64d(){ base64 --decode 2>/dev/null || base64 -d 2>/dev/null || base64 -D; }
 
-cat <<'BANNER'
-   ___ ___ ___ _  _
-  / __| _ \_ _| \| |   Super Pi Interoperable Navigator
-  \__ \  _/| || .` |   self-extracting installer
-  |___/_| |___|_|\_|
-BANNER
+# NOTE: no heredocs below. When this script is piped (curl | bash) bash reads it
+# from the same stream a heredoc would consume, which desyncs over a network and
+# skips lines. printf never touches the stream, so it's pipe-safe.
+printf '%s\n' \
+'   ___ ___ ___ _  _' \
+'  / __| _ \_ _| \| |   Super Pi Interoperable Navigator' \
+'  \__ \  _/| || .` |   self-extracting installer' \
+'  |___/_| |___|_|\_|'
 say "→ installing to $DEST"
 
 if [ -e "$DEST" ] && [ -n "$(ls -A "$DEST" 2>/dev/null || true)" ]; then

@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: run installer (no agent CLIs in CI)
-        run: SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+        run: SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
       - name: assert runtime files exist
         run: |
           set -e
@@ -64,7 +64,7 @@ jobs:
       - name: dispatcher runs clean on the queue
         run: bash scripts/omp-supervisor-once.sh
       - name: installer is idempotent
-        run: SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
+        run: SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
 
   bootstrap-selfextract:
     name: single-file installer self-extracts
@@ -77,7 +77,7 @@ jobs:
           # rebuild from source (the committed copy is platform-built; tar mtimes
           # make byte-equality across OSes impossible, so we test the fresh build)
           bash scripts/build-bootstrap.sh
-          SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-bootstrap.sh "$RUNNER_TEMP/spin-fresh"
+          SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-bootstrap.sh "$RUNNER_TEMP/spin-fresh"
           test -f "$RUNNER_TEMP/spin-fresh/scripts/org"
           test -f "$RUNNER_TEMP/spin-fresh/scripts/spin"
           test -f "$RUNNER_TEMP/spin-fresh/org/state.json"

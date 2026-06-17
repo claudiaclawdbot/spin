@@ -15,6 +15,15 @@ BANNER
 echo "install — root: $ROOT"
 echo
 
+# ── 0. auto-install dependencies (node, omp, cmux, an agent CLI) ─────────────
+# On by default so the one-liner gives you a working setup. Skip with SPIN_NO_DEPS=1
+# (CI sets it). Best-effort + idempotent — anything present is left alone.
+if [[ "${SPIN_NO_DEPS:-}" != "1" ]]; then
+  echo "Checking dependencies (set SPIN_NO_DEPS=1 to skip auto-install)…"
+  bash "$ROOT/scripts/install-deps.sh" || echo "  (dependency auto-install hit a snag — continuing; see notes above)"
+  echo
+fi
+
 # ── 1. dependency check ─────────────────────────────────────────────────────
 missing=0
 need() { command -v "$1" >/dev/null 2>&1 && echo "  ✓ $1" || { echo "  ✗ $1  ($2)"; missing=1; }; }
