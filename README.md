@@ -37,13 +37,14 @@ you ◀── spin status ◀── HUMAN_QUEUE ◀──│   tick loop       �
 
 ```bash
 git clone https://github.com/claudiaclawdbot/spin.git ~/spin
-cd ~/spin && ./install.sh          # installs missing deps, seeds runtime files, links `spin` + `org`
+cd ~/spin && ./install.sh    # installs missing deps, seeds runtime files, links `spin` + `org`
 
-spin doctor                        # confirm your setup
-scripts/bootstrap-project.sh my-app    # register your first project
-spin start                         # launch the Navigator loop
-spin                               # check on it any time
+spin init                    # onboarding wizard: providers (+ OpenRouter), your first
+                             # project, a supervisor that keeps it alive — then starts it
+spin                         # check on it any time
 ```
+
+`spin init` is the fast path. Prefer to wire it by hand? `spin doctor` → `scripts/bootstrap-project.sh my-app` → edit its charter → `spin service install` (keeps the driver alive across crashes/reboots) → `spin`.
 
 One-liner (review the script first, like any `curl | bash`):
 
@@ -167,8 +168,10 @@ spin-bootstrap.sh    tiny launcher for the curl|bash one-liner (clones + install
 spin-offline.sh      fully-offline single file (embeds everything; generated)
 install.sh           setup for a git clone
 scripts/             the engine (bash + node, no build step)
-  spin                 your command
+  spin                 your command (status, approve, init, service, …)
   org                  the state CLI agents call
+  spin-init.sh         onboarding wizard (spin init)
+  spin-service.sh      supervisor installer — launchd (macOS) / systemd (Linux)
   lib/ceo-waterfall.sh provider selection, benching, timeouts
 org/
   OMP_HARNESS.json     registry: projects, job types, dispatch config
