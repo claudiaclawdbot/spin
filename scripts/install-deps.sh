@@ -60,7 +60,7 @@ ensure_agent(){
   else guided+=("an agent CLI → Claude Code https://claude.com/claude-code · Codex · Gemini CLI · or Ollama"); fi
 }
 
-printf '%s\n' "${c_d}SPIN dependency check${DRY:+ (dry-run)}${c_o}"
+printf '%s\n' "${c_d}SPIN dependency check$([[ $DRY == 1 ]] && printf ' (dry-run)')${c_o}"
 ensure_node
 ensure_omp
 ensure_cmux
