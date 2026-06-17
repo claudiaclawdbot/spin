@@ -34,6 +34,13 @@ CEO_GEMINI_MODEL="${CEO_GEMINI_MODEL:-gemini-2.5-flash}"  # default to flash (co
 CEO_GEMINI_PRO_MODEL="${CEO_GEMINI_PRO_MODEL:-gemini-2.5-pro}"  # explicit override when needed
 CEO_OLLAMA_MODEL="${CEO_OLLAMA_MODEL:-qwen2.5:14b}"
 
+# The `omp` lane (oh-my-pi, headless `omp -p`) is the gateway to everything omp
+# supports — OpenRouter, Groq, xAI, Mistral, Cerebras, z.ai, Azure, … — via one
+# provider-prefixed model id. Opt-in: set CEO_OMP_MODEL to enable it (otherwise it
+# isn't probed, so it never becomes a dead lane). The matching key goes in
+# ~/.config/omp.env, e.g. OPENROUTER_API_KEY=… with CEO_OMP_MODEL="openrouter/anthropic/claude-sonnet-4".
+CEO_OMP_MODEL="${CEO_OMP_MODEL:-}"
+
 # model_for_job_type <job-type> → echoes the right MODEL env value
 # Used by dispatchers when spawning project agents.
 model_for_job_type() {
@@ -98,6 +105,9 @@ probe_claude() { provider_is_blocked claude && return 1; command -v claude      
 probe_cursor() { provider_is_blocked cursor && return 1; command -v cursor-agent >/dev/null 2>&1 && cursor-agent --version >/dev/null 2>&1; }
 probe_gemini() { provider_is_blocked gemini && return 1; command -v gemini       >/dev/null 2>&1 && gemini       --version >/dev/null 2>&1; }
 probe_ollama() { provider_is_blocked ollama && return 1; command -v ollama       >/dev/null 2>&1 && ollama list  >/dev/null 2>&1; }
+# omp lane: only available when you've chosen a model for it (CEO_OMP_MODEL) — that's
+# what makes OpenRouter/Groq/etc. a real fallback rather than a dead provider.
+probe_omp()    { provider_is_blocked omp    && return 1; command -v omp          >/dev/null 2>&1 && [ -n "${CEO_OMP_MODEL:-}" ]; }
 
 # select_provider <skip_codex(true|false)> [override]
 # Auto order: codex -> claude -> gemini -> ollama.
@@ -125,6 +135,7 @@ select_provider() {
   fi
   probe_claude && { echo "claude"; return; }
   probe_gemini && { echo "gemini"; return; }
+  probe_omp    && { echo "omp";    return; }   # OpenRouter/Groq/etc. via omp (if CEO_OMP_MODEL set)
   probe_ollama && { echo "ollama"; return; }
   echo "none"
 }
@@ -159,6 +170,11 @@ run_agent() {
       ;;
     gemini)
       echo "$prompt" | gemini --model "${MODEL:-$CEO_GEMINI_MODEL}" > "$log" 2>&1 || rc=$?
+      ;;
+    omp)
+      # omp -p (headless) takes the prompt as a positional arg. The model id selects
+      # the backend: openrouter/…, groq/…, x-ai/…, mistral/…, or any omp provider.
+      omp -p --model "${MODEL:-$CEO_OMP_MODEL}" "$prompt" > "$log" 2>&1 || rc=$?
       ;;
     ollama)
       echo "$prompt" | ollama run "${MODEL:-$CEO_OLLAMA_MODEL}" > "$log" 2>&1 || rc=$?

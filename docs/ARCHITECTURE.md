@@ -65,23 +65,31 @@ Model tiering is automatic: `read-only-worker`/`scout` jobs start on a cheap
 fast model (gemini-flash); `implementation-worker`/`project-ceo-run` start on
 claude-sonnet. The waterfall handles fallback either way.
 
-## The CLI waterfall (`scripts/lib/ceo-waterfall.sh`)
+## The provider waterfall (`scripts/lib/ceo-waterfall.sh`)
 
-These are all *command-line tools on PATH*, not bare model names — each wraps
-its own vendor's models: `codex` = OpenAI Codex CLI, `claude` = Claude Code,
-`gemini` = Google Gemini CLI, `ollama` = local model runtime.
+A **provider** is one lane in the fallback chain: a command-line agent on your
+PATH plus the account behind it. These are *tools*, not bare model names — each
+wraps its own vendor's models: `codex` = OpenAI Codex CLI, `claude` = Claude Code,
+`gemini` = Google Gemini CLI, `omp` = oh-my-pi (any of ~15 backends), `ollama` =
+local model runtime.
 
 ```
-codex → claude → gemini → ollama        (the Navigator skips codex by default
-                                         to preserve quota for project work)
+codex → claude → gemini → omp → ollama   (the Navigator skips codex by default
+                                          to preserve quota for project work)
 ```
 
-- Each provider is probed before use; one that errors with a usage/session/rate
-  limit is **benched** via a lockout file (`org/ceo/runs/.<provider>-blocked-until`,
-  epoch seconds) — 90 min for claude/gemini, 24 h for codex.
+- Each provider is probed before use; when its account returns a usage/session/rate
+  limit the provider is **benched** via a lockout file
+  (`org/ceo/runs/.<provider>-blocked-until`, epoch seconds) — 90 min for
+  claude/gemini, 24 h for codex.
 - A benched provider is skipped even when explicitly requested — a stale caller
-  can never resurrect a rate-limited CLI.
+  can't keep hammering a maxed-out account.
 - Expired lockouts self-heal: the probe compares the epoch and unblocks.
+- **The `omp` lane is the gateway to everything oh-my-pi supports** — OpenRouter,
+  Groq, xAI, Mistral, Cerebras, Azure, z.ai, … — through one provider-prefixed
+  model id. It's opt-in: set `CEO_OMP_MODEL` (e.g. `openrouter/anthropic/claude-sonnet-4`)
+  and put the key in `~/.config/omp.env`. Want OpenRouter as the *default*? Pass it
+  as the override (`PROJECT_CEO_PROVIDER=omp`) or move it earlier in `select_provider`.
 
 ## Watchdogs & failure modes
 

@@ -109,4 +109,6 @@ Done. Next:
 
 Keys for non-subscription providers go in ~/.config/omp.env (chmod 600), e.g.:
   export GEMINI_API_KEY=...
+  export OPENROUTER_API_KEY=...   # then set CEO_OMP_MODEL=openrouter/anthropic/claude-sonnet-4
+                                  # to add a fallback lane to ~15 model backends via omp
 EOF

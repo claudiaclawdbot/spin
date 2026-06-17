@@ -17,7 +17,7 @@
 
 ---
 
-SPIN is the **plant around your coding-agent CLIs.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → omp → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
 
 ```
 you ──spin approve──▶ APPROVALS.md ──▶ ┌──────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
@@ -77,9 +77,9 @@ Several of these are both a product and a model family. Here they always mean th
 | Name | What it actually is | Role in SPIN |
 |---|---|---|
 | **SPIN** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
-| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI | the **interactive backbone** — every floor agent is an omp session (the Navigator you chat with, each project's REPL); the **Pi** in SPIN |
-| **`codex`** / **`claude`** / **`gemini`** | headless-capable coding-agent CLIs, each wrapping its vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
-| **`ollama`** | a local model runtime | last-resort fallback when every cloud CLI is rate-limit benched |
+| [**`omp`**](https://omp.sh) (oh-my-pi) | an agent CLI that speaks to ~15 model backends | the **interactive backbone** (every floor is an omp session — the **Pi** in SPIN) *and* a job provider that unlocks **OpenRouter, Groq, xAI, Mistral**, … |
+| **`codex`** · **`claude`** · **`gemini`** | agent CLIs, each wrapping its own vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
+| **`ollama`** | a local model runtime | last-resort provider when every cloud account is benched |
 | [**cmux**](https://cmux.io) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
 
 The Navigator's "brain" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
@@ -142,7 +142,7 @@ Every `org` verb validates its input (unknown project? disallowed job type? → 
 ## Cost & reliability design
 
 - **Change-gated brain** — the LLM runs only when real inputs (approvals, inbox, project state) changed, plus a low-frequency heartbeat.
-- **CLI waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — jobs try `codex → claude → gemini → ollama`; any CLI that hits a usage limit is benched (90 min–24 h) and the waterfall advances. An override is *ignored* while that CLI is benched — a stale caller can't resurrect a rate-limited tool.
+- **Provider waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — a *provider* is one lane in the fallback chain: an agent CLI plus the account behind it. Jobs try `codex → claude → gemini → omp → ollama`. When a provider hits its account's usage limit, SPIN benches that lane (90 min–24 h) and advances to the next; an explicit override is ignored while a provider is benched, so a stale caller can't keep hammering a maxed-out account. The **`omp`** lane is special — it routes through [oh-my-pi](https://omp.sh) to **OpenRouter, Groq, xAI, Mistral, Azure, Cerebras** and more, so one lane is a fallback to ~15 model sources (set `CEO_OMP_MODEL`, e.g. `openrouter/anthropic/claude-sonnet-4`, to enable it).
 - **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer.
 - **Job timeouts** — a hung job is killed (whole process group) after `max_runtime_seconds` (default 1 h) so it can't hold its project lane forever.
 - **Silent-exit retry** — a job that exits 0 having changed no files is retried once on claude.
@@ -180,6 +180,17 @@ docs/
   ROADMAP.md           known weaknesses, honestly ranked
 ```
 
+## Acknowledgments
+
+SPIN is glue. It's worthless without the open tools it stands on — full credit and thanks to the people who built them:
+
+- **[oh-my-pi / omp](https://omp.sh)** — the agent CLI that is SPIN's interactive backbone (the *Pi*) and its gateway to ~15 model backends.
+- **[cmux](https://cmux.io)** — the agent-oriented terminal workspace that gives SPIN its visual floors, built on **[Ghostty](https://ghostty.org)** by Mitchell Hashimoto.
+- The agent CLIs SPIN dispatches to: **[Claude Code](https://claude.com/claude-code)** (Anthropic), **[OpenAI Codex CLI](https://github.com/openai/codex)**, **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** (Google), and **[Ollama](https://ollama.com)** for local models.
+- **[OpenRouter](https://openrouter.ai)** and the other backends reachable through omp.
+
+If you maintain one of these and want the credit adjusted or a link fixed, open an issue — happy to get it right.
+
 ## License
 
-MIT — see [LICENSE](LICENSE). Built in the open; issues and PRs welcome (see [CONTRIBUTING](CONTRIBUTING.md)).
+MIT — see [LICENSE](LICENSE). Built in the open; issues and PRs welcome (see [CONTRIBUTING](CONTRIBUTING.md)). SPIN's MIT license covers this repo only; each upstream tool keeps its own license.
