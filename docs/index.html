@@ -6,7 +6,7 @@
 <title>SPIN — Super Pi Interoperable Navigator</title>
 <meta name="description" content="A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.">
 <meta property="og:title" content="SPIN — Super Pi Interoperable Navigator">
-<meta property="og:description" content="A file-based AI org that coordinates coding-agent CLIs across your projects, with a human-approval gate on anything that leaves the machine.">
+<meta property="og:description" content="A file-based AI org that coordinates your coding agents across projects, with a human-approval gate on anything that leaves the machine.">
 <style>
   :root{
     --bg:#0a0a12; --bg2:#0f0f1c; --panel:#15152a; --line:#262645;
@@ -139,13 +139,13 @@
 
 <section id="what" class="wrap" style="border-top:none">
   <h2><span class="n">01</span>The plant around your agent CLIs</h2>
-  <p class="lede">Coding-agent CLIs (Claude Code, Codex, Gemini, omp) are brilliant <em>employees</em> — one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around them: it schedules, routes, budgets, gates, and audits the work.</p>
+  <p class="lede">A coding agent — Claude Code, Codex, omp — is a brilliant <em>employee</em>: one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around them: it schedules, routes, budgets, gates, and audits the work.</p>
   <div class="grid">
     <div class="card"><span class="ic">🌀</span><h3>One Navigator loop</h3><p>Claims a lock file at startup — a second launch just exits, instead of silently doubling your LLM spend.</p></div>
     <div class="card"><span class="ic">🧠</span><h3>Thinks only on change</h3><p>The brain runs only when watched inputs actually move. An idle org costs a couple of LLM calls a day.</p></div>
     <div class="card"><span class="ic">🗂️</span><h3>State via a CLI, never by hand</h3><p>Agents call <code>org queue-job …</code>; verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.</p></div>
     <div class="card"><span class="ic">🚦</span><h3>Four hard gates</h3><p>Acts freely on local, reversible work. Stops for external sends, money, prod deploys, protected pushes.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Auto-failover</h3><p>codex → claude → gemini → ollama. A rate-limited CLI is benched; the waterfall advances. No dead-ends.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Auto-failover</h3><p>codex → claude → gemini → omp → ollama. When a provider's account hits its usage limit, that lane is benched and the next takes over. No dead-ends.</p></div>
     <div class="card"><span class="ic">🧾</span><h3>Receipts for everything</h3><p>Every brain run and job writes an append-only audit trail you can <code>cat</code>.</p></div>
   </div>
 </section>
@@ -181,7 +181,7 @@
   <table>
     <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
     <tr><td><b>SPIN</b></td><td class="dimcell">a bash+node orchestration layer</td><td class="dimcell">schedules, routes, gates, audits</td></tr>
-    <tr><td><code>omp</code></td><td class="dimcell">interactive coding-agent CLI (oh-my-pi)</td><td class="dimcell">the interactive backbone — every floor agent is an omp session</td></tr>
+    <tr><td><code>omp</code></td><td class="dimcell">agent CLI to ~15 model backends (oh-my-pi)</td><td class="dimcell">the interactive backbone (every floor is an omp session) + the provider lane for OpenRouter, Groq, xAI…</td></tr>
     <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">headless agent CLIs (each wraps its vendor's models)</td><td class="dimcell">the job workers, in waterfall order</td></tr>
     <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort fallback</td></tr>
     <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">display only — never runs jobs</td></tr>
@@ -211,6 +211,12 @@
 <footer class="wrap">
   <div class="pill">spin · super pi interoperable navigator</div><br>
   Built in the open · MIT · <a href="https://github.com/claudiaclawdbot/spin">github.com/claudiaclawdbot/spin</a>
+  <div style="margin-top:14px;color:var(--faint);font-size:.8rem">
+    Stands on the shoulders of <a href="https://omp.sh">oh-my-pi</a> · <a href="https://cmux.io">cmux</a> ·
+    <a href="https://ghostty.org">Ghostty</a> · <a href="https://claude.com/claude-code">Claude&nbsp;Code</a> ·
+    <a href="https://github.com/openai/codex">Codex</a> · <a href="https://github.com/google-gemini/gemini-cli">Gemini&nbsp;CLI</a> ·
+    <a href="https://ollama.com">Ollama</a> · <a href="https://openrouter.ai">OpenRouter</a>. Thank you.
+  </div>
 </footer>
 
 <script>
