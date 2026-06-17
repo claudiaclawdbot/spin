@@ -66,22 +66,28 @@ jobs:
       - name: installer is idempotent
         run: SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
 
-  bootstrap-selfextract:
-    name: single-file installer self-extracts
+  installers:
+    name: launcher + offline installer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: rebuild then self-extract into a fresh dir
+      - name: offline self-extractor installs (no network)
         run: |
           set -e
-          # rebuild from source (the committed copy is platform-built; tar mtimes
-          # make byte-equality across OSes impossible, so we test the fresh build)
+          # rebuild from source (committed copy is platform-built; tar mtimes make
+          # cross-OS byte-equality impossible, so we test the fresh build)
           bash scripts/build-bootstrap.sh
-          SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-bootstrap.sh "$RUNNER_TEMP/spin-fresh"
-          test -f "$RUNNER_TEMP/spin-fresh/scripts/org"
-          test -f "$RUNNER_TEMP/spin-fresh/scripts/spin"
-          test -f "$RUNNER_TEMP/spin-fresh/org/state.json"
-          echo "ok: self-extracted and installed"
+          SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-offline.sh "$RUNNER_TEMP/spin-offline"
+          test -f "$RUNNER_TEMP/spin-offline/scripts/org"
+          test -f "$RUNNER_TEMP/spin-offline/org/state.json"
+          echo "ok: offline self-extract installed"
+      - name: launcher pipes cleanly (curl|bash) and clones
+        run: |
+          set -e
+          # feed the launcher through a pipe like curl|bash; it clones this repo + installs
+          cat spin-bootstrap.sh | SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash -s -- "$RUNNER_TEMP/spin-piped"
+          test -f "$RUNNER_TEMP/spin-piped/scripts/spin"
+          echo "ok: piped launcher cloned + installed"
 
   shellcheck:
     name: shellcheck (advisory)

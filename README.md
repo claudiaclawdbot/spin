@@ -51,6 +51,8 @@ One-liner (review the script first, like any `curl | bash`):
 curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash
 ```
 
+`spin-bootstrap.sh` is a tiny launcher that clones SPIN and runs the installer. Want a **single file that works fully offline** (no git, no network — everything embedded)? Download [`spin-offline.sh`](https://github.com/claudiaclawdbot/spin/raw/main/spin-offline.sh) and run `bash spin-offline.sh`.
+
 **Requirements:**
 
 - **Required** — macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). With just these, SPIN runs **headless** — the Navigator ticks and dispatches background jobs straight to the agent CLIs.
@@ -161,7 +163,8 @@ Keys stay out of the repo (`~/.config/omp.env`, chmod 600). The gate is *behavio
 ## Repo layout
 
 ```
-spin-bootstrap.sh    one-file self-extracting installer (clone-free)
+spin-bootstrap.sh    tiny launcher for the curl|bash one-liner (clones + installs)
+spin-offline.sh      fully-offline single file (embeds everything; generated)
 install.sh           setup for a git clone
 scripts/             the engine (bash + node, no build step)
   spin                 your command
