@@ -136,7 +136,7 @@
 
 <section id="install" class="wrap">
   <h2><span class="n">02</span>Install in 30 seconds</h2>
-  <p class="lede">One self-extracting file packages the whole setup — scripts, prompts, org skeleton. Review it first, like any <code>curl | bash</code>.</p>
+  <p class="lede">One self-extracting file packages the whole setup — scripts, prompts, org skeleton — and installs any missing dependencies for you (node, omp, cmux, an agent CLI). Review it first, like any <code>curl | bash</code>.</p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
       <button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash">copy</button></div>
@@ -151,7 +151,7 @@
 <span class="p">$</span> <span class="c">spin</span> doctor          <span class="o"># checks deps, driver, floors</span>
 <span class="p">$</span> <span class="c">spin</span> start           <span class="o"># launch the Navigator loop</span></pre>
   </div>
-  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and at least one agent CLI on your PATH. <a href="https://cmux.io">cmux</a> + <a href="https://omp.sh">omp</a> optional, for the visual floors.</p>
+  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on — every floor agent is an omp session, and it's the <b>Pi</b> in SPIN; <a href="https://cmux.io">cmux</a> is the optional visual layer. The installer sets all of this up.</p>
 </section>
 
 <section id="how" class="wrap">
@@ -165,7 +165,7 @@
   <table>
     <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
     <tr><td><b>SPIN</b></td><td class="dimcell">a bash+node orchestration layer</td><td class="dimcell">schedules, routes, gates, audits</td></tr>
-    <tr><td><code>omp</code></td><td class="dimcell">interactive coding-agent CLI</td><td class="dimcell">the floor agents you talk to</td></tr>
+    <tr><td><code>omp</code></td><td class="dimcell">interactive coding-agent CLI (oh-my-pi)</td><td class="dimcell">the interactive backbone — every floor agent is an omp session</td></tr>
     <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">headless agent CLIs (each wraps its vendor's models)</td><td class="dimcell">the job workers, in waterfall order</td></tr>
     <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort fallback</td></tr>
     <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">display only — never runs jobs</td></tr>

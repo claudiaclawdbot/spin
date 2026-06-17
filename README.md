@@ -30,7 +30,7 @@ you ◀── spin status ◀── HUMAN_QUEUE ◀──│   tick loop       �
 
 ```bash
 git clone https://github.com/claudiaclawdbot/spin.git ~/spin
-cd ~/spin && ./install.sh          # checks deps, seeds runtime files, links `spin` + `org`
+cd ~/spin && ./install.sh          # installs missing deps, seeds runtime files, links `spin` + `org`
 
 spin doctor                        # confirm your setup
 scripts/bootstrap-project.sh my-app    # register your first project
@@ -44,7 +44,11 @@ One-liner (review the script first, like any `curl | bash`):
 curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash
 ```
 
-**Requirements:** macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH` — `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). Optional but recommended: [cmux](https://cmux.io) for the visual floors, [`omp`](https://omp.sh) for the interactive floor agents.
+**Requirements:**
+
+- **Required** — macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). With just these, SPIN runs **headless** — the Navigator ticks and dispatches background jobs straight to the agent CLIs.
+- **[`omp`](https://omp.sh) (oh-my-pi) — the interactive backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN. Strongly recommended; only the headless dispatch path can do without it.
+- **[cmux](https://cmux.io) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
 
 ## Why SPIN exists
 
@@ -64,7 +68,7 @@ Several of these are both a product and a model family. Here they always mean th
 | Name | What it actually is | Role in SPIN |
 |---|---|---|
 | **SPIN** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
-| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI | the **floor agents** — idle REPLs in each cmux floor you (or the Navigator) hand work to |
+| [**`omp`**](https://omp.sh) (oh-my-pi) | an interactive coding-agent CLI | the **interactive backbone** — every floor agent is an omp session (the Navigator you chat with, each project's REPL); the **Pi** in SPIN |
 | **`codex`** / **`claude`** / **`gemini`** | headless-capable coding-agent CLIs, each wrapping its vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
 | **`ollama`** | a local model runtime | last-resort fallback when every cloud CLI is rate-limit benched |
 | [**cmux**](https://cmux.io) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
