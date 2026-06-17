@@ -80,7 +80,7 @@ mark_provider_blocked() {
 
 # Phrases that mean "this provider is out of quota / rate-limited right now".
 # Includes Claude's session-limit wording ("You've hit your session limit · resets …").
-CEO_LIMIT_PATTERNS='usage limit|reached your .*(subscription|limit)|hit your .*(session )?limit|session limit|rate.?limit|too many requests|\b429\b|overloaded|quota|upgrade to pro|purchase more credits|insufficient_quota'
+CEO_LIMIT_PATTERNS='usage limit|reached your .*(subscription|limit)|hit your .*(session )?limit|session limit|rate.?limit|too many requests|\b429\b|overloaded|quota|upgrade to pro|purchase more credits|insufficient_quota|PERMISSION_DENIED|denied access|\b403\b'
 
 # Scan a run log; if it shows a limit message, bench that provider. Returns 0 if benched.
 mark_blocked_if_limited() {

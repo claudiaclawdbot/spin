@@ -99,13 +99,17 @@ fi
 # ── 4. next steps ────────────────────────────────────────────────────────────
 cat <<'EOF'
 
-Done. Next:
+Done. Fastest path:
+  spin init      # onboarding wizard: providers (+ OpenRouter), your first project,
+                 # a supervisor so the driver stays up, and starts it. Recommended.
+
+Or set it up by hand:
   1. scripts/bootstrap-project.sh <your-project-id>     # register a project
   2. edit org/projects/<id>/PROJECT_CONTROLLER_PROMPT.md (its charter)
      and add the project to org/OMP_HARNESS.json (copy the example-app entry)
   3. edit org/ceo/WORKSPACE_CONTROLLER_PROMPT.md         (your org's charter)
-  4. spin start                                          # launch the driver loop
-  5. spin                                                # check on it any time
+  4. spin service install   # keep the driver alive (or: spin start)
+  5. spin                   # check on it any time
 
 Keys for non-subscription providers go in ~/.config/omp.env (chmod 600), e.g.:
   export GEMINI_API_KEY=...
