@@ -30,9 +30,23 @@
   .hero{text-align:center;padding:74px 0 56px;border:none}
   .spinner{width:128px;height:128px;margin:0 auto 26px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .wordmark{font-size:4.4rem;font-weight:800;letter-spacing:-.04em;margin:0;line-height:1;
-    background:linear-gradient(120deg,#fff 10%,var(--violet) 55%,var(--cyan) 95%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .wordmark{font-size:4.4rem;font-weight:800;letter-spacing:-.04em;margin:0;line-height:1;color:#ececfb}
+  /* PI is the backbone — make it pop: cyan→violet gradient with a glow */
+  .wordmark .pi{
+    background:linear-gradient(120deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 16px rgba(34,211,238,.55))}
   .sub{font-family:var(--mono);color:var(--dim);letter-spacing:.18em;text-transform:uppercase;font-size:.78rem;margin:14px 0 0}
+  /* hover-to-explain each word of the name */
+  .def{position:relative;cursor:help;border-bottom:1px dashed var(--faint);padding-bottom:1px;transition:color .15s}
+  .def:hover{color:var(--cyan)}
+  .def .tip{visibility:hidden;opacity:0;position:absolute;bottom:150%;left:50%;transform:translateX(-50%) translateY(5px);
+    width:248px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+    font-family:var(--sans);font-size:.82rem;line-height:1.55;color:var(--dim);text-transform:none;letter-spacing:normal;
+    box-shadow:0 18px 46px -18px #000;z-index:20;transition:.18s;pointer-events:none}
+  .def .tip b{color:var(--ink)} .def .tip .h{color:var(--cyan);font-weight:700}
+  .def .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--line)}
+  .def:hover .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+  @media(max-width:560px){.def .tip{width:200px}}
   .tag{font-size:1.32rem;color:var(--ink);max-width:38ch;margin:22px auto 30px}
   .tag b{color:var(--violet)}
   .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -108,8 +122,10 @@
     </g>
     <circle cx="50" cy="50" r="4" fill="url(#g)"/>
   </svg>
-  <h1 class="wordmark">SPIN</h1>
-  <p class="sub">Super&nbsp;·&nbsp;Pi&nbsp;·&nbsp;Interoperable&nbsp;·&nbsp;Navigator</p>
+  <h1 class="wordmark">S<span class="pi">PI</span>N</h1>
+  <p class="sub">
+    <span class="def">Super<span class="tip"><span class="h">Super</span> — combines a bunch of cutting-edge dev tools into one harness that works <b>with</b> you: you can track it, and it reports back to you. The good kind of over-engineered.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span> — the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it. The engine SPIN is built around — and the letters at the heart of the name.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span> — swap LLMs on the fly, plug-and-play. Because all state and memory live in <b>plain files</b>, any agent CLI — Claude, Codex, Gemini, Ollama — picks up the same context. No lock-in.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span> — the whole system, steering. Maximally legible for <b>humans</b> (live floors, status boards) and ordered for <b>agents</b> (clean files, validated verbs).</span></span>
+  </p>
   <p class="tag">A file-based AI organization that runs your projects <b>while you sleep</b> — gated on the four things that actually matter.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin">⭐ Get it on GitHub</a>
