@@ -50,7 +50,7 @@ ensure_cmux(){
   have cmux && { skipped+=("cmux"); return; }
   note "${c_y}• cmux missing${c_o}"
   if [[ "$OS" == Darwin ]] && have brew; then run brew install cmux && installed+=("cmux")
-  else guided+=("cmux → https://cmux.io (brew formula on macOS; optional display layer)"); fi
+  else guided+=("cmux → https://github.com/manaflow-ai/cmux (brew formula on macOS; optional display layer)"); fi
 }
 
 ensure_agent(){

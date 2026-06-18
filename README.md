@@ -17,7 +17,7 @@
 
 ---
 
-SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://cmux.io), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → omp → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://github.com/manaflow-ai/cmux), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → omp → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
 
 ```
 you ──spin approve──▶ APPROVALS.md ──▶ ┌──────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
@@ -58,11 +58,11 @@ curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-boot
 
 - **Required** — macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). With just these, SPIN runs **headless** — the Navigator ticks and dispatches background jobs straight to the agent CLIs.
 - **[`omp`](https://omp.sh) (oh-my-pi) — the interactive backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN. Strongly recommended; only the headless dispatch path can do without it.
-- **[cmux](https://cmux.io) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
+- **[cmux](https://github.com/manaflow-ai/cmux) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
 
 ## The interface — cmux *is* your GUI
 
-SPIN isn't a CLI you babysit; it's an app whose window is [cmux](https://cmux.io). Run `spin up` and you get:
+SPIN isn't a CLI you babysit; it's an app whose window is [cmux](https://github.com/manaflow-ai/cmux). Run `spin up` and you get:
 
 - a **Coordinator floor** — an [omp](https://omp.sh) agent you *talk to* like a person ("build me a landing page for X"),
 - one **workspace tab per project** in the cmux sidebar — your browser-style tabs, each a live omp orchestrator for that project,
@@ -99,7 +99,7 @@ Several of these are both a product and a model family. Here they always mean th
 | [**`omp`**](https://omp.sh) (oh-my-pi) | an agent CLI that speaks to ~15 model backends | the **interactive backbone** (every floor is an omp session — the **Pi** in SPIN) *and* a job provider that unlocks **OpenRouter, Groq, xAI, Mistral**, … |
 | **`codex`** · **`claude`** · **`gemini`** | agent CLIs, each wrapping its own vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
 | **`ollama`** | a local model runtime | last-resort provider when every cloud account is benched |
-| [**cmux**](https://cmux.io) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
+| [**cmux**](https://github.com/manaflow-ai/cmux) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
 
 The Navigator's "brain" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
 
@@ -206,7 +206,7 @@ docs/
 SPIN is glue. It's worthless without the open tools it stands on — full credit and thanks to the people who built them:
 
 - **[oh-my-pi / omp](https://omp.sh)** — the agent CLI that is SPIN's interactive backbone (the *Pi*) and its gateway to ~15 model backends.
-- **[cmux](https://cmux.io)** — the agent-oriented terminal workspace that gives SPIN its visual floors, built on **[Ghostty](https://ghostty.org)** by Mitchell Hashimoto.
+- **[cmux](https://github.com/manaflow-ai/cmux)** — the agent-oriented terminal workspace that gives SPIN its visual floors, built on **[Ghostty](https://ghostty.org)** by Mitchell Hashimoto.
 - The agent CLIs SPIN dispatches to: **[Claude Code](https://claude.com/claude-code)** (Anthropic), **[OpenAI Codex CLI](https://github.com/openai/codex)**, **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** (Google), and **[Ollama](https://ollama.com)** for local models.
 - **[OpenRouter](https://openrouter.ai)** and the other backends reachable through omp.
 
