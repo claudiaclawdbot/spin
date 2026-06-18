@@ -61,6 +61,15 @@ jobs:
           # disallowed type must be rejected
           if node scripts/org queue-job smoke-test-app banana "nope" 2>/dev/null; then echo "FAIL: bad type accepted"; exit 1; fi
           node scripts/org show
+      - name: commands work when invoked via the ~/.local/bin symlink
+        run: |
+          set -e
+          # install.sh linked spin+org into ~/.local/bin as symlinks; running them
+          # that way must resolve ROOT to the repo, not ~/.local (regression guard).
+          out="$("$HOME/.local/bin/org" show 2>&1)"
+          echo "$out" | grep -q "$(pwd)" || { echo "FAIL: org via symlink resolved wrong ROOT: $out"; exit 1; }
+          "$HOME/.local/bin/spin" help >/dev/null
+          echo "ok: spin + org resolve correctly through the symlink"
       - name: dispatcher runs clean on the queue
         run: bash scripts/omp-supervisor-once.sh
       - name: installer is idempotent
