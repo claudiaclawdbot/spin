@@ -150,8 +150,31 @@
   </div>
 </section>
 
+<section id="interface" class="wrap">
+  <h2><span class="n">02</span>cmux is your GUI</h2>
+  <p class="lede">SPIN isn't a CLI you babysit — its window is <a href="https://cmux.io">cmux</a>. One command opens the interface: a <b>Coordinator</b> floor you talk to like a person, one sidebar <b>tab per project</b> (each a live omp agent), and the driver coordinating in the background. No Electron, no separate app to maintain — the terminal workspace <em>is</em> the product.</p>
+  <div class="term">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">your first minute</span>
+      <button class="copy" data-copy="spin init && spin up">copy</button></div>
+    <pre><span class="p">$</span> <span class="c">spin</span> init            <span class="o"># wizard: providers, OpenRouter, your first project</span>
+<span class="p">$</span> <span class="c">spin</span> up              <span class="o"># opens the cmux interface</span>
+<span class="o">  ✓ Coordinator floor open — talk to it like a person</span>
+<span class="o">  ✓ driver supervised · live boards up</span></pre>
+  </div>
+  <p class="lede" style="margin:16px 0 10px">…then just tell the Coordinator what you want, and it spins up the project:</p>
+  <div class="flow">
+    <div class="lane"><span class="you">you</span> &nbsp;<span class="o">"start a project for my fidget-spinner shop"</span></div>
+    <div class="lane"><span class="arrow">└▶</span> <span class="box">spin new-project fidget-shop</span> <span class="arrow">▶</span> a new <span class="file">fidget-shop</span> tab appears — its own agent, already briefed</div>
+  </div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card"><span class="ic">🎛️</span><h3>Coordinator floor</h3><p>An omp agent you chat with. It onboards you, creates projects, and routes work between them.</p></div>
+    <div class="card"><span class="ic">🗂️</span><h3>A tab per project</h3><p>Each project is a cmux workspace in the sidebar — its own omp orchestrator, its own live board.</p></div>
+    <div class="card"><span class="ic">♾️</span><h3>Stays up on its own</h3><p><code>spin service install</code> supervises the driver (launchd/systemd) — it respawns on crash, pane-close, or wake.</p></div>
+  </div>
+</section>
+
 <section id="install" class="wrap">
-  <h2><span class="n">02</span>Install in 30 seconds</h2>
+  <h2><span class="n">03</span>Install in 30 seconds</h2>
   <p class="lede">The one-liner sets up everything — clones SPIN, seeds the org files, and installs any missing dependencies for you (node, omp, cmux, an agent CLI). Review it first, like any <code>curl | bash</code>. <span style="color:var(--faint)">(Prefer a single offline file? Grab <code>spin-offline.sh</code> — it embeds the whole kit.)</span></p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
@@ -164,14 +187,13 @@
     <pre><span class="p">$</span> <span class="c">git</span> clone https://github.com/claudiaclawdbot/spin.git ~/spin
 <span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&&</span> <span class="c">./install.sh</span>
 <span class="o">  ✓ linked: spin, org → ~/.local/bin/</span>
-<span class="p">$</span> <span class="c">spin</span> doctor          <span class="o"># checks deps, driver, floors</span>
-<span class="p">$</span> <span class="c">spin</span> start           <span class="o"># launch the Navigator loop</span></pre>
+<span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the cmux interface</span></pre>
   </div>
   <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on — every floor agent is an omp session, and it's the <b>Pi</b> in SPIN; <a href="https://cmux.io">cmux</a> is the optional visual layer. The installer sets all of this up.</p>
 </section>
 
 <section id="how" class="wrap">
-  <h2><span class="n">03</span>It's just files</h2>
+  <h2><span class="n">04</span>It's just files</h2>
   <p class="lede">No database, no message broker, no daemon you can't read. The whole org talks through plain files you can grep and audit.</p>
   <div class="flow">
     <div class="lane"><span class="you">you</span> <span class="arrow">──spin approve──▶</span> <span class="file">APPROVALS.md</span> <span class="arrow">──▶</span> <span class="box">SPIN Navigator</span> <span class="arrow">──▶</span> <span class="file">AGENT_QUEUE.json</span> <span class="arrow">──▶</span> detached agent jobs</div>
@@ -189,7 +211,7 @@
 </section>
 
 <section id="gates" class="wrap">
-  <h2><span class="n">04</span>The four gates</h2>
+  <h2><span class="n">05</span>The four gates</h2>
   <p class="lede">SPIN does local, reversible work without asking. It stops and waits for exactly four things — enforced behaviorally by every prompt, surfaced as an approval queue.</p>
   <div class="gates">
     <div class="gate"><span class="g">📤</span><div><b>External sends</b><span>email, DM, form, public post</span></div></div>
@@ -200,7 +222,7 @@
 </section>
 
 <section id="docs" class="wrap">
-  <h2><span class="n">05</span>Go deeper</h2>
+  <h2><span class="n">06</span>Go deeper</h2>
   <div class="grid">
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
