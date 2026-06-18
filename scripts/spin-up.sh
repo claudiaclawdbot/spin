@@ -11,7 +11,7 @@ while [ -h "$__src" ]; do __d="$(cd -P "$(dirname "$__src")" && pwd)"; __src="$(
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd -P "$(dirname "$__src")/.." && pwd)}}"
 RUN="$ROOT/org/ceo/runs"; c_v=$'\e[35m'; c_g=$'\e[32m'; c_d=$'\e[2m'; c_o=$'\e[0m'
 
-command -v cmux >/dev/null 2>&1 || { echo "cmux not found — install it (https://cmux.io) for the visual interface, or run headless with: spin start"; exit 1; }
+command -v cmux >/dev/null 2>&1 || { echo "cmux not found — install it (https://github.com/manaflow-ai/cmux) for the visual interface, or run headless with: spin start"; exit 1; }
 
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
