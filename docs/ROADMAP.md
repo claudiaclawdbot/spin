@@ -78,6 +78,10 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
 
 ## Done (recently)
 
+- ~~**Stale-STOP alarm**~~ — a STOP file is an intentional pause, but one left for
+  hours is forgotten (it once silently paused the driver ~20h). The watchdog now
+  escalates a STOP older than 2h (`SPIN_STALE_STOP_HOURS`) with an orange chip +
+  notification, instead of a quiet "paused" forever.
 - ~~**Durability: the driver stays up**~~ — `spin service` installs a supervisor
   (launchd on macOS, systemd-user on Linux) that respawns the driver on
   crash/pane-close/wake and pauses cleanly on the STOP file. (Largely closes the

@@ -37,18 +37,29 @@ while true; do
   # (cmux refs drift) — WORKSPACE_STATUS.md carries the same state as fallback.
   DRIVER_LOCK="$RUN_DIR/.workspace-ceo-tick.lock"
   DRIVER_STATE_F="$RUN_DIR/.driver-state"
-  if [[ -f "$RUN_DIR/STOP" ]]; then DSTATE="paused"
+  STALE_STOP_HRS="${SPIN_STALE_STOP_HOURS:-2}"   # a STOP older than this is probably forgotten
+  if [[ -f "$RUN_DIR/STOP" ]]; then
+    DSTATE="paused"
+    # A STOP that's been sitting for hours is almost certainly forgotten, not a
+    # deliberate pause (this once left the driver down ~20h silently). Escalate.
+    age_s=$(( $(date +%s) - $(stat -f %m "$RUN_DIR/STOP" 2>/dev/null || stat -c %Y "$RUN_DIR/STOP" 2>/dev/null || echo "$(date +%s)") ))
+    (( age_s > STALE_STOP_HRS * 3600 )) && DSTATE="paused-stale"
   elif dpid="$(cat "$DRIVER_LOCK" 2>/dev/null)" && [[ -n "$dpid" ]] && kill -0 "$dpid" 2>/dev/null; then DSTATE="up"
   else DSTATE="down"; fi
   PREV_DSTATE="$(cat "$DRIVER_STATE_F" 2>/dev/null || echo unknown)"
   if [[ "$DSTATE" != "$PREV_DSTATE" ]]; then
     echo "$DSTATE" > "$DRIVER_STATE_F"
     case "$DSTATE" in
-      up)     cmux set-status driver "CEO loop UP"     --workspace workspace:1 --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
-      paused) cmux set-status driver "CEO loop PAUSED" --workspace workspace:1 --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
-      down)   cmux set-status driver "CEO loop DOWN"   --workspace workspace:1 --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
-              cmux notify --title "Workspace CEO driver DOWN" \
-                   --body "tick loop not running — bash scripts/workspace-ceo-tick.sh in the CEO pane (or rm org/ceo/runs/STOP if paused)" \
+      up)     cmux set-status driver "SPIN loop UP"     --workspace workspace:1 --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
+      paused) cmux set-status driver "SPIN loop PAUSED" --workspace workspace:1 --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
+      paused-stale)
+              cmux set-status driver "SPIN PAUSED ${STALE_STOP_HRS}h+ — forgotten?" --workspace workspace:1 --icon exclamationmark.triangle --color '#f97316' --priority 95 >/dev/null 2>&1 || true
+              cmux notify --title "SPIN paused for hours" \
+                   --body "A STOP file has paused the driver for ${STALE_STOP_HRS}h+. Resume: rm org/ceo/runs/STOP (or spin start). If intentional, ignore." \
+                   --workspace workspace:1 >/dev/null 2>&1 || true ;;
+      down)   cmux set-status driver "SPIN loop DOWN"   --workspace workspace:1 --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
+              cmux notify --title "SPIN driver DOWN" \
+                   --body "tick loop not running — spin start (or rm org/ceo/runs/STOP if paused)" \
                    --workspace workspace:1 >/dev/null 2>&1 || true ;;
     esac
   fi
