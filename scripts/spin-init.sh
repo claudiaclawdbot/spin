@@ -27,20 +27,22 @@ fi
 echo
 
 # ── 2. OpenRouter (optional) ─────────────────────────────────────────────────
-echo "${c_b}2. OpenRouter${c_o} ${c_d}(optional — one key → ~15 model backends via omp)${c_o}"
-if yes "   Add an OpenRouter fallback lane?"; then
+echo "${c_b}2. OpenRouter${c_o} ${c_d}(optional — one API key gives you a fallback to ~15 model providers)${c_o}"
+echo "   ${c_d}If a provider runs out of quota, SPIN can fall back to any model on OpenRouter.${c_o}"
+if yes "   Set up OpenRouter as a fallback?"; then
   ENVF="$HOME/.config/omp.env"; mkdir -p "$(dirname "$ENVF")"; touch "$ENVF"; chmod 600 "$ENVF"
-  key="$(ask "   Paste your OPENROUTER_API_KEY (or leave blank to skip): ")"
+  key="$(ask "   Paste your OpenRouter API key ${c_d}(from openrouter.ai/keys — or leave blank to skip)${c_o}: ")"
   if [ -n "$key" ]; then
     grep -q '^export OPENROUTER_API_KEY=' "$ENVF" 2>/dev/null \
       && sed -i.bak "s|^export OPENROUTER_API_KEY=.*|export OPENROUTER_API_KEY=$key|" "$ENVF" \
       || echo "export OPENROUTER_API_KEY=$key" >> "$ENVF"
-    model="$(ask "   Model id for the omp lane ${c_d}[openrouter/anthropic/claude-sonnet-4]${c_o}: " "openrouter/anthropic/claude-sonnet-4")"
+    echo "   ${c_d}Which model should that fallback use? Press Enter to accept the default${c_o}"
+    model="$(ask "   ${c_d}(a model from openrouter.ai/models)${c_o} model ${c_d}[openrouter/anthropic/claude-sonnet-4]${c_o}: " "openrouter/anthropic/claude-sonnet-4")"
     grep -q '^export CEO_OMP_MODEL=' "$ENVF" 2>/dev/null \
       && sed -i.bak "s|^export CEO_OMP_MODEL=.*|export CEO_OMP_MODEL=$model|" "$ENVF" \
       || echo "export CEO_OMP_MODEL=$model" >> "$ENVF"
     rm -f "$ENVF.bak"
-    echo "   ${c_g}✓ OpenRouter lane configured${c_o} (key + CEO_OMP_MODEL in ~/.config/omp.env)"
+    echo "   ${c_g}✓ OpenRouter fallback ready${c_o} — uses ${model} (saved to ~/.config/omp.env)"
   fi
 fi
 echo
