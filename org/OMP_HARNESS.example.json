@@ -28,7 +28,7 @@
   "provider_waterfall": {
     "workspace_ceo": ["claude", "gemini", "omp", "ollama"],
     "project_ceo": ["codex", "claude", "gemini", "omp", "ollama"],
-    "note": "Each provider is an agent CLI + its account. The workspace CEO skips codex to preserve its quota. The 'omp' lane (oh-my-pi) is opt-in and routes to OpenRouter/Groq/xAI/Mistral/etc. — set CEO_OMP_MODEL (e.g. openrouter/anthropic/claude-sonnet-4) + the key in ~/.config/omp.env. Lockout files: org/ceo/runs/.<provider>-blocked-until"
+    "note": "Each provider is an agent CLI + its account. The workspace CEO skips codex to preserve its quota. The 'omp' lane (oh-my-pi) is opt-in and routes to OpenRouter/Groq/xAI/Mistral/etc. — set CEO_OMP_MODEL (e.g. openrouter/anthropic/claude-sonnet-4.6) + the key in ~/.config/omp.env. Lockout files: org/ceo/runs/.<provider>-blocked-until"
   },
   "workspace_ceo": {
     "id": "workspace-ceo",

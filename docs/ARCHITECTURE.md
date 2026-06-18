@@ -87,7 +87,7 @@ codex → claude → gemini → omp → ollama   (the Navigator skips codex by d
 - Expired lockouts self-heal: the probe compares the epoch and unblocks.
 - **The `omp` lane is the gateway to everything oh-my-pi supports** — OpenRouter,
   Groq, xAI, Mistral, Cerebras, Azure, z.ai, … — through one provider-prefixed
-  model id. It's opt-in: set `CEO_OMP_MODEL` (e.g. `openrouter/anthropic/claude-sonnet-4`)
+  model id. It's opt-in: set `CEO_OMP_MODEL` (e.g. `openrouter/anthropic/claude-sonnet-4.6`)
   and put the key in `~/.config/omp.env`. Want OpenRouter as the *default*? Pass it
   as the override (`PROJECT_CEO_PROVIDER=omp`) or move it earlier in `select_provider`.
 

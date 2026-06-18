@@ -38,7 +38,7 @@ CEO_OLLAMA_MODEL="${CEO_OLLAMA_MODEL:-qwen2.5:14b}"
 # supports — OpenRouter, Groq, xAI, Mistral, Cerebras, z.ai, Azure, … — via one
 # provider-prefixed model id. Opt-in: set CEO_OMP_MODEL to enable it (otherwise it
 # isn't probed, so it never becomes a dead lane). The matching key goes in
-# ~/.config/omp.env, e.g. OPENROUTER_API_KEY=… with CEO_OMP_MODEL="openrouter/anthropic/claude-sonnet-4".
+# ~/.config/omp.env, e.g. OPENROUTER_API_KEY=… with CEO_OMP_MODEL="openrouter/anthropic/claude-sonnet-4.6".
 CEO_OMP_MODEL="${CEO_OMP_MODEL:-}"
 
 # model_for_job_type <job-type> → echoes the right MODEL env value
