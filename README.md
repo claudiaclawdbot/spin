@@ -60,6 +60,24 @@ curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-boot
 - **[`omp`](https://omp.sh) (oh-my-pi) — the interactive backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN. Strongly recommended; only the headless dispatch path can do without it.
 - **[cmux](https://cmux.io) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
 
+## The interface — cmux *is* your GUI
+
+SPIN isn't a CLI you babysit; it's an app whose window is [cmux](https://cmux.io). Run `spin up` and you get:
+
+- a **Coordinator floor** — an [omp](https://omp.sh) agent you *talk to* like a person ("build me a landing page for X"),
+- one **workspace tab per project** in the cmux sidebar — your browser-style tabs, each a live omp orchestrator for that project,
+- the **driver** coordinating in the background, relaying work between projects through the org files.
+
+Tell the Coordinator what you want and it spins up the project:
+
+```
+you (in the Coordinator floor):  "start a project for my fidget-spinner shop"
+  → spin new-project fidget-shop "an online fidget-spinner store"
+  → a new "fidget-shop" tab appears in your sidebar, with its own agent, already briefed
+```
+
+So the stack reads cleanly: **cmux** is the screen, **omp** is the engine in each tab, and **SPIN** is the brain wiring them into one coordinated org. No Electron, no separate app to maintain — the terminal workspace *is* the product.
+
 ## Why SPIN exists
 
 Running multiple AI-driven projects from chat sessions doesn't scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. SPIN replaces that with a small, inspectable org:

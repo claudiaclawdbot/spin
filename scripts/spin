@@ -11,9 +11,10 @@
 #   spin log             follow the Navigator's live activity log
 #   spin start           start the driver loop (nohup daemon)
 #   spin stop            pause the driver loop (sets STOP flag)
-#   spin up              launch every cmux floor + roll-up daemons (workstation up)
-#   spin down            quit floors + stop daemons (workstation down)
+#   spin up              open the cmux interface: Coordinator floor + driver + boards
+#   spin down            quit floors + stop daemons
 #   spin init            first-run onboarding wizard (providers, first project, supervisor)
+#   spin new-project ... create a project AND open its cmux floor (a sidebar tab)
 #   spin service ...     install|uninstall|status the supervisor that keeps the driver up
 #   spin doctor          health check: deps, driver, floors, watchers
 #   spin help            this help
@@ -89,10 +90,11 @@ case "$cmd" in
     echo "${c_yel}STOP flag set. Driver will pause after the current tick. Remove: rm $RUN_DIR/STOP${c_off}"
     exit 0
     ;;
-  up)      exec "$ROOT/scripts/workstation.sh" up ;;
+  up)      exec bash "$ROOT/scripts/spin-up.sh" ;;
   down)    exec "$ROOT/scripts/workstation.sh" down ;;
-  init)    exec bash "$ROOT/scripts/spin-init.sh" ;;
-  service) exec bash "$ROOT/scripts/spin-service.sh" "$@" ;;
+  init)        exec bash "$ROOT/scripts/spin-init.sh" ;;
+  service)     exec bash "$ROOT/scripts/spin-service.sh" "$@" ;;
+  new-project) exec bash "$ROOT/scripts/spin-new-project.sh" "$@" ;;
   doctor)
     echo "${c_bold}═══ SPIN doctor ═══${c_off}"
     echo; echo "${c_bold}Dependencies${c_off}"
