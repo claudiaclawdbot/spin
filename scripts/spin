@@ -22,7 +22,14 @@
 # approve/decline/ask are the quick async path (the loop picks them up next tick).
 
 set -uo pipefail
-ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+# Resolve symlinks so ROOT is the real repo even when invoked via ~/.local/bin/spin
+# (bash reports the symlink path in BASH_SOURCE, not the target).
+__src="${BASH_SOURCE[0]}"
+while [ -h "$__src" ]; do
+  __dir="$(cd -P "$(dirname "$__src")" >/dev/null 2>&1 && pwd)"
+  __src="$(readlink "$__src")"; [ "${__src#/}" = "$__src" ] && __src="$__dir/$__src"
+done
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd -P "$(dirname "$__src")/.." >/dev/null 2>&1 && pwd)}}"
 ORG="$ROOT/org"
 APPROVALS="$ORG/ceo/APPROVALS.md"
 STATE="$ORG/state.json"

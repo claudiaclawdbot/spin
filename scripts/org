@@ -24,8 +24,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// realpathSync follows the ~/.local/bin/org symlink to the real repo dir.
+const selfDir = path.dirname(fs.realpathSync(__filename));
 const ROOT = process.env.SPIN_ROOT || process.env.OMP_ROOT ||
-             path.resolve(__dirname, '..');
+             path.resolve(selfDir, '..');
 const ORG = path.join(ROOT, 'org');
 const F = {
   harness:   path.join(ORG, 'OMP_HARNESS.json'),
