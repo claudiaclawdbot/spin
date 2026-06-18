@@ -37,7 +37,7 @@ if yes "   Set up OpenRouter as a fallback?"; then
       && sed -i.bak "s|^export OPENROUTER_API_KEY=.*|export OPENROUTER_API_KEY=$key|" "$ENVF" \
       || echo "export OPENROUTER_API_KEY=$key" >> "$ENVF"
     echo "   ${c_d}Which model should that fallback use? Press Enter to accept the default${c_o}"
-    model="$(ask "   ${c_d}(a model from openrouter.ai/models)${c_o} model ${c_d}[openrouter/anthropic/claude-sonnet-4]${c_o}: " "openrouter/anthropic/claude-sonnet-4")"
+    model="$(ask "   ${c_d}(a model from openrouter.ai/models)${c_o} model ${c_d}[openrouter/anthropic/claude-sonnet-4.6]${c_o}: " "openrouter/anthropic/claude-sonnet-4.6")"
     grep -q '^export CEO_OMP_MODEL=' "$ENVF" 2>/dev/null \
       && sed -i.bak "s|^export CEO_OMP_MODEL=.*|export CEO_OMP_MODEL=$model|" "$ENVF" \
       || echo "export CEO_OMP_MODEL=$model" >> "$ENVF"
