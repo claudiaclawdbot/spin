@@ -53,7 +53,7 @@ PLIST
 }
 launchd_uninstall(){
   local p; p="$(plist_path)"
-  launchctl bootstrap "gui/$(id -u)" 2>/dev/null; launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || launchctl unload "$p" 2>/dev/null
+  launchctl bootout "gui/$(id -u)" "$p" 2>/dev/null || launchctl unload "$p" 2>/dev/null || true
   rm -f "$p"; echo "${c_y}removed launchd agent $LABEL${c_o} (driver no longer supervised)."
 }
 launchd_status(){ launchctl list 2>/dev/null | grep -q "$LABEL" && echo "${c_g}● launchd agent installed${c_o}" || echo "${c_d}○ launchd agent not installed${c_o}"; }

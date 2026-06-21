@@ -43,9 +43,13 @@ if (( agents == 0 )); then
   fi
 fi
 echo "Optional:"
-for a in cmux omp; do
-  command -v "$a" >/dev/null 2>&1 && echo "  ✓ $a" || echo "  – $a (optional: visual floors / interactive agents)"
-done
+command -v cmux >/dev/null 2>&1 && echo "  ✓ cmux" || echo "  – cmux (optional: visual floors)"
+if command -v omp >/dev/null 2>&1; then
+  if omp --help >/dev/null 2>&1; then echo "  ✓ omp"
+  else echo "  ✗ omp (installed but not runnable — run scripts/install-deps.sh; current Bun may be too old)"; fi
+else
+  echo "  – omp (optional: interactive agents)"
+fi
 (( missing )) && { echo; echo "Install the missing required pieces, then re-run ./install.sh"; exit 1; }
 
 # ── 2. runtime org files (never overwrites existing state) ──────────────────

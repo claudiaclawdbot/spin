@@ -63,7 +63,7 @@ echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entr
 
 # ── 2. open the cmux floor (the sidebar "tab") ───────────────────────────────
 if [[ "$FLOOR" == 1 ]] && command -v cmux >/dev/null 2>&1; then
-  ref="$(CMUX_QUIET=1 cmux workspace create --name "$PID" --cwd "$CODE_DIR" \
+  ref="$(CMUX_QUIET=1 cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
         --command "bash '$ROOT/scripts/cmux-floor.sh' '$PID'" --focus false 2>/dev/null \
         | grep -oE 'workspace:[0-9]+' | head -1)"
   if [ -n "$ref" ]; then
