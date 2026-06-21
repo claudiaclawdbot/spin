@@ -18,10 +18,10 @@ Small project, simple rules.
   for f in scripts/*.sh scripts/lib/*.sh install.sh; do bash -n "$f"; done
   node --check scripts/ceo-dashboard.js
   node --check scripts/org
+  scripts/smoke-test.sh
   SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh   # in a scratch clone
   ```
 
 - Architecture context: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Why
   things are the way they are: [docs/LESSONS.md](docs/LESSONS.md). What's
   known-weak: [docs/ROADMAP.md](docs/ROADMAP.md).
-

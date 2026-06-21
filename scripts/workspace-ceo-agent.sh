@@ -55,7 +55,7 @@ trap 'rm -f "$CONTEXT"' EXIT
     echo "### Current WORKSPACE_HANDOFF.md (what you told them last tick)"; echo '```'; cat "$ROOT/org/projects/$project/WORKSPACE_HANDOFF.md" 2>/dev/null || echo "(none yet)"; echo '```'; echo
   done
   echo "## Codex lockout"
-  codex_is_blocked && echo "BLOCKED until $(date -r "$(cat "$CEO_LOCKOUT_FILE")" '+%Y-%m-%d %H:%M %Z')" || echo "available"
+  codex_is_blocked && echo "BLOCKED until $(format_epoch_full "$(cat "$CEO_LOCKOUT_FILE")")" || echo "available"
   echo
   echo "## Your receipt for this tick goes to:"
   echo "$CEO_RUN_DIR/workspace-ceo-agent-${TS}.md"
