@@ -15,7 +15,19 @@ command -v cmux >/dev/null 2>&1 || { echo "cmux not found — install it (https:
 
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
-# ── 1. driver ────────────────────────────────────────────────────────────────
+# ── 1. cmux app/socket ───────────────────────────────────────────────────────
+cmux_ready(){ CMUX_QUIET=1 cmux ping >/dev/null 2>&1; }
+if cmux_ready; then
+  echo "  ${c_g}✓${c_o} cmux already running"
+else
+  echo "  ${c_d}· starting cmux…${c_o}"
+  if [[ "$(uname -s)" == Darwin ]]; then open -a cmux >/dev/null 2>&1 || true; fi
+  for _ in 1 2 3 4 5 6 7 8 9 10; do cmux_ready && break; sleep 1; done
+  cmux_ready || { echo "  ${c_d}· cmux app is not reachable yet — open cmux, then rerun: spin up${c_o}"; exit 1; }
+  echo "  ${c_g}✓${c_o} cmux running"
+fi
+
+# ── 2. driver ────────────────────────────────────────────────────────────────
 lock="$RUN/.workspace-ceo-tick.lock"
 if [ -f "$lock" ] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
   echo "  ${c_g}✓${c_o} driver already running"
@@ -23,30 +35,30 @@ else
   bash "$ROOT/scripts/spin" start >/dev/null 2>&1 && echo "  ${c_g}✓${c_o} driver started ${c_d}(tip: 'spin service install' keeps it up across reboots)${c_o}"
 fi
 
-# ── 2. Coordinator floor (the omp agent you talk to) ─────────────────────────
+# ── 3. Coordinator floor (the omp agent you talk to) ─────────────────────────
 if CMUX_QUIET=1 cmux list-workspaces 2>/dev/null | grep -qi "SPIN Coordinator"; then
   echo "  ${c_g}✓${c_o} Coordinator floor already open"
 else
-  ref="$(CMUX_QUIET=1 cmux workspace create --name "SPIN Coordinator" --cwd "$HOME" \
+  ref="$(CMUX_QUIET=1 cmux new-workspace --name "SPIN Coordinator" --cwd "$HOME" \
         --command "bash '$ROOT/scripts/cmux-floor.sh' ceo" --focus true 2>/dev/null \
         | grep -oE 'workspace:[0-9]+' | head -1)"
   [ -n "$ref" ] && echo "  ${c_g}✓${c_o} Coordinator floor open → $ref ${c_d}(talk to it there)${c_o}" \
                 || echo "  ${c_d}· couldn't open the Coordinator floor (is cmux running?)${c_o}"
 fi
 
-# ── 3. live boards ───────────────────────────────────────────────────────────
+# ── 4. live boards ───────────────────────────────────────────────────────────
 rm -f "$RUN/STATUS_WATCH_STOP" "$RUN/WIKI_WATCH_STOP" 2>/dev/null
 pgrep -f workspace-status-watch >/dev/null 2>&1 || nohup bash "$ROOT/scripts/workspace-status-watch.sh" >/dev/null 2>&1 &
 echo "  ${c_g}✓${c_o} live status board running"
 
-# ── 4. re-open floors for active projects (after a cmux restart) ─────────────
+# ── 5. re-open floors for active projects (after a cmux restart) ─────────────
 node -e '
   const fs=require("fs"),f=process.argv[1];try{const h=JSON.parse(fs.readFileSync(f,"utf8"));
   for(const[id,p]of Object.entries(h.projects||{}))if(p.cmux_workspace)console.log(id);}catch{}
 ' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null | while read -r id; do
   [ -z "$id" ] && continue
   CMUX_QUIET=1 cmux list-workspaces 2>/dev/null | grep -qi "\b$id\b" && continue
-  CMUX_QUIET=1 cmux workspace create --name "$id" --cwd "$ROOT/projects/$id" \
+  CMUX_QUIET=1 cmux new-workspace --name "$id" --cwd "$ROOT/projects/$id" \
     --command "bash '$ROOT/scripts/cmux-floor.sh' '$id'" --focus false >/dev/null 2>&1 \
     && echo "  ${c_g}✓${c_o} re-opened floor: $id"
 done

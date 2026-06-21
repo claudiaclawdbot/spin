@@ -9,12 +9,13 @@
 #   scripts/install-deps.sh --dry-run  # show what it WOULD do, change nothing
 #
 # Installs (when missing): node · omp (oh-my-pi) · cmux · one agent CLI (claude).
-# Verified install methods (2026-06): omp = npm @oh-my-pi/pi-coding-agent,
+# Verified install methods (2026-06): bun = brew formula, omp = npm @oh-my-pi/pi-coding-agent,
 # cmux = brew formula, claude = npm @anthropic-ai/claude-code.
 set -uo pipefail
 
 DRY=0; [[ "${1:-}" == "--dry-run" ]] && DRY=1
 OS="$(uname -s)"
+BUN_MIN_VERSION="1.3.14"
 have(){ command -v "$1" >/dev/null 2>&1; }
 c_g=$'\e[32m'; c_y=$'\e[33m'; c_d=$'\e[2m'; c_o=$'\e[0m'
 note(){ printf '%s\n' "$*"; }
@@ -30,6 +31,22 @@ node_global_install(){  # $1 = package, $2 = friendly name
   else return 1; fi
 }
 
+version_ge(){
+  node - "$1" "$2" <<'NODE'
+const [actual, minimum] = process.argv.slice(2);
+const a = String(actual || '').split('.').map(n => parseInt(n, 10) || 0);
+const b = String(minimum || '').split('.').map(n => parseInt(n, 10) || 0);
+for (let i = 0; i < Math.max(a.length, b.length); i++) {
+  if ((a[i] || 0) > (b[i] || 0)) process.exit(0);
+  if ((a[i] || 0) < (b[i] || 0)) process.exit(1);
+}
+NODE
+}
+
+bun_version(){ bun --version 2>/dev/null | head -1; }
+bun_ok(){ have bun && version_ge "$(bun_version)" "$BUN_MIN_VERSION"; }
+omp_ok(){ have omp && omp --help >/dev/null 2>&1; }
+
 ensure_node(){
   have node && { skipped+=("node"); return; }
   note "${c_y}• node missing${c_o}"
@@ -39,10 +56,31 @@ ensure_node(){
   else guided+=("node → https://nodejs.org (or your package manager)"); fi
 }
 
+ensure_bun_for_omp(){
+  bun_ok && { skipped+=("bun"); return 0; }
+  local current="missing"; have bun && current="$(bun_version)"
+  note "${c_y}• bun $current does not satisfy omp's runtime requirement (>= $BUN_MIN_VERSION)${c_o}"
+  if have bun; then
+    run bun upgrade
+    [[ $DRY == 1 ]] && { installed+=("bun"); return 0; }
+    bun_ok && { installed+=("bun"); return 0; }
+  fi
+  if [[ "$OS" == Darwin ]] && have brew; then
+    if brew list bun >/dev/null 2>&1; then run brew upgrade bun || run brew reinstall bun
+    else run brew install bun; fi
+    [[ $DRY == 1 ]] && { installed+=("bun"); return 0; }
+    bun_ok && { installed+=("bun"); return 0; }
+  fi
+  guided+=("bun >= $BUN_MIN_VERSION → brew upgrade bun (or install from https://bun.sh)")
+  return 1
+}
+
 ensure_omp(){
-  have omp && { skipped+=("omp"); return; }
-  note "${c_y}• omp (oh-my-pi) missing${c_o}"
-  if node_global_install "@oh-my-pi/pi-coding-agent" omp; then installed+=("omp")
+  omp_ok && { skipped+=("omp"); return; }
+  have omp && note "${c_y}• omp is installed but not runnable; refreshing runtime + package${c_o}" \
+           || note "${c_y}• omp (oh-my-pi) missing${c_o}"
+  ensure_bun_for_omp || true
+  if node_global_install "@oh-my-pi/pi-coding-agent@latest" omp; then installed+=("omp")
   else guided+=("omp → see https://omp.sh (needs npm, bun, or pnpm)"); fi
 }
 

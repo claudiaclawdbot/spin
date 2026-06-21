@@ -21,10 +21,13 @@ source "$ROOT/scripts/lib/ceo-waterfall.sh"
 # --- kill switch ----------------------------------------------------------
 # If org/ceo/runs/STOP exists, the owner has paused the whole system. Refuse to
 # run (and exit any loop that finds it appear). Remove the file to resume.
-if [[ -f "$CEO_RUN_DIR/STOP" ]]; then
-  echo "[workspace-ceo-tick] STOP flag present ($CEO_RUN_DIR/STOP) — paused. Remove it to resume." >&2
-  exit 0
-fi
+stop_if_requested() {
+  if [[ -f "$CEO_RUN_DIR/STOP" ]]; then
+    echo "[workspace-ceo-tick] STOP flag present ($CEO_RUN_DIR/STOP) — paused. Remove it to resume." >&2
+    exit 0
+  fi
+}
+stop_if_requested
 
 # --- singleton guard ------------------------------------------------------
 # Only one workspace CEO driver may run, no matter how it's launched (cmux
@@ -68,6 +71,7 @@ watched_inputs() {
 }
 
 while true; do
+  stop_if_requested
   clear
   echo "============================================================"
   echo "WORKSPACE CEO  |  $(date '+%Y-%m-%d %H:%M:%S %Z')   tick #$TICK_COUNT"
@@ -90,7 +94,7 @@ NODE
   fi
   echo
   if codex_is_blocked; then
-    echo "Provider: claude (codex blocked until $(date -r "$(cat "$CEO_LOCKOUT_FILE")" '+%m-%d %H:%M'))"
+    echo "Provider: claude (codex blocked until $(format_epoch "$(cat "$CEO_LOCKOUT_FILE")"))"
   else
     echo "Provider: $(select_provider true)  (codex available for project jobs)"
   fi
@@ -99,6 +103,7 @@ NODE
   # -- 2. Queue dispatch + job lifecycle -----------------------------------
   echo; echo "[dispatch] running queue tick…"
   "$ROOT/scripts/omp-supervisor-once.sh" 2>&1 | sed 's/^/  /' || echo "  (dispatch tick failed)"
+  stop_if_requested
 
   # -- 3. CEO agent brain (change-gated) -----------------------------------
   echo
@@ -127,6 +132,7 @@ NODE
   [[ -n "$LATEST" ]] && tail -6 "$LATEST" | sed 's/^/  /' || echo "  (none yet)"
 
   echo; echo "Next tick in ${INTERVAL}s  (Ctrl-C to stop)"
+  stop_if_requested
   TICK_COUNT=$((TICK_COUNT + 1))
   sleep "$INTERVAL"
 done

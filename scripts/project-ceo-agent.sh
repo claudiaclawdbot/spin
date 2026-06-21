@@ -65,7 +65,7 @@ $(tail -40 "$RECEIPTS_FILE" 2>/dev/null || echo "(none yet)")
 \`\`\`
 
 ## Codex lockout
-$(codex_is_blocked && echo "BLOCKED until $(date -r "$(cat "$CEO_LOCKOUT_FILE")" '+%Y-%m-%d %H:%M %Z')" || echo "available")
+$(codex_is_blocked && echo "BLOCKED until $(format_epoch_full "$(cat "$CEO_LOCKOUT_FILE")")" || echo "available")
 
 ## Reporting
 - Append a one-paragraph receipt to $RECEIPTS_FILE for any meaningful work.
