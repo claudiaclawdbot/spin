@@ -41,6 +41,24 @@ CEO_OLLAMA_MODEL="${CEO_OLLAMA_MODEL:-qwen2.5:14b}"
 # ~/.config/omp.env, e.g. OPENROUTER_API_KEY=… with CEO_OMP_MODEL="openrouter/anthropic/claude-sonnet-4.6".
 CEO_OMP_MODEL="${CEO_OMP_MODEL:-}"
 
+format_epoch() {
+  local epoch="$1"
+  if date -r "$epoch" '+%m-%d %H:%M' >/dev/null 2>&1; then
+    date -r "$epoch" '+%m-%d %H:%M'
+  else
+    date -d "@$epoch" '+%m-%d %H:%M'
+  fi
+}
+
+format_epoch_full() {
+  local epoch="$1"
+  if date -r "$epoch" '+%Y-%m-%d %H:%M %Z' >/dev/null 2>&1; then
+    date -r "$epoch" '+%Y-%m-%d %H:%M %Z'
+  else
+    date -d "@$epoch" '+%Y-%m-%d %H:%M %Z'
+  fi
+}
+
 # model_for_job_type <job-type> → echoes the right MODEL env value
 # Used by dispatchers when spawning project agents.
 model_for_job_type() {
@@ -75,7 +93,7 @@ mark_provider_blocked() {
   local provider="$1"; local secs="${2:-$CEO_LOCKOUT_SECS}"
   local f; f="$(_provider_lock_file "$provider")"
   echo $(( $(date +%s) + secs )) > "$f"
-  echo "  [waterfall] $provider benched until $(date -r "$(cat "$f")" '+%m-%d %H:%M') (usage limit)" >&2
+  echo "  [waterfall] $provider benched until $(format_epoch "$(cat "$f")") (usage limit)" >&2
 }
 
 # Phrases that mean "this provider is out of quota / rate-limited right now".
@@ -100,7 +118,13 @@ mark_codex_blocked()         { mark_provider_blocked codex "${1:-$CEO_LOCKOUT_SE
 mark_codex_blocked_if_seen() { mark_blocked_if_limited codex "$1"; }
 
 # --- provider probes (each respects its lockout) --------------------------
-probe_codex()  { provider_is_blocked codex  && return 1; command -v codex        >/dev/null 2>&1 && codex        --version >/dev/null 2>&1; }
+probe_codex()  {
+  provider_is_blocked codex && return 1
+  if command -v codex >/dev/null 2>&1; then codex --version >/dev/null 2>&1
+  elif command -v omx >/dev/null 2>&1; then omx --version >/dev/null 2>&1
+  else return 1
+  fi
+}
 probe_claude() { provider_is_blocked claude && return 1; command -v claude       >/dev/null 2>&1 && claude       --version >/dev/null 2>&1; }
 probe_cursor() { provider_is_blocked cursor && return 1; command -v cursor-agent >/dev/null 2>&1 && cursor-agent --version >/dev/null 2>&1; }
 probe_gemini() { provider_is_blocked gemini && return 1; command -v gemini       >/dev/null 2>&1 && gemini       --version >/dev/null 2>&1; }
@@ -145,20 +169,29 @@ select_provider() {
 # Returns the CLI's exit code (codex always treated as soft-fail + lockout scan).
 run_agent() {
   local provider="$1"; local prompt="$2"; local log="$3"; shift 3
-  local extra_dirs=("$@")
   local rc=0
 
   case "$provider" in
     codex)
-      command -v omx >/dev/null 2>&1 || { echo "omx required for codex provider" >&2; return 1; }
-      local add_args=()
-      for d in "${extra_dirs[@]}"; do add_args+=(--add-dir "$d"); done
-      echo "$prompt" | omx exec --cd "$CEO_ROOT" --sandbox workspace-write "${add_args[@]}" - \
-        > "$log" 2>&1 || rc=$?
+      local codex_cmd=()
+      if command -v codex >/dev/null 2>&1; then
+        codex_cmd=(codex exec --cd "$CEO_ROOT" --sandbox workspace-write --ask-for-approval never)
+        for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
+        codex_cmd+=(-)
+        echo "$prompt" | "${codex_cmd[@]}" > "$log" 2>&1 || rc=$?
+      elif command -v omx >/dev/null 2>&1; then
+        codex_cmd=(omx exec --cd "$CEO_ROOT" --sandbox workspace-write)
+        for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
+        codex_cmd+=(-)
+        echo "$prompt" | "${codex_cmd[@]}" > "$log" 2>&1 || rc=$?
+      else
+        echo "codex CLI not found" >&2
+        return 1
+      fi
       ;;
     claude)
       local add_args=(--add-dir "$CEO_ROOT")
-      for d in "${extra_dirs[@]}"; do add_args+=(--add-dir "$d"); done
+      for d in "$@"; do add_args+=(--add-dir "$d"); done
       claude -p "$prompt" --model "${MODEL:-$CEO_CLAUDE_MODEL}" \
         --dangerously-skip-permissions "${add_args[@]}" \
         > "$log" 2>&1 || rc=$?
@@ -189,7 +222,7 @@ run_agent() {
 }
 
 # run_agent_resilient <skip_codex> <override> <prompt> <log> [extra --add-dir paths...]
-# Walks the provider waterfall (override first, then codex→claude→gemini→ollama),
+# Walks the provider waterfall (override first, then codex→claude→gemini→omp→ollama),
 # trying each AVAILABLE provider until one succeeds (rc==0). Falls through on ANY
 # failure — usage limit, auth error, crash, missing CLI — not just limits. This is
 # the core "no dead-end" guarantee: a broken/unauthed/benched provider (e.g. gemini
@@ -197,7 +230,6 @@ run_agent() {
 # Returns 0 on the first success, or 1 if every candidate is unavailable/failed.
 run_agent_resilient() {
   local skip_codex="$1"; local override="$2"; local prompt="$3"; local log="$4"; shift 4
-  local extra=("$@")
 
   # Candidate order: explicit override first, then the standard waterfall.
   # cursor is NOT included (protects the owner's $20 Cursor plan); use it only
@@ -205,7 +237,7 @@ run_agent_resilient() {
   local candidates=()
   [[ -n "$override" ]] && candidates+=("$override")
   [[ "$skip_codex" != "true" ]] && candidates+=("codex")
-  candidates+=("claude" "gemini" "ollama")
+  candidates+=("claude" "gemini" "omp" "ollama")
 
   local tried=" " provider rc
   for provider in "${candidates[@]}"; do
@@ -220,7 +252,7 @@ run_agent_resilient() {
     fi
 
     echo "  [waterfall] trying $provider" >&2
-    run_agent "$provider" "$prompt" "$log" "${extra[@]}"; rc=$?
+    run_agent "$provider" "$prompt" "$log" "$@"; rc=$?
 
     if provider_is_blocked "$provider"; then
       echo "  [waterfall] $provider hit a usage limit — next provider" >&2; continue

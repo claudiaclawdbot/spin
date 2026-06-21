@@ -72,6 +72,7 @@ case "$cmd" in
     ;;
   start)
     STOP_FILE="$RUN_DIR/STOP"
+    mkdir -p "$RUN_DIR"
     if [[ -f "$STOP_FILE" ]]; then
       rm -f "$STOP_FILE"
       echo "${c_grn}STOP flag cleared.${c_off}"
@@ -86,6 +87,7 @@ case "$cmd" in
     exit 0
     ;;
   stop)
+    mkdir -p "$RUN_DIR"
     touch "$RUN_DIR/STOP"
     echo "${c_yel}STOP flag set. Driver will pause after the current tick. Remove: rm $RUN_DIR/STOP${c_off}"
     exit 0
@@ -181,7 +183,7 @@ node -e '
 # what's waiting on you
 echo; echo "${c_bold}${c_yel}Waiting on you${c_off}"
 pending=$(awk '/^## Pending/{f=1;next}/^## Processed/{f=0}f&&/^- \[/' "$APPROVALS" 2>/dev/null)
-hq=$(awk '/^## Waiting On Human/{f=1;next}/^## /{if(f)f=0}f&&/^- /' "$HQ" 2>/dev/null)
+hq=$(awk '/^- \[[ xX]\]/ || /^- / { print }' "$HQ" 2>/dev/null)
 if [[ -n "$hq" ]]; then
   echo "$hq" | sed 's/^- /  ⏳ /'
   echo "  ${c_dim}approve with:  spin approve \"<project> <what>\"   (or: spin decline \"...\")${c_off}"
