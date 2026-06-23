@@ -2,12 +2,12 @@
 # project-ceo-agent.sh — invoke a single Project CEO as an LLM agent for one tick.
 #
 # Reads the project's controller prompt + its STATE/receipts + the latest
-# workspace handoff, runs the agent (codex -> claude -> cursor -> gemini, codex
-# skipped while locked out), and lets the agent update STATE/RECEIPTS and report
+# workspace handoff, runs the agent (OMP first, direct CLIs as outer fallback),
+# and lets the agent update STATE/RECEIPTS and report
 # up to org/ceo/INBOX.md per its prompt.
 #
 # Usage: project-ceo-agent.sh <project-id>
-# Env:   PROJECT_CEO_PROVIDER=...   MODEL=...
+# Env:   PROJECT_CEO_PROVIDER=...   SPIN_OMP_DEFAULT_MODEL=...
 #        OMP_JOB_ID / OMP_JOB_TYPE / OMP_JOB_DESCRIPTION  (optional worker job)
 
 set -euo pipefail
@@ -79,8 +79,8 @@ content_changed "$DIFF_STAMP" "$STATE_FILE" "$RECEIPTS_FILE" || true
 
 # --- run (resilient: falls through providers on usage-limit) --------------
 echo "[project-ceo-agent:$PROJECT_ID] run=$RUN_LOG" >&2
-run_agent_resilient false "${PROJECT_CEO_PROVIDER:-}" "$PROMPT_BODY" "$RUN_LOG" "$PROJECT"
-rc=$?
+rc=0
+run_agent_resilient false "${PROJECT_CEO_PROVIDER:-omp}" "$PROMPT_BODY" "$RUN_LOG" "$PROJECT" || rc=$?
 echo "[project-ceo-agent:$PROJECT_ID] done (rc=$rc) — log=$RUN_LOG" >&2
 
 # Post-run diff check: if agent exited 0 but changed no files, retry once with
@@ -89,8 +89,8 @@ echo "[project-ceo-agent:$PROJECT_ID] done (rc=$rc) — log=$RUN_LOG" >&2
 if [[ $rc -eq 0 ]] && ! content_changed "$DIFF_STAMP" "$STATE_FILE" "$RECEIPTS_FILE"; then
   echo "[project-ceo-agent:$PROJECT_ID] WARNING silent exit — no changes to STATE.json or RECEIPTS.md; retrying once with claude" >&2
   RUN_LOG2="$CEO_RUN_DIR/${PROJECT_ID}-agent-${TS}-retry.log"
-  run_agent_resilient false "claude" "$PROMPT_BODY" "$RUN_LOG2" "$PROJECT"
-  rc=$?
+  rc=0
+  run_agent_resilient false "claude" "$PROMPT_BODY" "$RUN_LOG2" "$PROJECT" || rc=$?
   if content_changed "$DIFF_STAMP" "$STATE_FILE" "$RECEIPTS_FILE"; then
     echo "[project-ceo-agent:$PROJECT_ID] retry produced changes (rc=$rc)" >&2
   else

@@ -98,6 +98,7 @@ function readStdin() {
   try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
 }
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+function validId(s) { return /^[A-Za-z0-9._:-]+$/.test(String(s)); }
 
 // ── verbs ───────────────────────────────────────────────────────────────────
 const verbs = {
@@ -115,6 +116,7 @@ const verbs = {
       const q = readJSON(F.queue, { jobs: [] });
       q.jobs = q.jobs || [];
       const id = p.flags.id || `${project}-${slug(type)}-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`;
+      if (!validId(id)) die(2, 'job id may only contain letters, numbers, dot, underscore, colon, or hyphen');
       if (q.jobs.some(j => j.id === id)) die(2, `job id "${id}" already exists`);
       const job = { id, project_id: project, type, status: 'queued', description, created_at: nowISO() };
       if (p.flags['max-runtime']) job.max_runtime_seconds = parseInt(p.flags['max-runtime'], 10);

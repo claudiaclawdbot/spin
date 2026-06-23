@@ -24,9 +24,35 @@ scripts/spin-new-project.sh <id> "<one-line goal>"
 
 This registers the project (charter, state, harness entry) **and opens a new cmux
 floor for it** — a new tab in their sidebar with its own omp orchestrator. Then set
-its first directive with `scripts/org set-handoff <id>` and queue its first step with
-`scripts/org queue-job <id> …`. Walk a new human through this: ask what they want to
-build, suggest an id, create it, and tell them to check the new floor in their sidebar.
+its first directive with `scripts/org set-handoff <id>`.
+
+If the human is chatting live and wants the project coordinator to act visibly, hand
+the first task to the floor with:
+
+```
+scripts/delegate.sh --wait --timeout 900 <id> "<task>"
+```
+
+If the org is running headless or this is routine background work, queue the first
+step with `scripts/org queue-job <id> …`. Walk a new human through this: ask what
+they want to build, suggest an id, create it, and tell them to check the new floor
+in their sidebar.
+
+## Live floor delegation
+
+When the human explicitly says to "send a message to", "tell", "ask", or "have"
+a named project coordinator do something in its visual floor, use:
+
+```
+scripts/delegate.sh --wait --timeout 900 <project-id> "<task>"
+```
+
+That types into the project's live cmux/omp agent, includes a request id, and waits
+for the project to report back through `scripts/org inbox <project-id> "delegate
+<id> complete: …"` or `"delegate <id> blocked: …"`. Treat this as a visible
+subagent handoff: relay the returned line to the human. If cmux or that floor is
+not reachable, say the live floor is unavailable and tell the human to run
+`spin up`; do not pretend a queued job is the same thing.
 
 ## Autonomy policy (tune this to your owner)
 
@@ -34,7 +60,9 @@ Default to **action, not asking.** Authorize projects to do all local,
 reversible work on their own — write/edit code in their repo, run local tests,
 research, draft content, commit to non-main branches. Queue such work directly
 (`org/AGENT_QUEUE.json`, type `implementation-worker` or `read-only-worker`);
-do NOT route it through the human.
+do NOT route it through the human. Use live floor delegation instead of queueing
+only when the human explicitly asks for a project coordinator/floor interaction or
+when you need them to watch that subagent work in cmux.
 
 **Only** put something in `org/HUMAN_QUEUE.md` and wait when the action is:
 
@@ -87,6 +115,7 @@ scripts/org escalate "<thing the human must decide>"
 scripts/org process-approval <substr|index> <approve|decline|ask> --note "<why>"
 scripts/org receipt                          # pipe your tick receipt in via stdin
 scripts/org show                             # read-only digest of state + queue
+scripts/delegate.sh --wait <project> "<task>" # visible cmux/omp project handoff
 ```
 
 `queue-job` refuses unknown projects and disallowed job types; `process-approval`
@@ -104,6 +133,10 @@ human approval — never overwrite a live prompt directly.
   fix the registration (`scripts/bootstrap-project.sh <id>` + a harness entry)
   or escalate — inline work hides the dispatch failure and is less careful.
   Workspace chores go through the `workspace` maintenance lane as queued jobs.
+- **Queue then stop.** After `scripts/org queue-job` succeeds, your work for
+  that project task is complete. Do not perform the worker's acceptance criteria,
+  do not append the project receipt, and do not mark queued/running jobs complete.
+  The dispatcher and project worker own execution and reporting.
 - A single tick changes at most: state.json + 1 handoff + 1 receipt +
   (optionally) 1 queue append + 1 human-queue append. Need more? Queue a worker.
 

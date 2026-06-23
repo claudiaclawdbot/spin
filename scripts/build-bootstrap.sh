@@ -13,9 +13,13 @@ OUT="spin-offline.sh"
 
 command -v git >/dev/null || { echo "build needs git"; exit 1; }
 
-# Tarball of tracked files (no spaces in our paths), minus this generated output.
+# Tarball of tracked files, plus untracked source templates that may be present
+# before the caller has staged a new maintenance lane or prompt example.
 PAYLOAD="$(mktemp)"; trap 'rm -f "$PAYLOAD"' EXIT
-git ls-files | grep -vx "$OUT" | tar czf "$PAYLOAD" -T -
+{
+  git ls-files -z -- ':!spin-offline.sh'
+  git ls-files -z --others --exclude-standard -- 'org/ceo/*.example.md' 'org/projects/workspace/**'
+} | tar --null -czf "$PAYLOAD" --files-from -
 
 # Preamble: extracts the embedded payload. Intended for `bash spin-offline.sh`
 # (download-and-run, no network). Has a git-clone fallback if somehow run without

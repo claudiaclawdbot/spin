@@ -15,20 +15,21 @@
   "lib": "scripts/lib/ceo-waterfall.sh",
   "dispatch": {
     "mechanism": "background-process",
-    "note": "Jobs spawn as detached bash processes (PID files at org/jobs/<job-id>.pid, logs at org/jobs/<job-id>.log). cmux is DISPLAY ONLY — never used to execute jobs.",
+    "note": "Queued jobs spawn as detached bash processes (PID files at org/jobs/<job-id>.pid, logs at org/jobs/<job-id>.log). cmux is display/status for queued work; explicit spin delegate handoffs are the separate live-floor path.",
     "completion_detection": "PID liveness check",
     "max_parallel": 3,
     "model_tiering": {
-      "read-only-worker": "gemini-2.5-flash",
-      "scout": "gemini-2.5-flash",
-      "implementation-worker": "claude-sonnet-4-6",
-      "project-ceo-run": "claude-sonnet-4-6"
+      "read-only-worker": "omp smol role",
+      "scout": "omp smol role",
+      "implementation-worker": "omp default role",
+      "project-ceo-run": "omp default role"
     }
   },
-  "provider_waterfall": {
-    "workspace_ceo": ["claude", "gemini", "omp", "ollama"],
-    "project_ceo": ["codex", "claude", "gemini", "omp", "ollama"],
-    "note": "Each provider is an agent CLI + its account. The workspace CEO skips codex to preserve its quota. The 'omp' lane (oh-my-pi) is opt-in and routes to OpenRouter/Groq/xAI/Mistral/etc. — set CEO_OMP_MODEL (e.g. openrouter/anthropic/claude-sonnet-4.6) + the key in ~/.config/omp.env. Lockout files: org/ceo/runs/.<provider>-blocked-until"
+  "provider_fallback": {
+    "primary": "omp with generated SPIN config overlay (modelRoles + retry.fallbackChains)",
+    "outer_fallback": ["codex", "claude", "gemini", "ollama"],
+    "workspace_ceo_outer_fallback": ["claude", "gemini", "ollama"],
+    "note": "OMP is the normal harness and uses authenticated providers from omp setup / ~/.config/omp.env. SPIN only falls through to direct CLIs if OMP is absent or hard-fails. Direct CLI lockout files: org/ceo/runs/.<provider>-blocked-until"
   },
   "workspace_ceo": {
     "id": "workspace-ceo",
@@ -68,7 +69,7 @@
   "cost_control": {
     "change_gated": true,
     "model_tiering": true,
-    "note": "The CEO brain fires only when watched inputs changed (content hash, not mtime). Max 3 parallel jobs. Scout/read-only jobs use a cheap fast model."
+    "note": "The CEO brain fires only when watched inputs changed (content hash, not mtime). Max 3 parallel jobs. Scout/read-only jobs use OMP's smol/fast role."
   },
   "safety_gates": [
     "No emails, DMs, forms, public posts, deploys, pushes, wallet actions, or transactions without explicit human approval.",

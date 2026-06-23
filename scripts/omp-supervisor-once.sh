@@ -6,7 +6,7 @@
 #     processes with PID files. cmux is display-only (status chips + live log tail).
 #   - Parallel execution: up to OMP_MAX_PARALLEL jobs across all projects (default 3).
 #     Still enforces one-active-job-per-project.
-#   - Model tiering: read-only-worker → gemini/haiku; implementation-worker → sonnet.
+#   - Model tiering: read-only-worker → OMP smol/fast; implementation-worker → OMP default.
 #   - Per-job log at org/jobs/<job-id>.log; completion detected by PID liveness.
 #
 # Called by workspace-ceo-tick.sh every tick.
@@ -38,6 +38,7 @@ const queue     = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
 const now       = new Date().toISOString();
 const jobsDir   = path.join(root, 'org', 'jobs');
 const MAX_PAR   = parseInt(process.env.OMP_MAX_PARALLEL || '3', 10);
+const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
 
 // ── helper: send a cmux command silently ────────────────────────────────────
 function cmux(args) {
@@ -62,6 +63,23 @@ function killJobGroup(pid) {
   return !pidAlive(pid);
 }
 
+function finishJob(job, rc, detail) {
+  const ok = Number(rc) === 0;
+  job.status = ok ? 'completed' : 'failed';
+  if (ok) job.completed_at = now;
+  else job.failed_at = now;
+  job.result = detail || (ok
+    ? `Exited 0; log at org/jobs/${job.id}.log`
+    : `Exited ${rc}; log at org/jobs/${job.id}.log`);
+}
+
+function readExitCode(job) {
+  const rcFile = path.join(jobsDir, `${job.id}.exit`);
+  if (!fs.existsSync(rcFile)) return null;
+  const rc = parseInt(fs.readFileSync(rcFile, 'utf8').trim(), 10);
+  return Number.isNaN(rc) ? null : rc;
+}
+
 // ── 1. Mark completed jobs ──────────────────────────────────────────────────
 // A "running" job is done when its PID file exists but the process is gone,
 // or when there is no PID file at all (legacy / lost). A job that exceeds its
@@ -71,13 +89,22 @@ const JOB_MAX_RUNTIME = parseInt(process.env.OMP_JOB_MAX_RUNTIME || '3600', 10);
 function markRunningJobs() {
   for (const job of queue.jobs || []) {
     if (job.status !== 'running') continue;
+    if (!validJobId(job.id)) {
+      job.status = 'failed';
+      job.failed_at = now;
+      job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
+      continue;
+    }
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
 
     if (!fs.existsSync(pidFile)) {
-      // Legacy job or PID file was never written → assume complete
-      job.status     = 'completed';
-      job.completed_at = now;
-      job.result     = job.result || 'PID file not found; inspect project receipts.';
+      const rc = readExitCode(job);
+      if (rc === null) {
+        // Legacy job or PID file was never written → preserve old behavior.
+        finishJob(job, 0, job.result || 'PID file not found; inspect project receipts.');
+      } else {
+        finishJob(job, rc);
+      }
       continue;
     }
 
@@ -100,11 +127,9 @@ function markRunningJobs() {
       continue;
     }
 
-    // Process dead → done
-    job.status       = 'completed';
-    job.completed_at = now;
-    const logFile    = path.join(jobsDir, `${job.id}.log`);
-    job.result       = `Exited; log at org/jobs/${job.id}.log`;
+    // Process dead → done; trust the wrapper's recorded exit code when present.
+    const rc = readExitCode(job);
+    finishJob(job, rc === null ? 0 : rc);
     try { fs.unlinkSync(pidFile); } catch {}
   }
 }
@@ -115,31 +140,41 @@ function markRunningJobs() {
 function dispatchQueuedJobs() {
   const dispatched = [];
 
-  // Model selection by job type. IMPORTANT: set PER-PROVIDER model vars only,
-  // never a global MODEL — run_agent reads ${MODEL:-$CEO_<provider>_MODEL} for
-  // EVERY provider, so a global MODEL leaks across the waterfall (e.g. a benched
-  // gemini falling through to claude would run `claude --model gemini-...` and die).
-  // Per-provider vars are isolated: each provider only reads its own.
+  // Model selection by job type. OMP is the primary harness, so we set its role
+  // overlay vars. Direct-CLI model vars remain as the outer fallback path if OMP
+  // is absent or hard-fails.
   function modelEnvFor(jobType) {
     switch (jobType) {
       case 'read-only-worker':
-      case 'scout':   return 'CEO_CODEX_MODEL=gpt-4.5-preview CEO_CODEX_REASONING=low';
-      default:        return 'CEO_CLAUDE_MODEL=claude-sonnet-4-6';
+      case 'scout':
+        return {
+          SPIN_OMP_DEFAULT_MODEL: process.env.SPIN_OMP_SCOUT_MODEL || process.env.SPIN_OMP_SMOL_MODEL || 'anthropic/claude-haiku-4-5',
+          SPIN_OMP_DEFAULT_FALLBACKS: process.env.SPIN_OMP_SCOUT_FALLBACKS || process.env.SPIN_OMP_SMOL_FALLBACKS || 'openai-codex/gpt-5.1-codex-mini openrouter/~anthropic/claude-haiku-latest openai/gpt-5-mini',
+          CEO_CODEX_MODEL: 'gpt-4.5-preview',
+          CEO_CODEX_REASONING: 'low',
+        };
+      default:
+        return {
+          SPIN_OMP_DEFAULT_MODEL: process.env.SPIN_OMP_DEFAULT_MODEL || 'anthropic/claude-sonnet-4-6',
+          SPIN_OMP_DEFAULT_FALLBACKS: process.env.SPIN_OMP_DEFAULT_FALLBACKS || `openai-codex/gpt-5-codex ${process.env.CEO_OMP_MODEL || 'openrouter/anthropic/claude-sonnet-4.6'} openai/gpt-5 cursor/claude-4.6-sonnet-medium`,
+          CEO_CLAUDE_MODEL: 'claude-sonnet-4-6',
+        };
     }
   }
 
-  // Provider override: scouts start on codex (OpenAI subscription, gpt-4.5-preview low);
-  // implementation workers start on claude. Both fall through the full waterfall on failure.
+  // Provider override: all queued jobs start in OMP. OMP owns provider/model
+  // fallback through retry.fallbackChains; direct CLIs are only the outer safety net.
   function providerOverrideFor(jobType) {
-    switch (jobType) {
-      case 'read-only-worker':
-      case 'scout': return 'PROJECT_CEO_PROVIDER=codex';
-      default:      return 'PROJECT_CEO_PROVIDER=claude';
-    }
+    return { PROJECT_CEO_PROVIDER: 'omp' };
   }
 
   for (const job of queue.jobs || []) {
     if (job.status !== 'queued') continue;
+    if (!validJobId(job.id)) {
+      job.status = 'blocked'; job.blocked_at = now;
+      job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
+      continue;
+    }
 
     const project = harness.projects?.[job.project_id];
     if (!project) {
@@ -164,28 +199,38 @@ function dispatchQueuedJobs() {
     // ── Spawn ───────────────────────────────────────────────────────────────
     const logFile = path.join(jobsDir, `${job.id}.log`);
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
-
-    // Escape description for shell
-    const desc = (job.description || '').replace(/'/g, "'\\''");
-
-    const cmd = [
-      `OMP_JOB_ID='${job.id}'`,
-      `OMP_JOB_TYPE='${job.type}'`,
-      `OMP_JOB_DESCRIPTION='${desc}'`,
-      modelEnvFor(job.type),
-      providerOverrideFor(job.type),
-      `${root}/scripts/project-ceo-agent.sh`,
-      job.project_id,
-    ].join(' ');
+    const rcFile = path.join(jobsDir, `${job.id}.exit`);
 
     let outFd, spawnedPid;
     try {
+      try { fs.unlinkSync(rcFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
-      const child = cp.spawn('bash', ['-c', cmd], {
+      const childEnv = Object.assign(
+        {},
+        process.env,
+        {
+          OMP_JOB_ID: String(job.id),
+          OMP_JOB_TYPE: String(job.type),
+          OMP_JOB_DESCRIPTION: String(job.description || ''),
+          OMP_PROJECT_ID: String(job.project_id),
+          OMP_RC_FILE: rcFile,
+          SPIN_PROJECT_AGENT: path.join(root, 'scripts', 'project-ceo-agent.sh'),
+        },
+        modelEnvFor(job.type),
+        providerOverrideFor(job.type)
+      );
+      const wrapper = [
+        'set -u',
+        '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID"',
+        'rc=$?',
+        'printf "%s\\n" "$rc" > "$OMP_RC_FILE"',
+        'exit "$rc"',
+      ].join('\n');
+      const child = cp.spawn('bash', ['-c', wrapper], {
         cwd: root,
         detached: true,
         stdio: ['ignore', outFd, outFd],
-        env: Object.assign({}, process.env),
+        env: childEnv,
       });
       child.unref();
       fs.closeSync(outFd); outFd = null;

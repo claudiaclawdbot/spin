@@ -4,7 +4,7 @@
 # Superseded by project-ceo-agent.sh (single run) + project-ceo-loop.sh (loop),
 # which share scripts/lib/ceo-waterfall.sh. Kept so any historical AGENT_QUEUE
 # commands and muscle-memory invocations still work: it forwards to the new
-# agent, preserving OMP_JOB_* env passthrough and PROJECT_CEO_PROVIDER/MODEL.
+# agent, preserving OMP_JOB_* env passthrough and PROJECT_CEO_PROVIDER/SPIN_OMP_*.
 #
 # Usage: launch-project-omx-ceo.sh <project-id>
 

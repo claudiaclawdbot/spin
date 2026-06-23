@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # run-project-omp.sh — run the REAL oh-my-pi (omp) as a project's agent for one task.
 #
-# This is the execution engine that replaces the old `claude -p` dispatch. omp rides
-# the Claude subscription (default=sonnet, smol=haiku; never opus — pinned in
-# ~/.omp/agent/models.yml AND by the flags below). It works IN the project's own code
-# repo with omp's full tool surface (LSP, bash, subagents/worktrees), then logs output.
+# This is the execution engine for a one-shot project OMP run. It uses SPIN's
+# generated OMP config overlay so OMP can fall through authenticated providers
+# (Anthropic/OpenAI/OpenRouter/etc.) before SPIN needs an outer CLI fallback.
 #
 # Usage: run-project-omp.sh <project-id> ["explicit task text"]
 #   With no task text, it follows the project's current WORKSPACE_HANDOFF directive.
@@ -14,7 +13,7 @@
 
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
-source "$HOME/.config/omp.env" 2>/dev/null || true   # optional extra keys
+source "$ROOT/scripts/lib/ceo-waterfall.sh"
 
 PID="${1:?usage: run-project-omp.sh <project-id> [task]}"
 PROJ_ORG="$ROOT/org/projects/$PID"
@@ -53,9 +52,9 @@ no production deploys, no git pushes to main/human repos, no wallet/crypto/money
 no contract broadcasts. Those are gated to the human. Local reversible work only."
 
 echo "[run-project-omp] project=$PID repo=$REPO log=$LOG" >&2
+OMP_CONFIG="$(ensure_spin_omp_config)"
 omp -p \
-  --model anthropic/claude-sonnet-4-6 \
-  --smol anthropic/claude-haiku-4-5 \
+  --config "$OMP_CONFIG" \
   --cwd "$REPO" \
   --no-session \
   "$PROMPT" 2>&1 | tee "$LOG"

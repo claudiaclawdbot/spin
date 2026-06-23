@@ -133,19 +133,19 @@
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
-    <span class="badge">macOS · Linux</span><span class="badge">claude · codex · gemini · ollama</span>
+    <span class="badge">macOS · Linux</span><span class="badge">omp · claude · codex · gemini · ollama</span>
   </div>
 </header>
 
 <section id="what" class="wrap" style="border-top:none">
   <h2><span class="n">01</span>The plant around your agent CLIs</h2>
-  <p class="lede">A coding agent — Claude Code, Codex, omp — is a brilliant <em>employee</em>: one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around them: it schedules, routes, budgets, gates, and audits the work.</p>
+  <p class="lede">A coding agent harness — primarily omp, with direct CLIs as backup — is a brilliant <em>employee</em>: one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around it: it schedules, routes, budgets, gates, and audits the work.</p>
   <div class="grid">
     <div class="card"><span class="ic">🌀</span><h3>One Navigator loop</h3><p>Claims a lock file at startup — a second launch just exits, instead of silently doubling your LLM spend.</p></div>
     <div class="card"><span class="ic">🧠</span><h3>Thinks only on change</h3><p>The brain runs only when watched inputs actually move. An idle org costs a couple of LLM calls a day.</p></div>
     <div class="card"><span class="ic">🗂️</span><h3>State via a CLI, never by hand</h3><p>Agents call <code>org queue-job …</code>; verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.</p></div>
     <div class="card"><span class="ic">🚦</span><h3>Four hard gates</h3><p>Acts freely on local, reversible work. Stops for external sends, money, prod deploys, protected pushes.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Auto-failover</h3><p>codex → claude → gemini → omp → ollama. When a provider's account hits its usage limit, that lane is benched and the next takes over. No dead-ends.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Auto-failover</h3><p>OMP uses configured model roles and fallback chains across your signed-in providers. If OMP itself fails, SPIN falls back to direct CLIs.</p></div>
     <div class="card"><span class="ic">🧾</span><h3>Receipts for everything</h3><p>Every brain run and job writes an append-only audit trail you can <code>cat</code>.</p></div>
   </div>
 </section>
@@ -203,10 +203,10 @@
   <table>
     <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
     <tr><td><b>SPIN</b></td><td class="dimcell">a bash+node orchestration layer</td><td class="dimcell">schedules, routes, gates, audits</td></tr>
-    <tr><td><code>omp</code></td><td class="dimcell">agent CLI to ~15 model backends (oh-my-pi)</td><td class="dimcell">the interactive backbone (every floor is an omp session) + the provider lane for OpenRouter, Groq, xAI…</td></tr>
-    <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">headless agent CLIs (each wraps its vendor's models)</td><td class="dimcell">the job workers, in waterfall order</td></tr>
-    <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort fallback</td></tr>
-    <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">display only — never runs jobs</td></tr>
+    <tr><td><code>omp</code></td><td class="dimcell">agent harness + model gateway (oh-my-pi)</td><td class="dimcell">runs floors and jobs first; handles model/provider fallback across signed-in services</td></tr>
+    <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">direct vendor CLIs</td><td class="dimcell">outer fallback if OMP is missing or hard-fails</td></tr>
+    <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort outer fallback</td></tr>
+    <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">visual floors, status chips, live boards, and explicit delegate handoffs</td></tr>
   </table>
 </section>
 
