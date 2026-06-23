@@ -104,6 +104,10 @@ human approval — never overwrite a live prompt directly.
   fix the registration (`scripts/bootstrap-project.sh <id>` + a harness entry)
   or escalate — inline work hides the dispatch failure and is less careful.
   Workspace chores go through the `workspace` maintenance lane as queued jobs.
+- **Queue then stop.** After `scripts/org queue-job` succeeds, your work for
+  that project task is complete. Do not perform the worker's acceptance criteria,
+  do not append the project receipt, and do not mark queued/running jobs complete.
+  The dispatcher and project worker own execution and reporting.
 - A single tick changes at most: state.json + 1 handoff + 1 receipt +
   (optionally) 1 queue append + 1 human-queue append. Need more? Queue a worker.
 

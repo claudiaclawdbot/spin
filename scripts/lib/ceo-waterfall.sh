@@ -178,7 +178,7 @@ run_agent() {
     codex)
       local codex_cmd=()
       if command -v codex >/dev/null 2>&1; then
-        codex_cmd=(codex exec --cd "$CEO_ROOT" --sandbox workspace-write --ask-for-approval never)
+        codex_cmd=(codex exec --cd "$CEO_ROOT" --full-auto)
         [[ -n "${CEO_CODEX_MODEL:-}" ]] && codex_cmd+=(--model "$CEO_CODEX_MODEL")
         for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
         codex_cmd+=(-)
@@ -260,7 +260,8 @@ run_agent_resilient() {
     fi
 
     echo "  [waterfall] trying $provider" >&2
-    run_agent "$provider" "$prompt" "$log" "$@"; rc=$?
+    rc=0
+    run_agent "$provider" "$prompt" "$log" "$@" || rc=$?
 
     if provider_is_blocked "$provider"; then
       echo "  [waterfall] $provider hit a usage limit — next provider" >&2; continue

@@ -12,6 +12,8 @@
 
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+export SPIN_ROOT="$ROOT"
+export WORKSPACE_ROOT="$ROOT"
 source "$HOME/.config/omp.env" 2>/dev/null || true
 TARGET="${1:?usage: cmux-floor.sh ceo|<project-id>}"
 MODEL=(--model anthropic/claude-sonnet-4-6 --smol anthropic/claude-haiku-4-5)
@@ -37,6 +39,19 @@ fi
 
 # Standing instruction: keep the live floor board current (it's shown on this cmux floor).
 BOARD_INSTR="
+
+## cmux floor runtime
+This floor may be running outside the repository. The absolute SPIN root is:
+$ROOT
+
+For any repo-relative path or scripts/... command, use an absolute path or run
+cd \"\$SPIN_ROOT\" first. Shell commands inherit SPIN_ROOT and WORKSPACE_ROOT with
+this value.
+
+If this is the Workspace CEO / Coordinator floor: after you run
+scripts/org queue-job, stop. Do not create the worker's output, append the project
+receipt, mark the job completed, or simulate worker results. The dispatcher and
+project worker own execution and reporting.
 
 ## Live floor status board (keep it current)
 You have a status board at: $FLOOR_DOC
