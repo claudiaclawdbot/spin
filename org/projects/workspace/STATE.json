@@ -1,0 +1,11 @@
+{
+  "project": "workspace",
+  "orchestrator": "workspace-ceo",
+  "updated_at": "2026-06-23T20:22:27.662Z",
+  "stage": "ready",
+  "status": "active",
+  "primary_goal": "Maintain the SPIN workspace: scripts, docs, org wiring, tests, and local hygiene.",
+  "next_action": "Awaiting workspace maintenance jobs from the Navigator.",
+  "blockers": [],
+  "active_workers": []
+}
