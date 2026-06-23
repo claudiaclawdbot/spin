@@ -26,6 +26,38 @@ if [ ${#present[@]} -eq 0 ]; then
 fi
 echo
 
+# ── 1b. Provider preferences ─────────────────────────────────────────────────
+# Sets the waterfall order. Saved to ~/.config/omp.env — sourced by every agent.
+# Default: codex (OpenAI) → claude (Anthropic) → omp (OpenRouter) → ollama
+echo "${c_b}1b. Provider preferences${c_o} ${c_d}(sets which runs first — others are auto-fallback)${c_o}"
+ENVF="$HOME/.config/omp.env"; mkdir -p "$(dirname "$ENVF")"; touch "$ENVF"; chmod 600 "$ENVF"
+_pref_provider() {
+  local role="$1" default="$2" varname="$3"
+  local choices=""; for p in "${present[@]}"; do choices+="$p|"; done; choices="${choices%|}"
+  local val; val="$(ask "   $role provider ${c_d}[$choices, default: $default]${c_o}: " "$default")"
+  grep -q "^export $varname=" "$ENVF" 2>/dev/null \
+    && sed -i.bak "s|^export $varname=.*|export $varname=$val|" "$ENVF" \
+    || echo "export $varname=$val" >> "$ENVF"
+  rm -f "$ENVF.bak"; echo "   ${c_g}✓${c_o} $role: $val"
+}
+if [ ${#present[@]} -gt 1 ]; then
+  _pref_provider "Primary (scouts + CEO)"      "codex"  "SPIN_PRIMARY_PROVIDER"
+  _pref_provider "Secondary (implementation)"  "claude" "SPIN_SECONDARY_PROVIDER"
+  echo "   ${c_d}OpenRouter (omp) will be used as last resort before ollama.${c_o}"
+else
+  echo "   ${c_d}(only one provider detected — preferences skipped)${c_o}"
+fi
+# Codex model preference (only asked if codex is present)
+if command -v codex >/dev/null 2>&1; then
+  codex_model="$(ask "   Codex model ${c_d}[gpt-4.5-preview]${c_o}: " "gpt-4.5-preview")"
+  grep -q '^export CEO_CODEX_MODEL=' "$ENVF" 2>/dev/null \
+    && sed -i.bak "s|^export CEO_CODEX_MODEL=.*|export CEO_CODEX_MODEL=$codex_model|" "$ENVF" \
+    || echo "export CEO_CODEX_MODEL=$codex_model" >> "$ENVF"
+  rm -f "$ENVF.bak"
+  echo "   ${c_g}✓${c_o} Codex model: $codex_model (reasoning: low by default)"
+fi
+echo
+
 # ── 2. OpenRouter (optional) ─────────────────────────────────────────────────
 echo "${c_b}2. OpenRouter${c_o} ${c_d}(optional — one API key gives you a fallback to ~15 model providers)${c_o}"
 echo "   ${c_d}If a provider runs out of quota, SPIN can fall back to any model on OpenRouter.${c_o}"

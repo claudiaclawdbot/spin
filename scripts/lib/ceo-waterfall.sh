@@ -26,9 +26,12 @@ CEO_LOCKOUT_SECS="${CEO_LOCKOUT_SECS:-86400}"   # 24h
 [[ -f "$HOME/.config/omp.env" ]] && source "$HOME/.config/omp.env" 2>/dev/null || true
 
 # Model defaults (override via env before sourcing, or per-call)
-# Tier map: scout/read-only → flash (cheap); implementation → sonnet; judgment → sonnet
+# Waterfall order (personal): codex (OpenAI) → claude (Anthropic) → omp/OpenRouter → gemini → ollama
+# Override via SPIN_PRIMARY_PROVIDER / SPIN_SECONDARY_PROVIDER in ~/.config/omp.env
+CEO_CODEX_MODEL="${CEO_CODEX_MODEL:-gpt-4.5-preview}"    # codex CLI model (OpenAI subscription)
+CEO_CODEX_REASONING="${CEO_CODEX_REASONING:-low}"         # reasoning effort: low|medium|high
 CEO_CLAUDE_MODEL="${CEO_CLAUDE_MODEL:-claude-sonnet-4-6}"
-CEO_SCOUT_MODEL="${CEO_SCOUT_MODEL:-gemini-2.5-flash}"   # fast/cheap for read-only workers
+CEO_SCOUT_MODEL="${CEO_SCOUT_MODEL:-$CEO_CODEX_MODEL}"   # scout tier: codex first, falls through waterfall
 CEO_CURSOR_MODEL="${CEO_CURSOR_MODEL:-sonnet-4}"
 CEO_GEMINI_MODEL="${CEO_GEMINI_MODEL:-gemini-2.5-flash}"  # default to flash (cost control)
 CEO_GEMINI_PRO_MODEL="${CEO_GEMINI_PRO_MODEL:-gemini-2.5-pro}"  # explicit override when needed
@@ -176,11 +179,13 @@ run_agent() {
       local codex_cmd=()
       if command -v codex >/dev/null 2>&1; then
         codex_cmd=(codex exec --cd "$CEO_ROOT" --sandbox workspace-write --ask-for-approval never)
+        [[ -n "${CEO_CODEX_MODEL:-}" ]] && codex_cmd+=(--model "$CEO_CODEX_MODEL")
         for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
         codex_cmd+=(-)
         echo "$prompt" | "${codex_cmd[@]}" > "$log" 2>&1 || rc=$?
       elif command -v omx >/dev/null 2>&1; then
         codex_cmd=(omx exec --cd "$CEO_ROOT" --sandbox workspace-write)
+        [[ -n "${CEO_CODEX_MODEL:-}" ]] && codex_cmd+=(--model "$CEO_CODEX_MODEL")
         for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
         codex_cmd+=(-)
         echo "$prompt" | "${codex_cmd[@]}" > "$log" 2>&1 || rc=$?
@@ -237,7 +242,10 @@ run_agent_resilient() {
   local candidates=()
   [[ -n "$override" ]] && candidates+=("$override")
   [[ "$skip_codex" != "true" ]] && candidates+=("codex")
-  candidates+=("claude" "gemini" "omp" "ollama")
+  # Order: codex → claude → omp (OpenRouter) → gemini → ollama
+  # omp before gemini: OpenRouter gives access to Anthropic/OpenAI via API key
+  # even when direct subscriptions are exhausted; gemini last (often not installed).
+  candidates+=("claude" "omp" "gemini" "ollama")
 
   local tried=" " provider rc
   for provider in "${candidates[@]}"; do
