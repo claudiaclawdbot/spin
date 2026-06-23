@@ -14,6 +14,7 @@ STOP="$RUN_DIR/STATUS_WATCH_STOP"
 INTERVAL="${1:-6}"
 mkdir -p "$RUN_DIR"
 rm -f "$STOP"
+CEO_WS="$(node -e 'const fs=require("fs"),f=process.argv[1];try{const h=JSON.parse(fs.readFileSync(f,"utf8"));process.stdout.write(h.workspace_ceo?.cmux_workspace||"workspace:1")}catch{process.stdout.write("workspace:1")}' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null)"
 
 # Atomic singleton: only one watcher, ever.
 while ! ( set -o noclobber; echo $$ > "$LOCK" ) 2>/dev/null; do
@@ -50,17 +51,17 @@ while true; do
   if [[ "$DSTATE" != "$PREV_DSTATE" ]]; then
     echo "$DSTATE" > "$DRIVER_STATE_F"
     case "$DSTATE" in
-      up)     cmux set-status driver "SPIN loop UP"     --workspace workspace:1 --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
-      paused) cmux set-status driver "SPIN loop PAUSED" --workspace workspace:1 --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
+      up)     cmux set-status driver "SPIN loop UP"     --workspace "$CEO_WS" --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
+      paused) cmux set-status driver "SPIN loop PAUSED" --workspace "$CEO_WS" --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
       paused-stale)
-              cmux set-status driver "SPIN PAUSED ${STALE_STOP_HRS}h+ — forgotten?" --workspace workspace:1 --icon exclamationmark.triangle --color '#f97316' --priority 95 >/dev/null 2>&1 || true
+              cmux set-status driver "SPIN PAUSED ${STALE_STOP_HRS}h+ — forgotten?" --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#f97316' --priority 95 >/dev/null 2>&1 || true
               cmux notify --title "SPIN paused for hours" \
                    --body "A STOP file has paused the driver for ${STALE_STOP_HRS}h+. Resume: rm org/ceo/runs/STOP (or spin start). If intentional, ignore." \
-                   --workspace workspace:1 >/dev/null 2>&1 || true ;;
-      down)   cmux set-status driver "SPIN loop DOWN"   --workspace workspace:1 --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
+                   --workspace "$CEO_WS" >/dev/null 2>&1 || true ;;
+      down)   cmux set-status driver "SPIN loop DOWN"   --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
               cmux notify --title "SPIN driver DOWN" \
                    --body "tick loop not running — spin start (or rm org/ceo/runs/STOP if paused)" \
-                   --workspace workspace:1 >/dev/null 2>&1 || true ;;
+                   --workspace "$CEO_WS" >/dev/null 2>&1 || true ;;
     esac
   fi
   sleep "$INTERVAL"

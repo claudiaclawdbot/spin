@@ -26,26 +26,19 @@ if [ ${#present[@]} -eq 0 ]; then
 fi
 echo
 
-# ── 1b. Provider preferences ─────────────────────────────────────────────────
-# Sets the waterfall order. Saved to ~/.config/omp.env — sourced by every agent.
-# Default: codex (OpenAI) → claude (Anthropic) → omp (OpenRouter) → ollama
-echo "${c_b}1b. Provider preferences${c_o} ${c_d}(sets which runs first — others are auto-fallback)${c_o}"
+# ── 1b. OMP fallback roles ───────────────────────────────────────────────────
+# OMP owns the normal model/provider fallback. SPIN writes a small runtime config
+# overlay with modelRoles + retry.fallbackChains; direct CLIs are only the outer
+# safety net if OMP is missing or hard-fails.
+echo "${c_b}1b. OMP fallback roles${c_o} ${c_d}(SPIN starts agents through OMP first)${c_o}"
 ENVF="$HOME/.config/omp.env"; mkdir -p "$(dirname "$ENVF")"; touch "$ENVF"; chmod 600 "$ENVF"
-_pref_provider() {
-  local role="$1" default="$2" varname="$3"
-  local choices=""; for p in "${present[@]}"; do choices+="$p|"; done; choices="${choices%|}"
-  local val; val="$(ask "   $role provider ${c_d}[$choices, default: $default]${c_o}: " "$default")"
-  grep -q "^export $varname=" "$ENVF" 2>/dev/null \
-    && sed -i.bak "s|^export $varname=.*|export $varname=$val|" "$ENVF" \
-    || echo "export $varname=$val" >> "$ENVF"
-  rm -f "$ENVF.bak"; echo "   ${c_g}✓${c_o} $role: $val"
-}
-if [ ${#present[@]} -gt 1 ]; then
-  _pref_provider "Primary (scouts + CEO)"      "codex"  "SPIN_PRIMARY_PROVIDER"
-  _pref_provider "Secondary (implementation)"  "claude" "SPIN_SECONDARY_PROVIDER"
-  echo "   ${c_d}OpenRouter (omp) will be used as last resort before ollama.${c_o}"
+if command -v omp >/dev/null 2>&1; then
+  echo "   ${c_g}✓${c_o} OMP found. Its authenticated providers are the normal fallback pool."
+  echo "   ${c_d}Default work role: anthropic/claude-sonnet-4-6${c_o}"
+  echo "   ${c_d}Cheap/read-only role: anthropic/claude-haiku-4-5${c_o}"
+  echo "   ${c_d}Advanced: override SPIN_OMP_DEFAULT_MODEL or SPIN_OMP_*_FALLBACKS in ~/.config/omp.env.${c_o}"
 else
-  echo "   ${c_d}(only one provider detected — preferences skipped)${c_o}"
+  echo "   ${c_d}OMP not found. SPIN can still use direct CLIs, but installing OMP enables account-aware fallback chains.${c_o}"
 fi
 # Codex model preference (only asked if codex is present)
 if command -v codex >/dev/null 2>&1; then
@@ -59,8 +52,8 @@ fi
 echo
 
 # ── 2. OpenRouter (optional) ─────────────────────────────────────────────────
-echo "${c_b}2. OpenRouter${c_o} ${c_d}(optional — one API key gives you a fallback to ~15 model providers)${c_o}"
-echo "   ${c_d}If a provider runs out of quota, SPIN can fall back to any model on OpenRouter.${c_o}"
+echo "${c_b}2. OpenRouter${c_o} ${c_d}(optional — adds an OMP fallback model source)${c_o}"
+echo "   ${c_d}SPIN starts agents through OMP first; OMP can fall through configured models when a provider runs out of quota.${c_o}"
 if yes "   Set up OpenRouter as a fallback?"; then
   ENVF="$HOME/.config/omp.env"; mkdir -p "$(dirname "$ENVF")"; touch "$ENVF"; chmod 600 "$ENVF"
   key="$(ask "   Paste your OpenRouter API key ${c_d}(from openrouter.ai/keys — or leave blank to skip)${c_o}: ")"
@@ -68,13 +61,13 @@ if yes "   Set up OpenRouter as a fallback?"; then
     grep -q '^export OPENROUTER_API_KEY=' "$ENVF" 2>/dev/null \
       && sed -i.bak "s|^export OPENROUTER_API_KEY=.*|export OPENROUTER_API_KEY=$key|" "$ENVF" \
       || echo "export OPENROUTER_API_KEY=$key" >> "$ENVF"
-    echo "   ${c_d}Which model should that fallback use? Press Enter to accept the default${c_o}"
+    echo "   ${c_d}Which OpenRouter model should SPIN include in OMP's fallback chain? Press Enter to accept the default${c_o}"
     model="$(ask "   ${c_d}(a model from openrouter.ai/models)${c_o} model ${c_d}[openrouter/anthropic/claude-sonnet-4.6]${c_o}: " "openrouter/anthropic/claude-sonnet-4.6")"
     grep -q '^export CEO_OMP_MODEL=' "$ENVF" 2>/dev/null \
       && sed -i.bak "s|^export CEO_OMP_MODEL=.*|export CEO_OMP_MODEL=$model|" "$ENVF" \
       || echo "export CEO_OMP_MODEL=$model" >> "$ENVF"
     rm -f "$ENVF.bak"
-    echo "   ${c_g}✓ OpenRouter fallback ready${c_o} — uses ${model} (saved to ~/.config/omp.env)"
+    echo "   ${c_g}✓ OpenRouter fallback ready${c_o} — ${model} will be included in OMP fallback chains"
   fi
 fi
 echo

@@ -86,6 +86,46 @@ seed org/state.json '{
 '
 [[ -f org/OMP_HARNESS.json ]] || { cp org/OMP_HARNESS.example.json org/OMP_HARNESS.json; echo "  ✓ org/OMP_HARNESS.json (from example)"; }
 [[ -f org/ceo/WORKSPACE_CONTROLLER_PROMPT.md ]] || { cp org/ceo/WORKSPACE_CONTROLLER_PROMPT.example.md org/ceo/WORKSPACE_CONTROLLER_PROMPT.md; echo "  ✓ org/ceo/WORKSPACE_CONTROLLER_PROMPT.md (from example — EDIT THIS)"; }
+[[ -f org/ceo/CEO_CHAT_PROMPT.md ]] || { cp org/ceo/CEO_CHAT_PROMPT.example.md org/ceo/CEO_CHAT_PROMPT.md; echo "  ✓ org/ceo/CEO_CHAT_PROMPT.md (from example — EDIT THIS)"; }
+
+if [[ ! -f org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md || ! -f org/projects/workspace/STATE.json ]]; then
+  bash "$ROOT/scripts/bootstrap-project.sh" workspace >/dev/null
+  cat > org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md <<'EOF_WORKSPACE_PROMPT'
+# workspace — Project Controller Prompt
+
+You are `workspace-maintenance`, the project orchestrator for SPIN's own
+workspace maintenance lane.
+
+## Mission
+
+Keep this SPIN install cohesive: repo hygiene, docs, org wiring, smoke tests,
+launcher scripts, and local maintenance tasks that support the Navigator.
+
+## Working dir
+
+`$SPIN_ROOT` is the SPIN repo root. Prefer local, reversible changes. Preserve
+dirty user work and never push, deploy, delete, or publish without human approval.
+
+## Reporting
+
+- Append receipts with the job ID to `org/projects/workspace/RECEIPTS.md`.
+- Update `org/projects/workspace/STATE.json` with the next action.
+- Report up with `scripts/org inbox workspace "<what was done / what's blocked>"`.
+EOF_WORKSPACE_PROMPT
+  node -e '
+    const fs=require("fs"), f="org/projects/workspace/STATE.json";
+    const s=JSON.parse(fs.readFileSync(f,"utf8"));
+    Object.assign(s,{
+      stage:"ready",
+      status:"active",
+      primary_goal:"Maintain the SPIN workspace: scripts, docs, org wiring, tests, and local hygiene.",
+      next_action:"Awaiting workspace maintenance jobs from the Navigator.",
+      updated_at:new Date().toISOString()
+    });
+    fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
+  ' 2>/dev/null || true
+  echo "  ✓ org/projects/workspace/ (maintenance lane)"
+fi
 
 chmod +x scripts/*.sh scripts/org scripts/spin 2>/dev/null || true
 
@@ -115,8 +155,9 @@ Or set it up by hand:
   4. spin service install   # keep the driver alive (or: spin start)
   5. spin                   # check on it any time
 
-Keys for non-subscription providers go in ~/.config/omp.env (chmod 600), e.g.:
+Keys and optional SPIN/OMP model overrides go in ~/.config/omp.env (chmod 600), e.g.:
   export GEMINI_API_KEY=...
-  export OPENROUTER_API_KEY=...   # then set CEO_OMP_MODEL=openrouter/anthropic/claude-sonnet-4.6
-                                  # to add a fallback lane to ~15 model backends via omp
+  export OPENROUTER_API_KEY=...
+  export CEO_OMP_MODEL=openrouter/anthropic/claude-sonnet-4.6
+  # SPIN writes an OMP retry.fallbackChains overlay at runtime and includes CEO_OMP_MODEL in it.
 EOF

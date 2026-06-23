@@ -17,7 +17,7 @@
 
 ---
 
-SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://github.com/manaflow-ai/cmux), dispatches work to detached background jobs run by whichever agent CLI is available (Codex CLI → Claude Code → Gemini CLI → omp → Ollama, with automatic fallback), and talks to you through one command: `spin`. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://github.com/manaflow-ai/cmux), dispatches work to detached background jobs through [oh-my-pi](https://omp.sh) (`omp`) first, and talks to you through one command: `spin`. OMP handles the normal model/provider fallback across your authenticated Anthropic, OpenAI, OpenRouter, Cursor, local, or other accounts; direct CLIs remain an outer safety net. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
 
 ```
 you ──spin approve──▶ APPROVALS.md ──▶ ┌──────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
@@ -56,8 +56,8 @@ curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-boot
 
 **Requirements:**
 
-- **Required** — macOS/Linux, `bash`, `node`, and at least one agent CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models). With just these, SPIN runs **headless** — the Navigator ticks and dispatches background jobs straight to the agent CLIs.
-- **[`omp`](https://omp.sh) (oh-my-pi) — the interactive backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN. Strongly recommended; only the headless dispatch path can do without it.
+- **Required** — macOS/Linux, `bash`, `node`, and `omp` or at least one direct fallback CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models).
+- **[`omp`](https://omp.sh) (oh-my-pi) — the agent backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session, and queued jobs try OMP first with a SPIN-generated config overlay for `modelRoles` and `retry.fallbackChains`. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN.
 - **[cmux](https://github.com/manaflow-ai/cmux) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
 
 ## The interface — cmux *is* your GUI
@@ -76,6 +76,11 @@ you (in the Coordinator floor):  "start a project for my fidget-spinner shop"
   → a new "fidget-shop" tab appears in your sidebar, with its own agent, already briefed
 ```
 
+When you want that visible project coordinator to do something now, the Coordinator
+uses `spin delegate --wait <project> "<task>"`. That sends the task into the
+project's live cmux/omp floor, stamps it with a request id, and waits for the
+project to report back through the org inbox.
+
 So the stack reads cleanly: **cmux** is the screen, **omp** is the engine in each tab, and **SPIN** is the brain wiring them into one coordinated org. No Electron, no separate app to maintain — the terminal workspace *is* the product.
 
 ## Why SPIN exists
@@ -84,7 +89,9 @@ Running multiple AI-driven projects from chat sessions doesn't scale: context ev
 
 - **One Navigator loop** — it claims a lock file at startup, so a second accidental launch just prints "already running" and exits instead of silently doubling your LLM spend.
 - **A brain that only thinks when something changed** — the LLM runs only when watched inputs move (content hash, not mtime). An idle org costs a couple of LLM calls a day.
-- **Detached background jobs** for real work — cmux is *display only* (a hard-won lesson; see [docs/LESSONS.md](docs/LESSONS.md)).
+- **Detached background jobs** for durable background work. Explicit `spin delegate`
+  handoffs are the live, human-visible path into a project floor; queued jobs do not
+  depend on cmux panes.
 - **State changed through a CLI, never hand-edited** — agents call `org queue-job …`, `org set-state …`; the verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.
 - **Four hard gates** — SPIN acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
 - **Receipts for everything** — every brain run and job writes an append-only audit trail.
@@ -96,12 +103,12 @@ Several of these are both a product and a model family. Here they always mean th
 | Name | What it actually is | Role in SPIN |
 |---|---|---|
 | **SPIN** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
-| [**`omp`**](https://omp.sh) (oh-my-pi) | an agent CLI that speaks to ~15 model backends | the **interactive backbone** (every floor is an omp session — the **Pi** in SPIN) *and* a job provider that unlocks **OpenRouter, Groq, xAI, Mistral**, … |
-| **`codex`** · **`claude`** · **`gemini`** | agent CLIs, each wrapping its own vendor's models | the **job workers** — the dispatcher spawns one per queued job, in waterfall order |
-| **`ollama`** | a local model runtime | last-resort provider when every cloud account is benched |
-| [**cmux**](https://github.com/manaflow-ai/cmux) | a terminal multiplexer with a GUI + control socket | **display only** — floors, status chips, live boards; never executes jobs |
+| [**`omp`**](https://omp.sh) (oh-my-pi) | the agent harness and model gateway | runs the Coordinator/project agents and handles normal fallback across authenticated model providers |
+| **`codex`** · **`claude`** · **`gemini`** | direct vendor CLIs | outer fallback if OMP is missing or hard-fails |
+| **`ollama`** | a local model runtime | last-resort outer fallback |
+| [**cmux**](https://github.com/manaflow-ai/cmux) | a terminal multiplexer with a GUI + control socket | visual floors, status chips, live boards, and explicit `spin delegate` handoffs |
 
-The Navigator's "brain" is not a separate program: it's one LLM invocation per tick (via the same waterfall, `claude` first) with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
+The Navigator's "brain" is not a separate program: it's one OMP agent invocation per tick with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
 
 ## The five layers
 
@@ -114,7 +121,7 @@ flowchart TD
     S["5 · WORKERS / SUBAGENTS<br/>per-task agent-CLI invocations: code edits, research, drafts, builds"]
     H -->|"spin approve / decline / ask"| W
     C --> W
-    W -->|"org queue-job + set-handoff"| P
+    W -->|"org queue-job / live delegate + set-handoff"| P
     P -->|"org inbox + STATE.json"| W
     P --> S
     W -->|"org escalate (only the 4 gated things)"| H
@@ -142,6 +149,7 @@ No database, no message broker, no daemon you can't `cat`.
 spin                 status: projects, what's waiting on you, recent activity
 spin watch           live dashboard, refreshing
 spin approve "<x>"   answer an approval   ·   spin decline / spin ask
+spin delegate --wait <project> "<task>"    send work to a live project floor
 spin start | stop    run / pause the Navigator loop
 spin up | down       launch / tear down all cmux floors + daemons
 spin doctor          health check: deps, driver, floors, watchers
@@ -161,7 +169,7 @@ Every `org` verb validates its input (unknown project? disallowed job type? → 
 ## Cost & reliability design
 
 - **Change-gated brain** — the LLM runs only when real inputs (approvals, inbox, project state) changed, plus a low-frequency heartbeat.
-- **Provider waterfall with auto-benching** (`scripts/lib/ceo-waterfall.sh`) — a *provider* is one lane in the fallback chain: an agent CLI plus the account behind it. Jobs try `codex → claude → gemini → omp → ollama`. When a provider hits its account's usage limit, SPIN benches that lane (90 min–24 h) and advances to the next; an explicit override is ignored while a provider is benched, so a stale caller can't keep hammering a maxed-out account. The **`omp`** lane is special — it routes through [oh-my-pi](https://omp.sh) to **OpenRouter, Groq, xAI, Mistral, Azure, Cerebras** and more, so one lane is a fallback to ~15 model sources (set `CEO_OMP_MODEL`, e.g. `openrouter/anthropic/claude-sonnet-4.6`, to enable it).
+- **OMP-first fallback** (`scripts/lib/ceo-waterfall.sh`) — SPIN writes a runtime OMP config overlay (`org/ceo/runs/spin-omp-config.yml`) with `modelRoles` and `retry.fallbackChains`. OMP retries rate/usage/server/network failures, switches authenticated credentials when available, and falls through configured models such as Anthropic → OpenAI Codex → OpenRouter. If OMP itself is absent or hard-fails, SPIN falls back to direct CLI lanes: `codex → claude → gemini → ollama`.
 - **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer.
 - **Job timeouts** — a hung job is killed (whole process group) after `max_runtime_seconds` (default 1 h) so it can't hold its project lane forever.
 - **Silent-exit retry** — a job that exits 0 having changed no files is retried once on claude.

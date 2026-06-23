@@ -90,8 +90,9 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
   `spin new-project <id> "<goal>"` registers a project AND spawns its cmux floor
   (a sidebar tab) with its own omp orchestrator; the Coordinator creates projects
   conversationally.
-- ~~**OpenRouter (and Groq/xAI/Mistral/…)**~~ — an opt-in `omp` provider lane
-  (`CEO_OMP_MODEL`) routes the waterfall fallback through oh-my-pi to ~15 backends.
+- ~~**OpenRouter (and Groq/xAI/Mistral/…)**~~ — OMP is now the primary harness;
+  SPIN writes `modelRoles` + `retry.fallbackChains` at runtime, and
+  `CEO_OMP_MODEL` is just an optional OpenRouter entry in that chain.
 - ~~**Onboarding wizard**~~ — `spin init`: providers, OpenRouter, first project, supervisor.
 - ~~**Single-file install, fixed**~~ — split into a tiny `curl|bash` launcher
   (`spin-bootstrap.sh`) + an offline self-extractor (`spin-offline.sh`) after the

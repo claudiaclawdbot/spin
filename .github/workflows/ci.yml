@@ -72,6 +72,8 @@ jobs:
           echo "ok: spin + org resolve correctly through the symlink"
       - name: dispatcher runs clean on the queue
         run: bash scripts/omp-supervisor-once.sh
+      - name: full local smoke suite
+        run: bash scripts/smoke-test.sh
       - name: installer is idempotent
         run: SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
 

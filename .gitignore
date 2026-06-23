@@ -11,10 +11,13 @@ org/AGENT_QUEUE.json
 org/state.json
 org/OMP_HARNESS.json
 org/ceo/WORKSPACE_CONTROLLER_PROMPT.md
+org/ceo/CEO_CHAT_PROMPT.md
 
 # real projects you register locally (the repo ships only example-app)
 org/projects/*
 !org/projects/example-app/
+!org/projects/workspace/
+!org/projects/workspace/**
 
 # secrets / local env
 .env

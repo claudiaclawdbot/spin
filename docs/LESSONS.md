@@ -14,6 +14,11 @@ failures (15+ consecutive at the worst) while the queue looked perfectly healthy
 and log. cmux only *displays* (log tails, status chips, markdown boards).
 Completion is detected by PID liveness, not by scraping pane text.
 
+**Current nuance:** an explicit `spin delegate --wait <project> "<task>"` handoff
+may type into a live project floor when the human wants to watch that coordinator.
+That path is stamped with a request id and waits for an `org inbox` report; it is
+not the autonomous queue dispatcher.
+
 ## 2. Duplicate loops are the silent quota killer
 
 One stale loop from a day earlier + a launchd copy + an old supervisor all
@@ -33,9 +38,11 @@ When a CLI hits its usage limit, retrying it every tick wastes the window and
 hides the problem. Worse: an explicit `PROVIDER=x` override somewhere upstream
 kept resurrecting the rate-limited provider.
 
-**v3:** on any usage-limit error the provider gets a **lockout file with an
-expiry epoch**; the waterfall skips it — *even when explicitly requested* —
-until the lockout expires on its own.
+**v3:** on any usage-limit error a direct CLI provider gets a **lockout file with
+an expiry epoch**; the outer fallback skips it — *even when explicitly requested* —
+until the lockout expires on its own. OMP keeps its own provider/account cooldowns
+inside the harness, so SPIN does not bench the whole OMP lane for one backend's
+429.
 
 ## 4. An LLM loop that runs on a timer is a money printer (for your provider)
 

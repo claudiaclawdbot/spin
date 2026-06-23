@@ -4,7 +4,8 @@
 # This is a "legit omp agent" sitting in a cmux pane: the workspace CEO on its floor,
 # or a project orchestrator on its floor. It is INTERACTIVE and IDLE — it costs nothing
 # sitting at the prompt and does NOTHING until you type to it (or a coordinator hands it
-# work). Rides your Claude subscription: sonnet for work, haiku for cheap subtasks, no opus.
+# work). Uses OMP's configured model roles and fallback chains, so authenticated
+# Anthropic/OpenAI/OpenRouter/etc. accounts can take over when one hits a limit.
 #
 # Usage:
 #   cmux-floor.sh ceo            # the workspace coordinator
@@ -12,9 +13,12 @@
 
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
-source "$HOME/.config/omp.env" 2>/dev/null || true
+export SPIN_ROOT="$ROOT"
+export WORKSPACE_ROOT="$ROOT"
+source "$ROOT/scripts/lib/ceo-waterfall.sh"
 TARGET="${1:?usage: cmux-floor.sh ceo|<project-id>}"
-MODEL=(--model anthropic/claude-sonnet-4-6 --smol anthropic/claude-haiku-4-5)
+OMP_CONFIG="$(ensure_spin_omp_config)"
+MODEL=(--config "$OMP_CONFIG")
 
 if [[ "$TARGET" == "ceo" ]]; then
   SYS="$ROOT/org/ceo/WORKSPACE_CONTROLLER_PROMPT.md"
@@ -38,6 +42,19 @@ fi
 # Standing instruction: keep the live floor board current (it's shown on this cmux floor).
 BOARD_INSTR="
 
+## cmux floor runtime
+This floor may be running outside the repository. The absolute SPIN root is:
+$ROOT
+
+For any repo-relative path or scripts/... command, use an absolute path or run
+cd \"\$SPIN_ROOT\" first. Shell commands inherit SPIN_ROOT and WORKSPACE_ROOT with
+this value.
+
+If this is the Workspace CEO / Coordinator floor: after you run
+scripts/org queue-job, stop. Do not create the worker's output, append the project
+receipt, mark the job completed, or simulate worker results. The dispatcher and
+project worker own execution and reporting.
+
 ## Live floor status board (keep it current)
 You have a status board at: $FLOOR_DOC
 It is displayed live on this cmux floor and auto-reloads. Whenever you start, finish,
@@ -54,8 +71,8 @@ clear
 echo "════════════════════════════════════════════════════════════"
 echo "  $TITLE"
 echo "  dir:    $DIR"
-echo "  model:  sonnet-4-6   (cheap subtasks: haiku-4-5)"
-echo "  auth:   your Claude subscription  ·  no opus, no API billing"
+echo "  model:  OMP default role   (cheap subtasks: OMP smol role)"
+echo "  auth:   OMP-configured accounts with retry/fallback chains"
 echo
 echo "  IDLE until you type. Nothing runs on its own."
 echo "  Type a request, or let the Workspace CEO hand it work."
