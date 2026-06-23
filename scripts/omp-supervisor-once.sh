@@ -123,16 +123,17 @@ function dispatchQueuedJobs() {
   function modelEnvFor(jobType) {
     switch (jobType) {
       case 'read-only-worker':
-      case 'scout':   return 'CEO_GEMINI_MODEL=gemini-2.5-flash';
+      case 'scout':   return 'CEO_CODEX_MODEL=gpt-4.5-preview CEO_CODEX_REASONING=low';
       default:        return 'CEO_CLAUDE_MODEL=claude-sonnet-4-6';
     }
   }
 
-  // Provider override: scouts can start on gemini; others start on claude.
+  // Provider override: scouts start on codex (OpenAI subscription, gpt-4.5-preview low);
+  // implementation workers start on claude. Both fall through the full waterfall on failure.
   function providerOverrideFor(jobType) {
     switch (jobType) {
       case 'read-only-worker':
-      case 'scout': return 'PROJECT_CEO_PROVIDER=gemini';
+      case 'scout': return 'PROJECT_CEO_PROVIDER=codex';
       default:      return 'PROJECT_CEO_PROVIDER=claude';
     }
   }

@@ -70,7 +70,7 @@ $(cat "$CONTEXT")
 
 # --- run (resilient: falls through providers on usage-limit) --------------
 echo "[workspace-ceo-agent] run=$RUN_LOG" >&2
-run_agent_resilient true "${WORKSPACE_CEO_PROVIDER:-}" "$PROMPT_BODY" "$RUN_LOG" "$ROOT/org" "$ROOT/scripts"
+run_agent_resilient false "${WORKSPACE_CEO_PROVIDER:-}" "$PROMPT_BODY" "$RUN_LOG" "$ROOT/org" "$ROOT/scripts"
 rc=$?
 echo "[workspace-ceo-agent] done (rc=$rc) — log=$RUN_LOG" >&2
 exit $rc
