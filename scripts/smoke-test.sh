@@ -9,13 +9,17 @@ trap 'rm -rf "$TMP"' EXIT
 
 KIT="$TMP/spin"
 mkdir -p "$KIT"
-( cd "$ROOT" && git ls-files -z | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
+( cd "$ROOT" && { git ls-files -z; git ls-files -z --others --exclude-standard -- 'org/ceo/*.example.md'; } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
 cd "$KIT"
 SPIN_NO_DEPS=1 \
 SPIN_INSTALL_SKIP_AGENT_CHECK=1 \
 SPIN_BIN_DIR="$TMP/bin" \
   ./install.sh >/dev/null
+
+test -f org/ceo/CEO_CHAT_PROMPT.md
+test -f org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md
+test -f org/projects/workspace/STATE.json
 
 for f in scripts/*.sh scripts/lib/*.sh scripts/spin install.sh spin-bootstrap.sh; do
   bash -n "$f"

@@ -62,6 +62,23 @@ function killJobGroup(pid) {
   return !pidAlive(pid);
 }
 
+function finishJob(job, rc, detail) {
+  const ok = Number(rc) === 0;
+  job.status = ok ? 'completed' : 'failed';
+  if (ok) job.completed_at = now;
+  else job.failed_at = now;
+  job.result = detail || (ok
+    ? `Exited 0; log at org/jobs/${job.id}.log`
+    : `Exited ${rc}; log at org/jobs/${job.id}.log`);
+}
+
+function readExitCode(job) {
+  const rcFile = path.join(jobsDir, `${job.id}.exit`);
+  if (!fs.existsSync(rcFile)) return null;
+  const rc = parseInt(fs.readFileSync(rcFile, 'utf8').trim(), 10);
+  return Number.isNaN(rc) ? null : rc;
+}
+
 // ── 1. Mark completed jobs ──────────────────────────────────────────────────
 // A "running" job is done when its PID file exists but the process is gone,
 // or when there is no PID file at all (legacy / lost). A job that exceeds its
@@ -74,10 +91,13 @@ function markRunningJobs() {
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
 
     if (!fs.existsSync(pidFile)) {
-      // Legacy job or PID file was never written → assume complete
-      job.status     = 'completed';
-      job.completed_at = now;
-      job.result     = job.result || 'PID file not found; inspect project receipts.';
+      const rc = readExitCode(job);
+      if (rc === null) {
+        // Legacy job or PID file was never written → preserve old behavior.
+        finishJob(job, 0, job.result || 'PID file not found; inspect project receipts.');
+      } else {
+        finishJob(job, rc);
+      }
       continue;
     }
 
@@ -100,11 +120,9 @@ function markRunningJobs() {
       continue;
     }
 
-    // Process dead → done
-    job.status       = 'completed';
-    job.completed_at = now;
-    const logFile    = path.join(jobsDir, `${job.id}.log`);
-    job.result       = `Exited; log at org/jobs/${job.id}.log`;
+    // Process dead → done; trust the wrapper's recorded exit code when present.
+    const rc = readExitCode(job);
+    finishJob(job, rc === null ? 0 : rc);
     try { fs.unlinkSync(pidFile); } catch {}
   }
 }
@@ -180,8 +198,12 @@ function dispatchQueuedJobs() {
 
     let outFd, spawnedPid;
     try {
+      const rcFile = path.join(jobsDir, `${job.id}.exit`);
+      try { fs.unlinkSync(rcFile); } catch {}
+      const rcFileShell = rcFile.replace(/'/g, "'\\''");
+      const wrappedCmd = `${cmd}\nrc=$?\nprintf '%s\\n' "$rc" > '${rcFileShell}'\nexit "$rc"`;
       outFd = fs.openSync(logFile, 'a');
-      const child = cp.spawn('bash', ['-c', cmd], {
+      const child = cp.spawn('bash', ['-c', wrappedCmd], {
         cwd: root,
         detached: true,
         stdio: ['ignore', outFd, outFd],

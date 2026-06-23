@@ -7,6 +7,7 @@
 # NOTE: run with bash (shebang) — relies on word-splitting that zsh disables.
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+OS="$(uname -s)"
 
 # floor map: "<workspace-ref> <floor-target>", derived from org/OMP_HARNESS.json —
 # the registry is the single source of truth (this list drifted when hardcoded).
@@ -22,8 +23,32 @@ for (const [id, p] of Object.entries(h.projects || {}))
 [[ ${#FLOORS[@]} -eq 0 ]] && { echo "no floors found in org/OMP_HARNESS.json" >&2; exit 1; }
 
 term_surface() {  # first terminal surface in a workspace (robust to ID drift)
-  cmux tree --workspace "$1" 2>/dev/null \
-    | grep -oE "surface:[0-9]+ \[terminal\]" | head -1 | grep -oE "surface:[0-9]+"
+  cmux tree --workspace "$1" 2>/dev/null | awk '
+    /surface:[0-9]+/ && /\[terminal\]/ {
+      match($0, /surface:[0-9]+/)
+      ref=substr($0, RSTART, RLENGTH)
+      if ($0 ~ /\[selected\]/) { print ref; found=1; exit }
+      if (!first) first=ref
+    }
+    END { if (!found && first) print first }
+  '
+}
+
+surface_tty() {
+  local ws="$1" sf="$2"
+  cmux tree --workspace "$ws" 2>/dev/null | awk -v sf="$sf" '
+    index($0, sf) && /tty=/ {
+      match($0, /tty=[^[:space:]]+/)
+      if (RSTART) { print substr($0, RSTART + 4, RLENGTH - 4); exit }
+    }
+  '
+}
+
+agent_floor_active() {
+  local ws="$1" sf="$2" tty
+  tty="$(surface_tty "$ws" "$sf")"
+  [[ -n "$tty" ]] || return 1
+  ps -t "$tty" -o command= 2>/dev/null | grep -q '[o]mp --model'
 }
 
 agent_cmd() {  # $1=ws $2=target $3=cmd
@@ -34,15 +59,27 @@ agent_cmd() {  # $1=ws $2=target $3=cmd
   echo "  ✓ $2  ($1/$sf)"
 }
 
+start_daemon() {
+  local label="$1" log="$2" script="$3"; shift 3
+  mkdir -p "$(dirname "$log")"
+  if [[ "$OS" == Darwin ]] && command -v launchctl >/dev/null 2>&1; then
+    launchctl remove "$label" >/dev/null 2>&1 || true
+    launchctl submit -l "$label" -o "$log" -e "$log" -- \
+      /usr/bin/env SPIN_ROOT="$ROOT" WORKSPACE_ROOT="$ROOT" HOME="$HOME" PATH="$PATH" \
+      /bin/bash "$script" "$@" >/dev/null 2>&1 && return 0
+  fi
+  SPIN_ROOT="$ROOT" WORKSPACE_ROOT="$ROOT" nohup bash "$script" "$@" >"$log" 2>&1 &
+  disown $! 2>/dev/null || true
+}
+
 daemon_up() {
   rm -f "$ROOT/org/ceo/runs/STATUS_WATCH_STOP" "$ROOT/org/ceo/runs/WIKI_WATCH_STOP"
   if ! pgrep -f workspace-status-watch >/dev/null 2>&1; then
-    nohup bash "$ROOT/scripts/workspace-status-watch.sh" >/dev/null 2>&1 &
+    start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
   fi
   echo "  ✓ roll-up daemon running"
   if ! pgrep -f wiki-watch >/dev/null 2>&1; then
-    mkdir -p "$ROOT/logs"
-    WORKSPACE_ROOT="$ROOT" nohup bash "$ROOT/scripts/wiki-watch.sh" >"$ROOT/logs/wiki-watch.log" 2>&1 &
+    start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
     echo "  ✓ wiki-watch daemon started (initial build running in background)"
   else
     echo "  ✓ wiki-watch daemon already running"
@@ -50,6 +87,10 @@ daemon_up() {
 }
 daemon_down() {
   touch "$ROOT/org/ceo/runs/STATUS_WATCH_STOP" "$ROOT/org/ceo/runs/WIKI_WATCH_STOP"
+  if [[ "$OS" == Darwin ]] && command -v launchctl >/dev/null 2>&1; then
+    launchctl remove com.spin.status-watch >/dev/null 2>&1 || true
+    launchctl remove com.spin.wiki-watch >/dev/null 2>&1 || true
+  fi
   pkill -f workspace-status-watch 2>/dev/null && echo "  ✓ roll-up daemon stopped" || echo "  (roll-up daemon was not running)"
   pkill -f wiki-watch 2>/dev/null && echo "  ✓ wiki-watch stopped" || echo "  (wiki-watch was not running)"
 }
@@ -70,8 +111,7 @@ case "${1:-status}" in
     echo "Workstation status:"
     for f in "${FLOORS[@]}"; do
       set -- $f; sf="$(term_surface "$1")"
-      scr="$(cmux read-screen --workspace "$1" --surface "$sf" 2>/dev/null | tail -3)"
-      if echo "$scr" | grep -q "Sonnet"; then echo "  ✓ $2 agent idle on Sonnet ($1/$sf)"
+      if [[ -n "$sf" ]] && agent_floor_active "$1" "$sf"; then echo "  ✓ $2 agent floor active ($1/$sf)"
       else echo "  ? $2 not at omp prompt ($1/$sf)"; fi
     done
     if pgrep -f workspace-status-watch >/dev/null 2>&1; then
