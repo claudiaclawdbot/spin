@@ -435,122 +435,123 @@ if env SPIN_CODESIGN_IDENTITY=- SPIN_APPLE_TEAM_ID= SPIN_CODESIGN_HARDENED=0 SPI
   echo "production release passed unexpectedly without credentials"
   exit 1
 fi
-SPIN_RELEASE_DIR="$TMP/release" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
-ls "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
-ls "$TMP/release"/SPIN-*-macos-*.zip.sha256 >/dev/null
-ls "$TMP/release"/SPIN-*-macos-*.manifest >/dev/null
-scripts/check-installed-app.sh "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
-SPIN_RELEASE_FORMAT=dmg SPIN_RELEASE_DIR="$TMP/release-dmg" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
-RELEASE_DMG="$(ls "$TMP/release-dmg"/SPIN-*-macos-*.dmg | head -1)"
-test -f "$RELEASE_DMG"
-test -f "$RELEASE_DMG.sha256"
-test -f "${RELEASE_DMG%.dmg}.manifest"
-scripts/check-installed-app.sh "$RELEASE_DMG" >/dev/null
-scripts/release-macos.sh --skip-build --skip-vendor --app "$TMP/SPIN.app" --release-dir "$TMP/release-command" >/dev/null
-ls "$TMP/release-command"/SPIN-*-macos-*.zip >/dev/null
-ls "$TMP/release-command"/SPIN-*-macos-*.zip.sha256 >/dev/null
-ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
-RELEASE_COMMAND_ZIP="$(ls "$TMP/release-command"/SPIN-*-macos-*.zip | head -1)"
-TESTER_RELEASE_DIR="$TMP/open-source-tester-release"
-scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
-TESTER_NOTES="$(ls "$TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
-test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
-test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"
-test -f "$TESTER_RELEASE_DIR/$(basename "${RELEASE_COMMAND_ZIP%.zip}.manifest")"
-test -f "$TESTER_NOTES"
-grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
-grep -q 'ad-hoc signed' "$TESTER_NOTES"
-grep -q 'not notarized' "$TESTER_NOTES"
-grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$TESTER_NOTES"
-grep -q 'GPL-compatible' "$TESTER_NOTES"
-grep -q 'cmux-derived UI engine is GPL-3.0-or-later' "$TESTER_NOTES"
-grep -q "$(basename "$RELEASE_COMMAND_ZIP")" "$TESTER_NOTES"
-grep -q "$(awk '{print $1}' "$RELEASE_COMMAND_ZIP.sha256")" "$TESTER_NOTES"
-scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/open-source-tester-release-cli" > "$TMP/app-release-notes.out"
-ls "$TMP/open-source-tester-release-cli"/*-open-source-tester-notes.md >/dev/null
-DMG_TESTER_RELEASE_DIR="$TMP/open-source-tester-release-dmg"
-scripts/prepare-open-source-release.sh --artifact "$RELEASE_DMG" --release-dir "$DMG_TESTER_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
-DMG_TESTER_NOTES="$(ls "$DMG_TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
-test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG")"
-test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG").sha256"
-test -f "$DMG_TESTER_RELEASE_DIR/$(basename "${RELEASE_DMG%.dmg}.manifest")"
-grep -q 'Format: `dmg`' "$DMG_TESTER_NOTES"
-grep -q 'hdiutil attach' "$DMG_TESTER_NOTES"
-scripts/spin app-updates --check --candidate "$RELEASE_DMG" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check-dmg.out"
-grep -q 'SPIN app updates' "$TMP/app-updates-check-dmg.out"
-grep -q 'SPIN app update plan' "$TMP/app-updates-check-dmg.out"
-SPIN_RELEASE_DIR="$TMP/no-release-artifacts" scripts/spin app-updates --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-empty.out"
-grep -q 'SPIN app updates' "$TMP/app-updates-empty.out"
-grep -q 'candidate:     none' "$TMP/app-updates-empty.out"
-scripts/spin app-updates --check --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check.out"
-grep -q 'SPIN app updates' "$TMP/app-updates-check.out"
-grep -q 'SPIN app update plan' "$TMP/app-updates-check.out"
-grep -q 'dry run, no app code changed' "$TMP/app-updates-check.out"
-scripts/spin app-update --dry-run --installed-app "$TMP/SPIN.app" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-plan.out"
-grep -q 'SPIN app update plan' "$TMP/app-update-plan.out"
-grep -q 'Preserved user state:' "$TMP/app-update-plan.out"
-grep -q 'org/OMP_HARNESS.json' "$TMP/app-update-plan.out"
-grep -q 'dry run, no app code changed' "$TMP/app-update-plan.out"
-scripts/spin app-update --record-rollback --installed-app "$TMP/SPIN.app" --app-home "$TMP/app-update-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-record.out"
-ROLLBACK_FILE="$(find "$TMP/app-update-home/updates" -type f -name 'rollback-*.json' | head -1)"
-test -f "$ROLLBACK_FILE"
-grep -q '"preservedState"' "$ROLLBACK_FILE"
-PROD_APP="$TMP/production/SPIN.app"
-mkdir -p "$TMP/production"
-if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$PROD_APP"; else cp -R "$TMP/SPIN.app" "$PROD_APP"; fi
-node - "$PROD_APP/Contents/Resources/app/release-compat.json" <<'NODE'
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  SPIN_RELEASE_DIR="$TMP/release" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
+  ls "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
+  ls "$TMP/release"/SPIN-*-macos-*.zip.sha256 >/dev/null
+  ls "$TMP/release"/SPIN-*-macos-*.manifest >/dev/null
+  scripts/check-installed-app.sh "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
+  SPIN_RELEASE_FORMAT=dmg SPIN_RELEASE_DIR="$TMP/release-dmg" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
+  RELEASE_DMG="$(ls "$TMP/release-dmg"/SPIN-*-macos-*.dmg | head -1)"
+  test -f "$RELEASE_DMG"
+  test -f "$RELEASE_DMG.sha256"
+  test -f "${RELEASE_DMG%.dmg}.manifest"
+  scripts/check-installed-app.sh "$RELEASE_DMG" >/dev/null
+  scripts/release-macos.sh --skip-build --skip-vendor --app "$TMP/SPIN.app" --release-dir "$TMP/release-command" >/dev/null
+  ls "$TMP/release-command"/SPIN-*-macos-*.zip >/dev/null
+  ls "$TMP/release-command"/SPIN-*-macos-*.zip.sha256 >/dev/null
+  ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
+  RELEASE_COMMAND_ZIP="$(ls "$TMP/release-command"/SPIN-*-macos-*.zip | head -1)"
+  TESTER_RELEASE_DIR="$TMP/open-source-tester-release"
+  scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
+  TESTER_NOTES="$(ls "$TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
+  test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
+  test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"
+  test -f "$TESTER_RELEASE_DIR/$(basename "${RELEASE_COMMAND_ZIP%.zip}.manifest")"
+  test -f "$TESTER_NOTES"
+  grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
+  grep -q 'ad-hoc signed' "$TESTER_NOTES"
+  grep -q 'not notarized' "$TESTER_NOTES"
+  grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$TESTER_NOTES"
+  grep -q 'GPL-compatible' "$TESTER_NOTES"
+  grep -q 'cmux-derived UI engine is GPL-3.0-or-later' "$TESTER_NOTES"
+  grep -q "$(basename "$RELEASE_COMMAND_ZIP")" "$TESTER_NOTES"
+  grep -q "$(awk '{print $1}' "$RELEASE_COMMAND_ZIP.sha256")" "$TESTER_NOTES"
+  scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/open-source-tester-release-cli" > "$TMP/app-release-notes.out"
+  ls "$TMP/open-source-tester-release-cli"/*-open-source-tester-notes.md >/dev/null
+  DMG_TESTER_RELEASE_DIR="$TMP/open-source-tester-release-dmg"
+  scripts/prepare-open-source-release.sh --artifact "$RELEASE_DMG" --release-dir "$DMG_TESTER_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
+  DMG_TESTER_NOTES="$(ls "$DMG_TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
+  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG")"
+  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG").sha256"
+  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "${RELEASE_DMG%.dmg}.manifest")"
+  grep -q 'Format: `dmg`' "$DMG_TESTER_NOTES"
+  grep -q 'hdiutil attach' "$DMG_TESTER_NOTES"
+  scripts/spin app-updates --check --candidate "$RELEASE_DMG" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check-dmg.out"
+  grep -q 'SPIN app updates' "$TMP/app-updates-check-dmg.out"
+  grep -q 'SPIN app update plan' "$TMP/app-updates-check-dmg.out"
+  SPIN_RELEASE_DIR="$TMP/no-release-artifacts" scripts/spin app-updates --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-empty.out"
+  grep -q 'SPIN app updates' "$TMP/app-updates-empty.out"
+  grep -q 'candidate:     none' "$TMP/app-updates-empty.out"
+  scripts/spin app-updates --check --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check.out"
+  grep -q 'SPIN app updates' "$TMP/app-updates-check.out"
+  grep -q 'SPIN app update plan' "$TMP/app-updates-check.out"
+  grep -q 'dry run, no app code changed' "$TMP/app-updates-check.out"
+  scripts/spin app-update --dry-run --installed-app "$TMP/SPIN.app" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-plan.out"
+  grep -q 'SPIN app update plan' "$TMP/app-update-plan.out"
+  grep -q 'Preserved user state:' "$TMP/app-update-plan.out"
+  grep -q 'org/OMP_HARNESS.json' "$TMP/app-update-plan.out"
+  grep -q 'dry run, no app code changed' "$TMP/app-update-plan.out"
+  scripts/spin app-update --record-rollback --installed-app "$TMP/SPIN.app" --app-home "$TMP/app-update-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-record.out"
+  ROLLBACK_FILE="$(find "$TMP/app-update-home/updates" -type f -name 'rollback-*.json' | head -1)"
+  test -f "$ROLLBACK_FILE"
+  grep -q '"preservedState"' "$ROLLBACK_FILE"
+  PROD_APP="$TMP/production/SPIN.app"
+  mkdir -p "$TMP/production"
+  if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$PROD_APP"; else cp -R "$TMP/SPIN.app" "$PROD_APP"; fi
+  node - "$PROD_APP/Contents/Resources/app/release-compat.json" <<'NODE'
 const fs = require('fs');
 const file = process.argv[2];
 const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
 manifest.release.channel = 'production';
 fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
-if scripts/spin app-update --dry-run --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
-  echo "app-update allowed production channel downgrade without force"
-  exit 1
-fi
-scripts/spin app-update --dry-run --force-channel --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-force.out"
-grep -q 'production -> ad-hoc' "$TMP/app-update-force.out"
-INSTALL_APP="$TMP/install-target/SPIN.app"
-mkdir -p "$TMP/install-target"
-if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$INSTALL_APP"; fi
-printf 'stale app marker\n' > "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
-if scripts/spin app-update --install --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
-  echo "app-update installed ad-hoc candidate without --allow-ad-hoc"
-  exit 1
-fi
-scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-install.out"
-grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-update-install.out"
-test ! -e "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
-INSTALL_ROLLBACK_FILE="$(find "$TMP/install-home/updates" -type f -name 'rollback-*.json' | head -1)"
-INSTALL_BACKUP_APP="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name 'SPIN-*.app' | head -1)"
-test -f "$INSTALL_ROLLBACK_FILE"
-test -d "$INSTALL_BACKUP_APP"
-test -f "$INSTALL_BACKUP_APP/Contents/Resources/app/stale-update-marker"
-grep -q '"backupPath"' "$INSTALL_ROLLBACK_FILE"
-node - "$INSTALL_APP/Contents/Resources/app/release-compat.json" <<'NODE'
+  if scripts/spin app-update --dry-run --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
+    echo "app-update allowed production channel downgrade without force"
+    exit 1
+  fi
+  scripts/spin app-update --dry-run --force-channel --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-force.out"
+  grep -q 'production -> ad-hoc' "$TMP/app-update-force.out"
+  INSTALL_APP="$TMP/install-target/SPIN.app"
+  mkdir -p "$TMP/install-target"
+  if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$INSTALL_APP"; fi
+  printf 'stale app marker\n' > "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  if scripts/spin app-update --install --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
+    echo "app-update installed ad-hoc candidate without --allow-ad-hoc"
+    exit 1
+  fi
+  scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-install.out"
+  grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-update-install.out"
+  test ! -e "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  INSTALL_ROLLBACK_FILE="$(find "$TMP/install-home/updates" -type f -name 'rollback-*.json' | head -1)"
+  INSTALL_BACKUP_APP="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name 'SPIN-*.app' | head -1)"
+  test -f "$INSTALL_ROLLBACK_FILE"
+  test -d "$INSTALL_BACKUP_APP"
+  test -f "$INSTALL_BACKUP_APP/Contents/Resources/app/stale-update-marker"
+  grep -q '"backupPath"' "$INSTALL_ROLLBACK_FILE"
+  node - "$INSTALL_APP/Contents/Resources/app/release-compat.json" <<'NODE'
 const fs = require('fs');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (!manifest.release || manifest.release.channel !== 'ad-hoc') process.exit(1);
 NODE
-scripts/check-app-release.sh "$INSTALL_APP" >/dev/null
-UI_INSTALL_APP="$TMP/ui-install-target/SPIN.app"
-mkdir -p "$TMP/ui-install-target"
-if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$UI_INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$UI_INSTALL_APP"; fi
-printf 'stale app marker\n' > "$UI_INSTALL_APP/Contents/Resources/app/stale-update-marker"
-if scripts/spin app-updates --install --yes --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$UI_INSTALL_APP" --app-home "$TMP/ui-install-home" >/dev/null 2>&1; then
-  echo "app-updates installed ad-hoc candidate without --allow-test-builds"
-  exit 1
-fi
-scripts/spin app-updates --install --yes --allow-test-builds --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$UI_INSTALL_APP" --app-home "$TMP/ui-install-home" > "$TMP/app-updates-install.out"
-grep -q 'SPIN app updates' "$TMP/app-updates-install.out"
-grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-updates-install.out"
-test ! -e "$UI_INSTALL_APP/Contents/Resources/app/stale-update-marker"
-scripts/check-app-release.sh "$UI_INSTALL_APP" >/dev/null
-PROD_CANDIDATE_APP="$TMP/prod-candidate/SPIN.app"
-mkdir -p "$TMP/prod-candidate"
-if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$PROD_CANDIDATE_APP"; else cp -R "$TMP/SPIN.app" "$PROD_CANDIDATE_APP"; fi
-node - "$PROD_CANDIDATE_APP/Contents/Resources/app/release-compat.json" <<'NODE'
+  scripts/check-app-release.sh "$INSTALL_APP" >/dev/null
+  UI_INSTALL_APP="$TMP/ui-install-target/SPIN.app"
+  mkdir -p "$TMP/ui-install-target"
+  if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$UI_INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$UI_INSTALL_APP"; fi
+  printf 'stale app marker\n' > "$UI_INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  if scripts/spin app-updates --install --yes --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$UI_INSTALL_APP" --app-home "$TMP/ui-install-home" >/dev/null 2>&1; then
+    echo "app-updates installed ad-hoc candidate without --allow-test-builds"
+    exit 1
+  fi
+  scripts/spin app-updates --install --yes --allow-test-builds --candidate "$RELEASE_COMMAND_ZIP" --installed-app "$UI_INSTALL_APP" --app-home "$TMP/ui-install-home" > "$TMP/app-updates-install.out"
+  grep -q 'SPIN app updates' "$TMP/app-updates-install.out"
+  grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-updates-install.out"
+  test ! -e "$UI_INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  scripts/check-app-release.sh "$UI_INSTALL_APP" >/dev/null
+  PROD_CANDIDATE_APP="$TMP/prod-candidate/SPIN.app"
+  mkdir -p "$TMP/prod-candidate"
+  if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$PROD_CANDIDATE_APP"; else cp -R "$TMP/SPIN.app" "$PROD_CANDIDATE_APP"; fi
+  node - "$PROD_CANDIDATE_APP/Contents/Resources/app/release-compat.json" <<'NODE'
 const fs = require('fs');
 const file = process.argv[2];
 const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -569,13 +570,14 @@ manifest.release.productionTrust = {
 };
 fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
-if scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/prod-install-home" "$PROD_CANDIDATE_APP" >/dev/null 2>&1; then
-  echo "app-update installed production candidate without notarization support"
-  exit 1
-fi
-if scripts/spin app-update --install --allow-production --installed-app "$INSTALL_APP" --app-home "$TMP/prod-trust-home" "$PROD_CANDIDATE_APP" >/dev/null 2>&1; then
-  echo "app-update installed untrusted production candidate"
-  exit 1
+  if scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/prod-install-home" "$PROD_CANDIDATE_APP" >/dev/null 2>&1; then
+    echo "app-update installed production candidate without notarization support"
+    exit 1
+  fi
+  if scripts/spin app-update --install --allow-production --installed-app "$INSTALL_APP" --app-home "$TMP/prod-trust-home" "$PROD_CANDIDATE_APP" >/dev/null 2>&1; then
+    echo "app-update installed untrusted production candidate"
+    exit 1
+  fi
 fi
 
 SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-before.out"
