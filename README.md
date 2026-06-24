@@ -84,7 +84,7 @@ scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dm
 
 These builds are ad-hoc signed and not notarized, so macOS may show Gatekeeper
 warnings. Download tester builds from
-[GitHub Releases](https://github.com/claudiaclawdbot/spin/releases), and see
+[the current tester DMG release](https://github.com/claudiaclawdbot/spin/releases/tag/spin-app-test-4.1.0-dev-20260624-dmg), and see
 [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md).
 
 ## Updating SPIN
