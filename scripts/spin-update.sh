@@ -112,7 +112,7 @@ fetch_updates() {
 
 target_commit() {
   local ref="$1"
-  git rev-parse "$ref^{commit}" 2>/dev/null || die "cannot resolve update target: $ref"
+  git rev-parse "$ref^{commit}" 2>/dev/null
 }
 
 tracked_dirty() {
@@ -217,11 +217,18 @@ run_install_and_checks() {
 print_status() {
   local ref="$1" head target tag
   head="$(git rev-parse HEAD)"
-  target="$(target_commit "$ref")"
   tag="$(latest_tag || true)"
   say "SPIN version file: $(version_file)"
   say "Current checkout:  $(git_desc) ($head)"
   [[ -n "$tag" ]] && say "Newest local tag:  $tag"
+  if ! target="$(target_commit "$ref")"; then
+    warn "cannot resolve update target: $ref"
+    if [[ "$CHECK_ONLY" == "1" && "$NO_FETCH" == "1" ]]; then
+      say "${c_d}Target unavailable in this checkout; rerun without --no-fetch to fetch update refs.${c_o}"
+      return
+    fi
+    die "cannot resolve update target: $ref"
+  fi
   say "Update target:     $ref ($target)"
   if [[ "$head" == "$target" ]]; then
     say "${c_g}Up to date.${c_o}"
@@ -237,7 +244,7 @@ print_status() {
 perform_update() {
   local ref="$1" head target
   head="$(git rev-parse HEAD)"
-  target="$(target_commit "$ref")"
+  target="$(target_commit "$ref")" || die "cannot resolve update target: $ref"
   if [[ "$head" == "$target" ]]; then
     say "${c_g}Already up to date.${c_o}"
   elif git merge-base --is-ancestor "$head" "$target"; then
