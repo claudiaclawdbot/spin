@@ -73,6 +73,10 @@ case "$ARTIFACT" in
     MOUNT="$TMP/mount"
     mkdir -p "$MOUNT"
     hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$ARTIFACT" >/dev/null
+    [ -d "$MOUNT/SPIN.app" ] || fail "dmg missing SPIN.app"
+    [ -e "$MOUNT/Applications" ] || fail "dmg missing Applications shortcut"
+    [ -f "$MOUNT/README.txt" ] || fail "dmg missing README.txt"
+    grep -q 'Drag SPIN.app onto Applications' "$MOUNT/README.txt" || fail "dmg README missing install instruction"
     ditto "$MOUNT/SPIN.app" "$INSTALL_ROOT/SPIN.app"
     hdiutil detach "$MOUNT" >/dev/null
     MOUNT=""

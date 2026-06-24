@@ -5,6 +5,10 @@ production channel exists. These builds are public, inspectable, and ad-hoc
 signed, but they are not Apple-notarized. Gatekeeper may warn on first launch.
 The preferred tester artifact is a DMG.
 
+User-facing install instructions live in
+[`docs/MACOS_TESTER_INSTALL.md`](MACOS_TESTER_INSTALL.md). This file is the
+maintainer checklist for preparing the GitHub release assets.
+
 ## Build And Prepare
 
 The normal checked tester release path is:
