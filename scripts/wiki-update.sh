@@ -47,7 +47,13 @@ queued_jobs() {
 
 human_items() {
   [[ -f "$ROOT/org/HUMAN_QUEUE.md" ]] || { echo "(none)"; return; }
-  grep -E "^- " "$ROOT/org/HUMAN_QUEUE.md" | head -10 || echo "(none)"
+  local items
+  items="$(node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --lines 2>/dev/null | head -10 || true)"
+  [[ -n "$items" ]] && printf '%s\n' "$items" || echo "(none)"
+}
+
+human_summary() {
+  node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --text 2>/dev/null || echo "nothing waiting"
 }
 
 # ── project status blocks ────────────────────────────────────────────────────
@@ -107,6 +113,8 @@ $(project_block built-by-ai)
 $(project_block agentclaudia)
 $(project_block biible)
 ## Waiting on human
+
+$(human_summary)
 
 $(human_items)
 

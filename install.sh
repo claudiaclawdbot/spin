@@ -5,6 +5,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 
 cat <<'BANNER'
    ___ ___ ___ _  _
@@ -43,9 +44,14 @@ if (( agents == 0 )); then
   fi
 fi
 echo "Optional:"
-command -v cmux >/dev/null 2>&1 && echo "  ✓ cmux" || echo "  – cmux (optional: visual floors)"
-if command -v omp >/dev/null 2>&1; then
-  if omp --help >/dev/null 2>&1; then echo "  ✓ omp"
+if spin_have_binary cmux; then
+  echo "  ✓ cmux ($(spin_resolve_binary cmux))"
+else
+  echo "  – cmux (optional: visual floors)"
+fi
+if spin_have_binary omp; then
+  OMP_BIN="$(spin_resolve_binary omp)"
+  if "$OMP_BIN" --help >/dev/null 2>&1; then echo "  ✓ omp ($OMP_BIN)"
   else echo "  ✗ omp (installed but not runnable — run scripts/install-deps.sh; current Bun may be too old)"; fi
 else
   echo "  – omp (optional: interactive agents)"
@@ -128,6 +134,20 @@ EOF_WORKSPACE_PROMPT
 fi
 
 chmod +x scripts/*.sh scripts/org scripts/spin 2>/dev/null || true
+
+# ── 2b. runtime migrations + installed version marker ───────────────────────
+if [[ -x scripts/spin-migrate.sh ]]; then
+  echo
+  bash scripts/spin-migrate.sh || { echo "Migration failed; fix the error above, then rerun ./install.sh"; exit 1; }
+fi
+if [[ -f VERSION ]]; then
+  mkdir -p org
+  {
+    echo "version=$(tr -d '[:space:]' < VERSION)"
+    echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    command -v git >/dev/null 2>&1 && echo "git=$(git describe --tags --always --dirty 2>/dev/null || true)"
+  } > org/.spin-version
+fi
 
 # ── 3. the `spin` and `org` commands ─────────────────────────────────────────
 echo

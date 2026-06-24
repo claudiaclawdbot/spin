@@ -3,6 +3,7 @@
 #
 #   spin                 show status: projects, what's waiting on you, recent activity
 #   spin watch           LIVE dashboard — all agents/jobs + what's waiting, refreshing
+#   spin web             local browser control panel for approvals/jobs/floors
 #   spin chat            TALK to the Navigator live (conversational agent)
 #   spin jobs            one-shot view of running/queued/recent jobs
 #   spin approve "<x>"   approve something  (e.g. spin approve "my-app send Draft 1")
@@ -14,7 +15,15 @@
 #   spin stop            pause the driver loop (sets STOP flag)
 #   spin up              open the cmux interface: Coordinator floor + driver + boards
 #   spin down            quit floors + stop daemons
-#   spin init            first-run onboarding wizard (providers, first project, supervisor)
+#   spin app-launch      app bundle entrypoint; routes first launch to onboarding
+#   spin app-health      app/runtime health report; use --json for machine output
+#   spin app-update      plan a SPIN.app artifact update from compatibility manifests
+#   spin app-updates     user-facing SPIN.app update check/install surface
+#   spin app-release-notes prepare open-source tester release notes for a macOS artifact
+#   spin omp-setup       hand off to OMP's built-in setup wizard
+#   spin update          safely update SPIN, back up state, run migrations
+#   spin version         show installed version + git checkout
+#   spin init            first-run onboarding wizard (health, OMP setup handoff, first project)
 #   spin new-project ... create a project AND open its cmux floor (a sidebar tab)
 #   spin service ...     install|uninstall|status the supervisor that keeps the driver up
 #   spin doctor          health check: deps, driver, floors, watchers
@@ -38,8 +47,9 @@ STATE="$ORG/state.json"
 HQ="$ORG/HUMAN_QUEUE.md"
 INBOX="$ORG/ceo/INBOX.md"
 RUN_DIR="$ORG/ceo/runs"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 
-c_bold=$'\e[1m'; c_dim=$'\e[2m'; c_grn=$'\e[32m'; c_yel=$'\e[33m'; c_cyn=$'\e[36m'; c_off=$'\e[0m'
+c_bold=$'\e[1m'; c_dim=$'\e[2m'; c_grn=$'\e[32m'; c_yel=$'\e[33m'; c_cyn=$'\e[36m'; c_red=$'\e[31m'; c_off=$'\e[0m'
 
 cmd="${1:-status}"; shift || true
 
@@ -57,11 +67,12 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     echo "${c_cyn}Connecting you to the Navigator…${c_off}  ${c_dim}(Ctrl-C or 'exit' to leave)${c_off}"
     echo "${c_dim}Talk normally: \"what's going on?\", \"have built-by-ai prep 3 more leads\", \"hold the fidget deploy\"…${c_off}"
     echo
-    if command -v omp >/dev/null 2>&1 && omp --help >/dev/null 2>&1; then
+    if spin_have_binary omp && spin_cmd omp --help >/dev/null 2>&1; then
       source "$ROOT/scripts/lib/ceo-waterfall.sh"
       OMP_CONFIG="$(ensure_spin_omp_config)"
       CHAT_DIR="$HOME/.omp-ceo"; mkdir -p "$CHAT_DIR"; cd "$CHAT_DIR"
-      exec omp \
+      OMP_BIN="$(spin_resolve_binary omp)"
+      exec "$OMP_BIN" \
         --config "$OMP_CONFIG" \
         --append-system-prompt "$SYS_CONTENT"
     fi
@@ -88,6 +99,9 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
       sleep "${CEO_WATCH_INTERVAL:-5}"
     done
     ;;
+  web)
+    exec node "$ROOT/scripts/spin-web.js" "$@"
+    ;;
   start)
     STOP_FILE="$RUN_DIR/STOP"
     mkdir -p "$RUN_DIR"
@@ -104,6 +118,37 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     echo "${c_grn}SPIN driver started (PID $!). Follow: spin log${c_off}"
     exit 0
     ;;
+  app-launch)
+    # Finder launches do not provide a useful interactive TTY. For first run,
+    # open a cmux terminal that runs the onboarding wizard, then starts SPIN.
+    mkdir -p "$ORG" "$RUN_DIR"
+    if [[ "${SPIN_APP_LAUNCH_DRY_RUN:-}" == "1" ]]; then
+      if [[ -f "$ORG/.spin-onboarded" ]]; then echo "app-launch: spin up"; else echo "app-launch: onboarding"; fi
+      exit 0
+    fi
+    if [[ -f "$ORG/.spin-onboarded" ]]; then
+      exec bash "$ROOT/scripts/spin-up.sh"
+    fi
+    spin_require_binary cmux "SPIN.app bundles cmux under Resources/bin/cmux; development checkouts need cmux on PATH." || exit 1
+    cmux_ready(){ CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; }
+    if ! cmux_ready; then
+      [[ "$(uname -s)" == Darwin ]] && spin_open_cmux_app || true
+      for _ in 1 2 3 4 5 6 7 8 9 10; do cmux_ready && break; sleep 1; done
+    fi
+    if ! cmux_ready; then
+      echo "cmux is not reachable yet. Open SPIN/cmux, then run: spin app-launch"
+      exit 1
+    fi
+    onboarding_cmd="bash '$ROOT/scripts/spin-init.sh'; printf '\\n'; bash '$ROOT/scripts/spin-up.sh'; exec bash -l"
+    ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "SPIN Onboarding" --cwd "$HOME" --command "$onboarding_cmd" --focus true 2>/dev/null \
+      | grep -oE 'workspace:[0-9]+' | head -1)"
+    if [[ -n "$ref" ]]; then
+      echo "SPIN onboarding opened in cmux ($ref)."
+      exit 0
+    fi
+    echo "could not open SPIN onboarding workspace"
+    exit 1
+    ;;
   stop)
     mkdir -p "$RUN_DIR"
     touch "$RUN_DIR/STOP"
@@ -112,27 +157,43 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     ;;
   up)      exec bash "$ROOT/scripts/spin-up.sh" ;;
   down)    exec "$ROOT/scripts/workstation.sh" down ;;
+  update)  exec bash "$ROOT/scripts/spin-update.sh" "$@" ;;
+  version|--version)
+    version="unknown"; [[ -f "$ROOT/VERSION" ]] && version="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+    echo "SPIN $version"
+    if command -v git >/dev/null 2>&1 && [[ -d "$ROOT/.git" ]]; then
+      echo "git: $(cd "$ROOT" && git describe --tags --always --dirty 2>/dev/null || echo unknown)"
+    fi
+    if [[ -f "$ORG/.spin-version" ]]; then
+      echo "installed:"
+      sed 's/^/  /' "$ORG/.spin-version"
+    fi
+    exit 0
+    ;;
   init)        exec bash "$ROOT/scripts/spin-init.sh" ;;
+  app-health|health)
+    exec node "$ROOT/scripts/spin-app-health.js" "$@"
+    ;;
+  app-update)
+    exec node "$ROOT/scripts/spin-app-update.js" "$@"
+    ;;
+  app-updates|updates)
+    exec node "$ROOT/scripts/spin-app-updates.js" "$@"
+    ;;
+  app-release-notes|release-notes)
+    exec bash "$ROOT/scripts/prepare-open-source-release.sh" "$@"
+    ;;
+  omp-setup|setup-omp)
+    spin_require_binary omp "SPIN.app bundles OMP under Resources/bin/omp; run scripts/vendor-app-deps.sh --omp-only in a checkout." || exit 1
+    omp_bin="$(spin_resolve_binary omp)"
+    exec "$omp_bin" setup "$@"
+    ;;
   service)     exec bash "$ROOT/scripts/spin-service.sh" "$@" ;;
   new-project) exec bash "$ROOT/scripts/spin-new-project.sh" "$@" ;;
   doctor)
     echo "${c_bold}═══ SPIN doctor ═══${c_off}"
-    echo; echo "${c_bold}Dependencies${c_off}"
-    for d in bash node; do
-      if command -v "$d" >/dev/null 2>&1; then echo "  ${c_grn}✓${c_off} $d"; else echo "  ${c_yel}–${c_off} $d $([[ $d == bash || $d == node ]] && echo '(REQUIRED)' || echo '(optional)')"; fi
-    done
-    if command -v cmux >/dev/null 2>&1; then
-      if CMUX_QUIET=1 cmux ping >/dev/null 2>&1; then echo "  ${c_grn}✓${c_off} cmux"
-      else echo "  ${c_yel}!${c_off} cmux CLI installed, app/socket not reachable — open cmux, then run: spin up"; fi
-    else
-      echo "  ${c_yel}–${c_off} cmux (optional: visual floors)"
-    fi
-    if command -v omp >/dev/null 2>&1; then
-      if omp --help >/dev/null 2>&1; then echo "  ${c_grn}✓${c_off} omp"
-      else echo "  ${c_yel}✗${c_off} omp installed but not runnable — run: scripts/install-deps.sh"; fi
-    else
-      echo "  ${c_yel}–${c_off} omp (recommended: primary agent harness; direct CLIs can still run jobs)"
-    fi
+    echo
+    node "$ROOT/scripts/spin-app-health.js" || true
     echo "  direct fallback CLIs:"; ac=0
     for a in claude codex gemini ollama; do command -v "$a" >/dev/null 2>&1 && { echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1)); }; done
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"
@@ -140,7 +201,7 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     if [[ -f "$RUN_DIR/STOP" ]]; then echo "  ${c_yel}⏸ paused (STOP flag) — spin start to resume${c_off}"
     elif [[ -f "$RUN_DIR/.workspace-ceo-tick.lock" ]] && kill -0 "$(cat "$RUN_DIR/.workspace-ceo-tick.lock" 2>/dev/null)" 2>/dev/null; then
       echo "  ${c_grn}● running${c_off} (PID $(cat "$RUN_DIR/.workspace-ceo-tick.lock"))"
-    else echo "  ${c_red:-$c_yel}○ down${c_off} — spin start"; fi
+    else echo "  ${c_red}○ down${c_off} — spin start"; fi
     echo; exec "$ROOT/scripts/workstation.sh" status
     ;;
   jobs)
@@ -183,12 +244,20 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     exit 0
     ;;
   help|-h|--help)
-    grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed '1d'; exit 0 ;;
+    awk 'NR==1 && /^#!/ { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
   status|"") : ;;  # fall through to status below
   *) echo "Unknown: $cmd  (try: spin, spin jobs, spin approve "...", spin stop/start, spin log)"; exit 1 ;;
 esac
 
 # ---- status view ----
+if approval_env="$(node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --env 2>/dev/null)"; then
+  eval "$approval_env"
+else
+  SPIN_HUMAN_WAITING_COUNT=0
+  SPIN_HUMAN_WAITING_SUMMARY="nothing waiting"
+  SPIN_HUMAN_WAITING_SEVERITY="none"
+fi
+
 echo "${c_bold}═══ SPIN ═══${c_off}  ${c_dim}$(date '+%a %H:%M')${c_off}"
 echo
 
@@ -198,6 +267,12 @@ if [[ -f "$lock" ]] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
   echo "${c_grn}● running${c_off} (PID $(cat "$lock"))"
 else
   echo "${c_yel}○ not running${c_off} — run: spin start"
+fi
+
+if (( ${SPIN_HUMAN_WAITING_COUNT:-0} > 0 )); then
+  wait_color="$c_yel"
+  [[ "${SPIN_HUMAN_WAITING_SEVERITY:-}" == "stale" ]] && wait_color="$c_red"
+  echo "${wait_color}⏳ ${SPIN_HUMAN_WAITING_SUMMARY}${c_off}"
 fi
 
 # projects
@@ -211,11 +286,14 @@ node -e '
 ' "$STATE" 2>/dev/null || echo "  (state unreadable)"
 
 # what's waiting on you
-echo; echo "${c_bold}${c_yel}Waiting on you${c_off}"
+if (( ${SPIN_HUMAN_WAITING_COUNT:-0} > 0 )); then
+  echo; echo "${c_bold}${c_yel}Waiting on you${c_off}  ${c_dim}${SPIN_HUMAN_WAITING_SUMMARY}${c_off}"
+else
+  echo; echo "${c_bold}${c_yel}Waiting on you${c_off}"
+fi
 pending=$(awk '/^## Pending/{f=1;next}/^## Processed/{f=0}f&&/^- \[/' "$APPROVALS" 2>/dev/null)
-hq=$(awk '/^- \[[ xX]\]/ || /^- / { print }' "$HQ" 2>/dev/null)
-if [[ -n "$hq" ]]; then
-  echo "$hq" | sed 's/^- /  ⏳ /'
+if (( ${SPIN_HUMAN_WAITING_COUNT:-0} > 0 )); then
+  node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --lines 2>/dev/null | sed 's/^/  ⏳ /'
   echo "  ${c_dim}approve with:  spin approve \"<project> <what>\"   (or: spin decline \"...\")${c_off}"
 else
   echo "  ${c_grn}nothing — you're clear${c_off}"

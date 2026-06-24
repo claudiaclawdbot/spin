@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# Prove a packaged SPIN macOS artifact behaves like an installed app.
+set -euo pipefail
+
+ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ARTIFACT="${1:-}"
+TMP=""
+MOUNT=""
+SYSTEM_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/check-installed-app.sh dist/release/SPIN-<version>-macos-<arch>.zip|.dmg
+
+Extracts the release artifact into a temporary Applications-like directory,
+verifies the signed app contract, then runs a deterministic first-launch proof
+from an isolated SPIN_APP_HOME using bundled fake cmux/OMP shims inside the
+extracted app copy.
+EOF
+}
+
+fail(){ echo "installed-app check failed: $*" >&2; exit 1; }
+ok(){ echo "  ok: $*"; }
+cleanup(){
+  if [ -n "$MOUNT" ] && mount | grep -Fq " on $MOUNT "; then
+    hdiutil detach "$MOUNT" >/dev/null 2>&1 || true
+  fi
+  [ -n "$TMP" ] && rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  usage
+  exit 0
+fi
+
+if [ -z "$ARTIFACT" ]; then
+  ARTIFACT="$(ls -t "$ROOT"/dist/release/SPIN-*-macos-*.zip 2>/dev/null | head -1 || true)"
+fi
+[ -n "$ARTIFACT" ] || fail "missing artifact path"
+if [ "${ARTIFACT#/}" = "$ARTIFACT" ]; then
+  ARTIFACT="$(cd "$(dirname "$ARTIFACT")" >/dev/null 2>&1 && pwd)/$(basename "$ARTIFACT")"
+fi
+[ -f "$ARTIFACT" ] || fail "artifact not found: $ARTIFACT"
+
+case "$ARTIFACT" in
+  *.zip|*.dmg) ;;
+  *) fail "only zip and dmg artifacts are supported for installed-app proof today: $ARTIFACT" ;;
+esac
+
+command -v ditto >/dev/null 2>&1 || fail "ditto is required on macOS"
+command -v codesign >/dev/null 2>&1 || fail "codesign is required on macOS"
+if [ "${ARTIFACT%.dmg}" != "$ARTIFACT" ]; then
+  command -v hdiutil >/dev/null 2>&1 || fail "hdiutil is required for dmg installed-app proof"
+fi
+
+TMP="$(mktemp -d)"
+INSTALL_ROOT="$TMP/Applications"
+CONTROL_ROOT="$TMP/Controlled Applications"
+APP_HOME="$TMP/App Support/SPIN"
+HOME_DIR="$TMP/home"
+GLOBAL_BIN="$TMP/global-bin"
+CMUX_CALLS="$TMP/bundled-cmux.calls"
+OMP_CALLS="$TMP/bundled-omp.calls"
+GLOBAL_CALLS="$TMP/global.calls"
+mkdir -p "$INSTALL_ROOT" "$CONTROL_ROOT" "$APP_HOME" "$HOME_DIR" "$GLOBAL_BIN"
+
+case "$ARTIFACT" in
+  *.zip)
+    ditto -x -k "$ARTIFACT" "$INSTALL_ROOT"
+    ;;
+  *.dmg)
+    MOUNT="$TMP/mount"
+    mkdir -p "$MOUNT"
+    hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$ARTIFACT" >/dev/null
+    ditto "$MOUNT/SPIN.app" "$INSTALL_ROOT/SPIN.app"
+    hdiutil detach "$MOUNT" >/dev/null
+    MOUNT=""
+    ;;
+esac
+INSTALLED_APP="$INSTALL_ROOT/SPIN.app"
+[ -x "$INSTALLED_APP/Contents/MacOS/SPIN" ] || fail "artifact did not extract SPIN.app launcher"
+codesign --verify --deep --strict --verbose=2 "$INSTALLED_APP" >/dev/null 2>&1 \
+  || codesign --verify --deep --strict --verbose=2 "$INSTALLED_APP"
+SPIN_SKIP_OMP_VENDOR_HASH=1 "$ROOT/scripts/check-app-release.sh" "$INSTALLED_APP" >/dev/null
+ok "installed artifact verifies"
+
+CONTROL_APP="$CONTROL_ROOT/SPIN.app"
+ditto "$INSTALLED_APP" "$CONTROL_APP"
+
+cat > "$CONTROL_APP/Contents/Resources/bin/cmux" <<EOF
+#!/usr/bin/env bash
+printf 'cmux|%s|%s\n' "\$0" "\$*" >> "$CMUX_CALLS"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "installed-proof cmux"; exit 0 ;;
+  new-workspace) echo "workspace:512"; exit 0 ;;
+  list-workspaces) echo "workspace:512 SPIN Onboarding"; exit 0 ;;
+  tree) echo "surface:512 [terminal] tty=ttys512"; exit 0 ;;
+  read-screen) echo "installed proof screen"; exit 0 ;;
+  send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$CONTROL_APP/Contents/Resources/bin/cmux"
+
+cat > "$CONTROL_APP/Contents/Resources/bin/omp" <<EOF
+#!/usr/bin/env bash
+printf 'omp|%s|%s\n' "\$0" "\$*" >> "$OMP_CALLS"
+if [[ "\${1:-}" == "--help" ]]; then echo "installed-proof omp"; exit 0; fi
+if [[ "\${1:-}" == "--version" ]]; then echo "omp/installed-proof"; exit 0; fi
+if [[ "\${1:-}" == "setup" && "\${2:-}" == "--help" ]]; then echo "omp setup installed proof"; exit 0; fi
+if [[ "\${1:-}" == "auth-broker" && "\${2:-}" == "status" && "\${3:-}" == "--json" ]]; then echo '{"ok":false,"reason":"not_configured"}'; exit 0; fi
+exit 0
+EOF
+chmod +x "$CONTROL_APP/Contents/Resources/bin/omp"
+
+for bin in cmux omp; do
+  cat > "$GLOBAL_BIN/$bin" <<EOF
+#!/usr/bin/env bash
+printf 'global-$bin|%s|%s\n' "\$0" "\$*" >> "$GLOBAL_CALLS"
+exit 93
+EOF
+  chmod +x "$GLOBAL_BIN/$bin"
+done
+
+first_out="$TMP/first-launch.out"
+env -i \
+  HOME="$HOME_DIR" \
+  PATH="$GLOBAL_BIN:$SYSTEM_PATH" \
+  SPIN_APP_HOME="$APP_HOME" \
+  "$CONTROL_APP/Contents/MacOS/SPIN" > "$first_out"
+
+grep -q 'SPIN onboarding opened in cmux (workspace:512)' "$first_out" \
+  || fail "installed first launch did not open onboarding workspace"
+[ -x "$APP_HOME/runtime/scripts/spin" ] || fail "installed first launch did not seed writable runtime"
+[ -d "$APP_HOME/runtime/org" ] || fail "installed first launch did not seed org state"
+grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|ping" "$CMUX_CALLS" \
+  || fail "installed first launch did not call bundled cmux ping"
+grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|new-workspace --name SPIN Onboarding" "$CMUX_CALLS" \
+  || fail "installed first launch did not call bundled cmux onboarding workspace"
+[ ! -s "$GLOBAL_CALLS" ] || fail "installed launch called a global cmux/omp shim: $(cat "$GLOBAL_CALLS")"
+ok "installed first launch uses bundled cmux and seeds runtime"
+
+route_before="$TMP/route-before.out"
+env -i \
+  HOME="$HOME_DIR" \
+  PATH="$GLOBAL_BIN:$SYSTEM_PATH" \
+  SPIN_APP_HOME="$APP_HOME" \
+  SPIN_APP_LAUNCH_DRY_RUN=1 \
+  "$CONTROL_APP/Contents/MacOS/SPIN" > "$route_before"
+grep -q 'app-launch: onboarding' "$route_before" || fail "pre-onboarding relaunch route was not onboarding"
+
+touch "$APP_HOME/runtime/org/.spin-onboarded"
+route_after="$TMP/route-after.out"
+env -i \
+  HOME="$HOME_DIR" \
+  PATH="$GLOBAL_BIN:$SYSTEM_PATH" \
+  SPIN_APP_HOME="$APP_HOME" \
+  SPIN_APP_LAUNCH_DRY_RUN=1 \
+  "$CONTROL_APP/Contents/MacOS/SPIN" > "$route_after"
+grep -q 'app-launch: spin up' "$route_after" || fail "post-onboarding relaunch route was not spin up"
+ok "installed relaunch routes to spin up after onboarding"
+
+NODE_BIN="$(command -v node || true)"
+if [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ]; then
+  health_json="$TMP/app-health.json"
+  env -i \
+    HOME="$HOME_DIR" \
+    PATH="$SYSTEM_PATH" \
+    SPIN_APP_RESOURCES="$CONTROL_APP/Contents/Resources" \
+    SPIN_INTERNAL_BIN_DIR="$CONTROL_APP/Contents/Resources/bin" \
+    SPIN_BUNDLED_RUNTIME="$CONTROL_APP/Contents/Resources/runtime" \
+    SPIN_ROOT="$APP_HOME/runtime" \
+    "$NODE_BIN" "$APP_HOME/runtime/scripts/spin-app-health.js" --json > "$health_json"
+  "$NODE_BIN" - "$health_json" "$CONTROL_APP/Contents/Resources/bin" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const [healthPath, binDir] = process.argv.slice(2);
+const health = JSON.parse(fs.readFileSync(healthPath, 'utf8'));
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+if (!health.app || health.app.inBundle !== true) fail('health did not detect installed app bundle context');
+if (!health.app.runtimeWritable || health.app.runtimeWritable.status !== 'ok') fail('health did not validate installed writable runtime');
+for (const [name, key] of [['cmux', 'cmux'], ['omp', 'omp'], ['spin-agent', 'spinAgent']]) {
+  const item = health.binaries && health.binaries[key];
+  if (!item || item.status !== 'ok') fail(`health did not validate bundled ${name}`);
+  if (item.path !== path.join(binDir, name)) fail(`health resolved ${name} outside installed bundle`);
+  if (item.source !== 'app-bundled') fail(`health did not classify ${name} as app-bundled`);
+}
+NODE
+  ok "installed app health resolves bundled binaries"
+fi
+
+echo "SPIN installed-app check passed: $ARTIFACT"

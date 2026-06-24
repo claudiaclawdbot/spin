@@ -8,6 +8,7 @@
 #   delegate.sh [--wait] [--timeout SEC] [--id REQUEST_ID] <project-id> "<task text>"
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -47,15 +48,15 @@ TASK="$*"
 WS="$(node -e 'const h=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const p=(h.projects||{})[process.argv[2]];if(p&&p.cmux_workspace)console.log(p.cmux_workspace);' "$ROOT/org/OMP_HARNESS.json" "$PID" 2>/dev/null)"
 [[ -z "$WS" ]] && { echo "no cmux_workspace for '$PID' in org/OMP_HARNESS.json projects" >&2; exit 1; }
 
-command -v cmux >/dev/null 2>&1 || { echo "cmux not found; run headless jobs with scripts/org queue-job instead" >&2; exit 1; }
-CMUX_QUIET=1 cmux ping >/dev/null 2>&1 || { echo "cmux is not reachable; open cmux or run: scripts/spin up" >&2; exit 1; }
+spin_require_binary cmux "run headless jobs with scripts/org queue-job instead" || exit 1
+CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1 || { echo "cmux is not reachable; open SPIN or run: scripts/spin up" >&2; exit 1; }
 
 # find the omp agent's terminal surface in that workspace (robust to ID drift)
-SF="$(cmux tree --workspace "$WS" 2>/dev/null | grep -oE "surface:[0-9]+ \[terminal\]" | head -1 | grep -oE "surface:[0-9]+")"
+SF="$(spin_cmd cmux tree --workspace "$WS" 2>/dev/null | grep -oE "surface:[0-9]+ \[terminal\]" | head -1 | grep -oE "surface:[0-9]+")"
 [[ -z "$SF" ]] && { echo "no agent pane found in $WS for $PID" >&2; exit 1; }
 
 if [[ "$FORCE" != 1 ]]; then
-  SCREEN="$(cmux read-screen --workspace "$WS" --surface "$SF" 2>/dev/null | tail -12)"
+  SCREEN="$(spin_cmd cmux read-screen --workspace "$WS" --surface "$SF" 2>/dev/null | tail -12)"
   if ! grep -Eiq 'omp|sonnet|haiku|claude|model:' <<<"$SCREEN"; then
     echo "terminal $WS/$SF does not look like an omp agent prompt; use --force to send anyway" >&2
     exit 1
@@ -66,11 +67,11 @@ TASK_ONE_LINE="$(printf '%s' "$TASK" | tr '\n' ' ' | sed 's/[[:space:]][[:space:
 WRAPPED_TASK="SPIN delegation $REQ_ID from the Navigator. Task: $TASK_ONE_LINE. When done or blocked, update your project files/floor board as appropriate, then report back with exactly one of: scripts/org inbox $PID \"delegate $REQ_ID complete: <summary>\" OR scripts/org inbox $PID \"delegate $REQ_ID blocked: <summary>\"."
 
 # type the task into the project agent and submit it
-if ! cmux send --workspace "$WS" --surface "$SF" "$WRAPPED_TASK" >/dev/null 2>&1; then
+if ! spin_cmd cmux send --workspace "$WS" --surface "$SF" "$WRAPPED_TASK" >/dev/null 2>&1; then
   echo "failed to send task to $PID ($WS/$SF)" >&2
   exit 1
 fi
-if ! cmux send-key --workspace "$WS" --surface "$SF" enter >/dev/null 2>&1; then
+if ! spin_cmd cmux send-key --workspace "$WS" --surface "$SF" enter >/dev/null 2>&1; then
   echo "failed to submit task to $PID ($WS/$SF)" >&2
   exit 1
 fi

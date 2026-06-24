@@ -10,14 +10,16 @@ __src="${BASH_SOURCE[0]}"
 while [ -h "$__src" ]; do __d="$(cd -P "$(dirname "$__src")" && pwd)"; __src="$(readlink "$__src")"; [ "${__src#/}" = "$__src" ] && __src="$__d/$__src"; done
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd -P "$(dirname "$__src")/.." && pwd)}}"
 RUN="$ROOT/org/ceo/runs"; c_v=$'\e[35m'; c_g=$'\e[32m'; c_d=$'\e[2m'; c_o=$'\e[0m'
+source "$ROOT/scripts/lib/spin-runtime.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
-command -v cmux >/dev/null 2>&1 || { echo "cmux not found — install it (https://github.com/manaflow-ai/cmux) for the visual interface, or run headless with: spin start"; exit 1; }
+spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or install cmux for the development visual interface. Headless: spin start" || exit 1
 
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
 workspace_ref_by_name() {
   local name="$1"
-  CMUX_QUIET=1 cmux list-workspaces 2>/dev/null | awk -v want="$name" '
+  CMUX_QUIET=1 spin_cmd cmux list-workspaces 2>/dev/null | awk -v want="$name" '
     {
       line=$0
       sub(/^[*[:space:]]+/, "", line)
@@ -33,7 +35,7 @@ workspace_ref_by_name() {
 }
 
 term_surface() {
-  CMUX_QUIET=1 cmux tree --workspace "$1" 2>/dev/null | awk '
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$1" 2>/dev/null | awk '
     /surface:[0-9]+/ && /\[terminal\]/ {
       match($0, /surface:[0-9]+/)
       ref=substr($0, RSTART, RLENGTH)
@@ -46,7 +48,7 @@ term_surface() {
 
 surface_tty() {
   local ref="$1" sf="$2"
-  CMUX_QUIET=1 cmux tree --workspace "$ref" 2>/dev/null | awk -v sf="$sf" '
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$ref" 2>/dev/null | awk -v sf="$sf" '
     index($0, sf) && /tty=/ {
       match($0, /tty=[^[:space:]]+/)
       if (RSTART) { print substr($0, RSTART + 4, RLENGTH - 4); exit }
@@ -69,8 +71,8 @@ start_floor_if_needed() {
     echo "  ${c_g}✓${c_o} $label floor running"
     return 0
   fi
-  CMUX_QUIET=1 cmux send --workspace "$ref" --surface "$sf" "bash '$ROOT/scripts/cmux-floor.sh' '$target'" >/dev/null 2>&1
-  CMUX_QUIET=1 cmux send-key --workspace "$ref" --surface "$sf" enter >/dev/null 2>&1
+  CMUX_QUIET=1 spin_cmd cmux send --workspace "$ref" --surface "$sf" "bash '$ROOT/scripts/cmux-floor.sh' '$target'" >/dev/null 2>&1
+  CMUX_QUIET=1 spin_cmd cmux send-key --workspace "$ref" --surface "$sf" enter >/dev/null 2>&1
   echo "  ${c_g}✓${c_o} $label floor started"
 }
 
@@ -96,12 +98,12 @@ start_daemon() {
 }
 
 # ── 1. cmux app/socket ───────────────────────────────────────────────────────
-cmux_ready(){ CMUX_QUIET=1 cmux ping >/dev/null 2>&1; }
+cmux_ready(){ CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; }
 if cmux_ready; then
   echo "  ${c_g}✓${c_o} cmux already running"
 else
   echo "  ${c_d}· starting cmux…${c_o}"
-  if [[ "$(uname -s)" == Darwin ]]; then open -a cmux >/dev/null 2>&1 || true; fi
+  if [[ "$(uname -s)" == Darwin ]]; then spin_open_cmux_app || true; fi
   for _ in 1 2 3 4 5 6 7 8 9 10; do cmux_ready && break; sleep 1; done
   cmux_ready || { echo "  ${c_d}· cmux app is not reachable yet — open cmux, then rerun: spin up${c_o}"; exit 1; }
   echo "  ${c_g}✓${c_o} cmux running"
@@ -122,7 +124,7 @@ if [[ -n "$coord_ref" ]]; then
   remember_ceo_ref "$coord_ref"
   start_floor_if_needed "$coord_ref" ceo Coordinator
 else
-  ref="$(CMUX_QUIET=1 cmux new-workspace --name "SPIN Coordinator" --cwd "$HOME" \
+  ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "SPIN Coordinator" --cwd "$HOME" \
         --command "bash '$ROOT/scripts/cmux-floor.sh' ceo" --focus true 2>/dev/null \
         | grep -oE 'workspace:[0-9]+' | head -1)"
   if [[ -n "$ref" ]]; then
@@ -174,7 +176,7 @@ node -e '
   ref="$(workspace_ref_by_name "$id")"
   if [[ -z "$ref" ]]; then
     cwd="$ROOT/projects/$id"; [[ -d "$cwd" ]] || cwd="$ROOT/org/projects/$id"
-    ref="$(CMUX_QUIET=1 cmux new-workspace --name "$id" --cwd "$cwd" \
+    ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$id" --cwd "$cwd" \
       --command "bash '$ROOT/scripts/cmux-floor.sh' '$id'" --focus false 2>/dev/null \
       | grep -oE 'workspace:[0-9]+' | head -1)"
     [[ -n "$ref" ]] && echo "  ${c_g}✓${c_o} re-opened floor: $id"
@@ -182,6 +184,10 @@ node -e '
   if [[ -n "$ref" ]]; then
     remember_project_ref "$id" "$ref"
     start_floor_if_needed "$ref" "$id" "$id"
+    sf="$(term_surface "$ref")"
+    if spin_cmux_open_project_board "$ref" "$id" "$sf"; then
+      echo "  ${c_g}✓${c_o} $id board visible"
+    fi
   fi
 done
 
