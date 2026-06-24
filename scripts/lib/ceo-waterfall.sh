@@ -19,6 +19,8 @@ CEO_RUN_DIR="${CEO_RUN_DIR:-$CEO_ROOT/org/ceo/runs}"
 CEO_LOCKOUT_FILE="${CEO_LOCKOUT_FILE:-$CEO_RUN_DIR/codex-blocked-until}"
 CEO_LOCKOUT_SECS="${CEO_LOCKOUT_SECS:-86400}"   # 24h
 
+source "$CEO_ROOT/scripts/lib/spin-runtime.sh"
+
 # Owner-provided secrets (Gemini API key, etc.). Lives OUTSIDE the repo at
 # ~/.config/omp.env (chmod 600), so the autonomous agents — which all source this
 # lib — inherit GEMINI_API_KEY regardless of how the driver was launched (nohup,
@@ -204,7 +206,7 @@ probe_claude() { provider_is_blocked claude && return 1; command -v claude      
 probe_cursor() { provider_is_blocked cursor && return 1; command -v cursor-agent >/dev/null 2>&1 && cursor-agent --version >/dev/null 2>&1; }
 probe_gemini() { provider_is_blocked gemini && return 1; command -v gemini       >/dev/null 2>&1 && gemini       --version >/dev/null 2>&1; }
 probe_ollama() { provider_is_blocked ollama && return 1; command -v ollama       >/dev/null 2>&1 && ollama list  >/dev/null 2>&1; }
-probe_omp()    { provider_is_blocked omp    && return 1; command -v omp          >/dev/null 2>&1 && omp --help   >/dev/null 2>&1; }
+probe_omp()    { provider_is_blocked omp    && return 1; spin_have_binary omp && spin_cmd omp --help >/dev/null 2>&1; }
 
 # select_provider <skip_codex(true|false)> [override]
 # Auto order: omp -> codex -> claude -> gemini -> ollama.
@@ -282,7 +284,7 @@ run_agent() {
     omp)
       local omp_config
       omp_config="$(ensure_spin_omp_config)"
-      omp -p --config "$omp_config" --cwd "$CEO_ROOT" --no-session "$prompt" > "$log" 2>&1 || rc=$?
+      spin_cmd omp -p --config "$omp_config" --cwd "$CEO_ROOT" --no-session "$prompt" > "$log" 2>&1 || rc=$?
       ;;
     ollama)
       echo "$prompt" | ollama run "${MODEL:-$CEO_OLLAMA_MODEL}" > "$log" 2>&1 || rc=$?

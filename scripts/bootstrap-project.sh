@@ -65,6 +65,32 @@ fi
 
 [[ -f "$PROJECT_DIR/RECEIPTS.md" ]]       || { touch "$PROJECT_DIR/RECEIPTS.md";       echo "[bootstrap]  created RECEIPTS.md"; }
 [[ -f "$PROJECT_DIR/WORKSPACE_HANDOFF.md" ]] || { touch "$PROJECT_DIR/WORKSPACE_HANDOFF.md"; echo "[bootstrap]  created WORKSPACE_HANDOFF.md"; }
+if [[ ! -f "$PROJECT_DIR/FLOOR.md" ]]; then
+  cat > "$PROJECT_DIR/FLOOR.md" <<EOF
+# $PROJECT_ID — Floor Board
+
+_Live at-a-glance board for this project's cmux floor. The status roll-up
+daemon aggregates every project's board into \`org/ceo/WORKSPACE_STATUS.md\`._
+
+Last updated: (never)
+
+## Goal
+Describe the win condition here.
+
+## In progress
+- (nothing yet)
+
+## Recently done
+- (nothing yet)
+
+## Next
+- (nothing yet)
+
+## Waiting on human
+- (nothing yet)
+EOF
+  echo "[bootstrap]  created FLOOR.md"
+fi
 
 echo "[bootstrap] $PROJECT_ID ready at $PROJECT_DIR"
 echo "  Next: fill PROJECT_CONTROLLER_PROMPT.md with real charter, then queue agent jobs."

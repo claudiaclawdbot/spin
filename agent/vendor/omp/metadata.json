@@ -1,0 +1,38 @@
+{
+  "package": "@oh-my-pi/pi-coding-agent",
+  "version": "16.1.16",
+  "packageSpec": "@oh-my-pi/pi-coding-agent@16.1.16",
+  "upstream": "https://github.com/can1357/oh-my-pi.git",
+  "upstreamSource": "agent/upstream/oh-my-pi",
+  "upstreamCommit": "93d730c01d84b59833f327fab3ea1972d30f1ebc",
+  "npm": {
+    "tarball": "https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/-/pi-coding-agent-16.1.16.tgz",
+    "shasum": "facf8a4fa562eeba9e310c71ab6aa26ae0075862",
+    "integrity": "sha512-96C2KqYEImjo961V9KLaphZBf1szv58nqNXBbubP66x1hncvm4yf5gQRzf6hayngPB/4xEEdobFtQfeTOXRX1A==",
+    "localPack": "agent/vendor/npm/oh-my-pi-pi-coding-agent-16.1.16.tgz",
+    "localPackSha256": "45d3e4c2f8ee90a6cef4c9df59f0434677d47541051866ab699ddc659c3b98fa"
+  },
+  "build": {
+    "runtime": "bun build --compile",
+    "bunMinimumVersion": "1.3.14",
+    "bunVersion": "1.3.14",
+    "lockfile": {
+      "path": "agent/vendor/omp/bun.lock",
+      "sha256": "b997ae8e21f0dcb3207126376c96cb2d9dee2f57dac7c75db2dc85e1e454e80f"
+    },
+    "platformTag": "darwin-arm64",
+    "nativeAddon": "pi_natives.darwin-arm64.node"
+  },
+  "outputs": [
+    {
+      "kind": "compiled-cli",
+      "path": "vendor/bin/omp",
+      "sha256": "d630afeb0dfee8825601c7de69c6c23dd74343cc7d7d3fe79b66ec09eef6ebe7"
+    },
+    {
+      "kind": "native-addon",
+      "path": "vendor/bin/pi_natives.darwin-arm64.node",
+      "sha256": "5ce7eaad7dcd194b9b8f6dadcbdffcedea0dc28b206ffb8d20b4b46e81fa9ac9"
+    }
+  ]
+}

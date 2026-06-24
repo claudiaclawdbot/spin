@@ -5,6 +5,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { summarizeHumanQueue } = require('./lib/human-queue-summary.js');
 
 const root    = process.argv[2] || process.env.OMP_ROOT || require("path").resolve(__dirname, "..");
 const ORG     = path.join(root, 'org');
@@ -96,18 +97,11 @@ for (const j of queued.slice(0, 6)) out.push(`  ${c.yel}⏳${c.off} ${j.id} ${c.
 out.push('');
 
 // ── Waiting on you ────────────────────────────────────────────────────────
-out.push(`${c.bold}${c.yel}WAITING ON YOU${c.off}`);
-try {
-  const hq = fs.readFileSync(path.join(ORG, 'HUMAN_QUEUE.md'), 'utf8');
-  const sec = hq.split(/^## /m).find(s => s.startsWith('Waiting On Human')) || '';
-  const items = sec.split('\n').filter(l => l.startsWith('- '));
-  if (items.length === 0) out.push(`  ${c.grn}nothing — you're clear${c.off}`);
-  for (const it of items) {
-    const m = it.replace(/^- /, '').replace(/\*\*/g, '');
-    out.push(`  ${c.yel}⏳${c.off} ${trunc(m, 76)}`);
-  }
-  if (items.length) out.push(`  ${c.dim}approve:  ceo approve "<project> <what>"   ·   redirect:  ceo chat${c.off}`);
-} catch { out.push(`  ${c.dim}(human queue unreadable)${c.off}`); }
+const wait = summarizeHumanQueue(root, now);
+out.push(`${c.bold}${c.yel}WAITING ON YOU${c.off}${wait.count ? ` ${c.dim}(${wait.summary})${c.off}` : ''}`);
+if (wait.count === 0) out.push(`  ${c.grn}nothing — you're clear${c.off}`);
+for (const item of wait.items) out.push(`  ${c.yel}⏳${c.off} ${trunc(item.text, 76)}`);
+if (wait.count) out.push(`  ${c.dim}approve:  spin approve "<project> <what>"   ·   steer: spin chat${c.off}`);
 out.push('');
 
 // ── Last CEO decision ─────────────────────────────────────────────────────

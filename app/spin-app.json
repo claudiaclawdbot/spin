@@ -1,0 +1,46 @@
+{
+  "name": "SPIN",
+  "bundleIdentifier": "dev.spin.app",
+  "product": "Self-contained macOS app bundle",
+  "licensePosture": "GPL-compatible app distribution because the cmux UI engine is GPL-3.0-or-later unless commercially licensed.",
+  "components": {
+    "uiEngine": {
+      "name": "SPIN cmux fork",
+      "upstream": "https://github.com/manaflow-ai/cmux",
+      "upstreamLicense": "GPL-3.0-or-later or commercial",
+      "plannedLocation": "app/upstream/cmux",
+      "bundledBinary": "Resources/bin/cmux",
+      "bundledApp": "Resources/SPIN.app",
+      "role": "Native terminal, browser, workspace, notification, split-pane, sidebar, and socket UI engine."
+    },
+    "agentEngine": {
+      "name": "SPIN agent runtime",
+      "upstream": "https://github.com/can1357/oh-my-pi",
+      "upstreamPackage": "@oh-my-pi/pi-coding-agent",
+      "upstreamLicense": "MIT",
+      "plannedLocation": "agent/upstream/oh-my-pi",
+      "bundledBinary": "Resources/bin/omp",
+      "brandedAlias": "Resources/bin/spin-agent",
+      "role": "Internal OMP/Pi-derived coding-agent harness with SPIN defaults for model roles and fallback chains."
+    },
+    "runtime": {
+      "name": "SPIN runtime",
+      "source": "scripts/ and org/",
+      "license": "MIT",
+      "bundledLocation": "Resources/runtime",
+      "role": "Plain-file org state, approvals, job dispatch, receipts, project floors, and CLI companion commands."
+    }
+  },
+  "firstLaunch": {
+    "entrypoint": "Resources/runtime/scripts/spin app-launch",
+    "writableRuntime": "~/Library/Application Support/SPIN/runtime",
+    "coordinatorWorkspace": "SPIN Coordinator",
+    "onboardingWorkspace": "SPIN Onboarding",
+    "runtimeEnv": {
+      "SPIN_ROOT": "~/Library/Application Support/SPIN/runtime",
+      "SPIN_BUNDLED_RUNTIME": "Resources/runtime",
+      "SPIN_APP_RESOURCES": "Resources",
+      "SPIN_INTERNAL_BIN_DIR": "Resources/bin"
+    }
+  }
+}

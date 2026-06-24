@@ -1,7 +1,9 @@
-# Roadmap — known weaknesses + what's next, in priority order
+# Core System Roadmap — known weaknesses + what's next, in priority order
 
-Honest list. The system works; these are the places it still leans on luck or
-discipline instead of mechanism, plus the next features.
+Honest list for the plain-file SPIN runtime: `spin`, `org`, the Navigator loop,
+project floors, jobs, approvals, receipts, and supervisors. The macOS wrapper
+work is tracked separately in [APP_ROADMAP](APP_ROADMAP.md) so app packaging and
+core orchestration do not blur together.
 
 ## 1. Harden the singleton lock (atomicity)
 
@@ -21,22 +23,7 @@ has its PID. Apply to the driver, the watchers, and the dispatcher.
 works, but a year of operation shouldn't mean a 5 MB inbox. Rotate to dated
 archive files past ~400 lines (only when mtime is quiet to dodge append races).
 
-## 3. Richer project floors (2-pane layout)
-
-`spin new-project` opens a terminal-only floor (the omp orchestrator). The nicer
-experience — and what the live reference setup uses — is a split: a live
-`FLOOR.md` markdown board (Goal / In progress / Next / Waiting on you) **beside**
-the agent, so a glance at the tab tells you the project's state. Add the second
-pane on floor creation (`cmux` split + markdown surface) and have the
-orchestrator keep the board current.
-
-## 4. Approval-latency surfacing
-
-The org idles correctly when everything is gated on the human — but "5 items
-waiting, oldest is 4 days old" should be loud (chip + `spin` banner + optional
-notification), not something you discover by asking.
-
-## 5. Coordinator-driven onboarding (conversational)
+## 3. Coordinator-driven onboarding (conversational)
 
 `spin init` is a solid bash wizard, but the real vision is the **Coordinator
 agent** onboarding you: first run drops you into the Coordinator floor with an
@@ -44,33 +31,26 @@ onboarding directive, and it asks what you want to build, creates the project
 (`spin new-project`), and briefs it — all in conversation. Keep the bash wizard
 as the headless fallback.
 
-## 6. Optional web control panel
-
-The "more app-like" middle path (short of any desktop app): a tiny local server
-that renders the org files — queue, approvals, floors, receipts — in the browser
-with approve/decline buttons. ~200 lines, no Electron; it *reinforces* the
-file-based model rather than replacing it. cmux remains the primary interface.
-
-## 7. PID-reuse hardening
+## 4. PID-reuse hardening
 
 Locks and job liveness use `kill -0 <pid>`. After a reboot (or very long uptime)
 a recycled PID could make a stale lock look alive. Record
 `<pid>:<boot-epoch>:<start-time>` and compare all three. (Pairs with #1.)
 
-## 8. A `--dry-run` org mode
+## 5. A `--dry-run` org mode
 
 For demos and tests: dispatcher prints what it *would* spawn; brain runs against
 a sandbox copy of `org/`. CI covers plumbing and the symlink/launcher paths, but
 not a full simulated tick with a fake agent, nor the cmux floor-spawn (no GUI in
 CI — currently manual-verified only).
 
-## 9. Job-level provider/model overrides in the queue schema
+## 6. Job-level provider/model overrides in the queue schema
 
 `max_runtime_seconds` is honored per job; `provider`/`model` overrides still come
 from job *type* tiering only. Let the Navigator request `"provider": "omp"` (e.g.
 the OpenRouter lane) per job, with benching still able to veto.
 
-## 10. Cross-platform reach
+## 7. Cross-platform reach
 
 The supervisor is launchd (macOS) / systemd-user (Linux); Windows/WSL users fall
 back to `spin start`. A scheduled-task path (or a documented WSL recipe) would
@@ -78,6 +58,17 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
 
 ## Done (recently)
 
+- ~~**Optional web control panel**~~ — `spin web` starts a local-only browser
+  panel that renders projects, queued jobs, approvals, floor boards, and recent
+  receipts from the plain files; approve/decline/ask buttons write back to the
+  normal `APPROVALS.md` flow.
+- ~~**Approval-latency surfacing**~~ — `spin` and the live dashboard now show the
+  active human-wait count plus oldest age; the status watcher paints a cmux chip
+  and can send a one-shot notification when the oldest item crosses
+  `SPIN_APPROVAL_NOTIFY_MINUTES`.
+- ~~**Richer project floors (2-pane layout)**~~ — `spin new-project` and `spin up`
+  now seed `FLOOR.md` boards and open them in a live cmux markdown pane beside
+  each project agent; existing projects missing a board get one backfilled.
 - ~~**Stale-STOP alarm**~~ — a STOP file is an intentional pause, but one left for
   hours is forgotten (it once silently paused the driver ~20h). The watchdog now
   escalates a STOP older than 2h (`SPIN_STALE_STOP_HOURS`) with an orange chip +

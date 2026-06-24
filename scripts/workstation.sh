@@ -8,6 +8,8 @@
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 OS="$(uname -s)"
+source "$ROOT/scripts/lib/spin-runtime.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
 # floor map: "<workspace-ref> <floor-target>", derived from org/OMP_HARNESS.json —
 # the registry is the single source of truth (this list drifted when hardcoded).
@@ -29,7 +31,7 @@ for (const [id, p] of Object.entries(h.projects || {})) {
 [[ ${#FLOORS[@]} -eq 0 ]] && { echo "no floors found in org/OMP_HARNESS.json" >&2; exit 1; }
 
 term_surface() {  # first terminal surface in a workspace (robust to ID drift)
-  cmux tree --workspace "$1" 2>/dev/null | awk '
+  spin_cmd cmux tree --workspace "$1" 2>/dev/null | awk '
     /surface:[0-9]+/ && /\[terminal\]/ {
       match($0, /surface:[0-9]+/)
       ref=substr($0, RSTART, RLENGTH)
@@ -42,7 +44,7 @@ term_surface() {  # first terminal surface in a workspace (robust to ID drift)
 
 surface_tty() {
   local ws="$1" sf="$2"
-  cmux tree --workspace "$ws" 2>/dev/null | awk -v sf="$sf" '
+  spin_cmd cmux tree --workspace "$ws" 2>/dev/null | awk -v sf="$sf" '
     index($0, sf) && /tty=/ {
       match($0, /tty=[^[:space:]]+/)
       if (RSTART) { print substr($0, RSTART + 4, RLENGTH - 4); exit }
@@ -60,8 +62,8 @@ agent_floor_active() {
 agent_cmd() {  # $1=ws $2=target $3=cmd
   local sf; sf="$(term_surface "$1")"
   [[ -z "$sf" ]] && { echo "  ✗ no terminal surface in $1 ($2)"; return 1; }
-  cmux send     --workspace "$1" --surface "$sf" "$3" >/dev/null 2>&1
-  cmux send-key --workspace "$1" --surface "$sf" enter >/dev/null 2>&1
+  spin_cmd cmux send     --workspace "$1" --surface "$sf" "$3" >/dev/null 2>&1
+  spin_cmd cmux send-key --workspace "$1" --surface "$sf" enter >/dev/null 2>&1
   echo "  ✓ $2  ($1/$sf)"
 }
 
@@ -104,7 +106,14 @@ daemon_down() {
 case "${1:-status}" in
   up)
     echo "Workstation UP:"
-    for f in "${FLOORS[@]}"; do set -- $f; agent_cmd "$1" "$2" "bash $ROOT/scripts/cmux-floor.sh $2"; done
+    for f in "${FLOORS[@]}"; do
+      set -- $f
+      agent_cmd "$1" "$2" "bash $ROOT/scripts/cmux-floor.sh $2"
+      if [[ "$2" != "ceo" ]]; then
+        sf="$(term_surface "$1")"
+        spin_cmux_open_project_board "$1" "$2" "$sf" >/dev/null 2>&1 && echo "  ✓ $2 board visible"
+      fi
+    done
     daemon_up
     echo "Give agents ~8s to boot, then: workstation.sh status"
     ;;
