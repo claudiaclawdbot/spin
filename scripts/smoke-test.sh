@@ -20,6 +20,7 @@ mkdir -p "$KIT"
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
+      docs/MACOS_TESTER_INSTALL.md \
       'org/ceo/*.example.md'
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
@@ -53,11 +54,17 @@ grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/mac
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
 grep -q 'macOS app tester lane' README.md
+grep -q 'v4.1.0-beta.1' README.md
+grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app tester lane' docs/index.html
 grep -q 'SPIN_RELEASE_FORMAT=dmg' docs/index.html
 grep -q 'scripts/prepare-open-source-release.sh.*dmg' docs/index.html
 grep -q 'actions/workflows/macos-app.yml' docs/index.html
+grep -q 'v4.1.0-beta.1' docs/index.html
+grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
+grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
+grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
 test -f app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
@@ -477,6 +484,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   test -f "$DMG_TESTER_RELEASE_DIR/$(basename "${RELEASE_DMG%.dmg}.manifest")"
   grep -q 'Format: `dmg`' "$DMG_TESTER_NOTES"
   grep -q 'hdiutil attach' "$DMG_TESTER_NOTES"
+  grep -q 'Applications shortcut and README.txt' "$DMG_TESTER_NOTES"
   scripts/spin app-updates --check --candidate "$RELEASE_DMG" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check-dmg.out"
   grep -q 'SPIN app updates' "$TMP/app-updates-check-dmg.out"
   grep -q 'SPIN app update plan' "$TMP/app-updates-check-dmg.out"

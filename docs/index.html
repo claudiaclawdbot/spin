@@ -204,20 +204,21 @@
   <p class="lede">The CLI/runtime path is still the stable install. In parallel, SPIN now has a checked macOS app-bundle lane: SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same plain-file SPIN runtime inside <code>SPIN.app</code>.</p>
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>Self-contained bundle</h3><p><code>SPIN.app</code> carries its cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
-    <div class="card"><span class="ic">🧪</span><h3>Tester releases first</h3><p>Open-source tester artifacts are ad-hoc signed and not notarized. They are useful for early users who can verify checksums and accept Gatekeeper friction.</p></div>
+    <div class="card"><span class="ic">🧪</span><h3>Beta releases first</h3><p>Open-source beta artifacts are ad-hoc signed and not notarized. They are useful for early users who can verify checksums and accept Gatekeeper friction.</p></div>
     <div class="card"><span class="ic">🔏</span><h3>Production later</h3><p>A polished public macOS app still needs Developer ID signing and notarization. That is a trust/installer UX step, not a blocker for open-source testing.</p></div>
   </div>
   <div class="term" style="margin-top:16px">
-    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">build the checked tester DMG</span>
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">build the checked beta DMG</span>
       <button class="copy" data-copy="SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux && scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg">copy</button></div>
     <pre><span class="p">$</span> <span class="c">SPIN_RELEASE_FORMAT=dmg</span> scripts/release-macos.sh --source-cmux
 <span class="p">$</span> <span class="c">scripts/prepare-open-source-release.sh</span> --artifact dist/release/SPIN-*-macos-*.dmg
 <span class="o">  ✓ dmg · sha256 · manifest · open-source tester notes</span></pre>
   </div>
-  <p class="lede" style="margin-top:14px">When a tester DMG is attached to a GitHub release, install by verifying the SHA-256, mounting the DMG, copying <code>SPIN.app</code> to <code>/Applications</code>, and opening it. If macOS warns because the build is not notarized, use right-click Open after verifying the checksum. Full instructions live in <a href="https://github.com/claudiaclawdbot/spin/blob/main/docs/OPEN_SOURCE_TESTER_RELEASE.md">Open-Source Tester Release</a>.</p>
+  <p class="lede" style="margin-top:14px">When a beta DMG is attached to a GitHub release, install by verifying the SHA-256, opening the DMG, dragging <code>SPIN.app</code> onto Applications, and opening it. If macOS warns because the build is not notarized, use right-click Open after verifying the checksum. Full instructions live in <a href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">macOS beta install guide</a>.</p>
   <div class="cta" style="justify-content:flex-start;margin-top:12px">
-    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/spin-app-test-4.1.0-dev-20260624-dmg">Download tester DMG</a>
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download beta DMG</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml">macOS app workflow</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
   </div>
