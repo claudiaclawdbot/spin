@@ -74,7 +74,7 @@ There are now two lanes:
 - **macOS app tester lane:** checked `SPIN.app` artifacts that bundle cmux and
   OMP/Pi. These are for early testers until Developer ID notarization is wired.
 
-Early macOS app builds can be released as open-source tester artifacts without
+Early macOS app builds can be released as open-source beta artifacts without
 Apple Developer ID:
 
 ```bash
@@ -83,8 +83,10 @@ scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dm
 ```
 
 These builds are ad-hoc signed and not notarized, so macOS may show Gatekeeper
-warnings. Download tester builds from
-[the current tester DMG release](https://github.com/claudiaclawdbot/spin/releases/tag/spin-app-test-4.1.0-dev-20260624-dmg), and see
+warnings. Download the current beta from
+[v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1),
+then follow [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
+Maintainer release notes live in
 [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md).
 
 ## Updating SPIN
