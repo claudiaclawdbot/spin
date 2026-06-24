@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+  "schemaVersion": 1,
+  "app": {
+    "appearance": "dark",
+    "windowTitleTemplate": "SPIN - {activeWorkspace}",
+    "hideWorkspaceTitleBar": false,
+    "keepWorkspaceOpenWhenClosingLastSurface": true
+  },
+  "sidebar": {
+    "showWorkspaceDescription": true,
+    "wrapWorkspaceTitles": false,
+    "showNotifications": true,
+    "showPorts": true,
+    "showPullRequests": true
+  },
+  "sidebarAppearance": {
+    "tintColor": "#112B35",
+    "darkModeTintColor": "#112B35",
+    "tintOpacity": 0.12
+  },
+  "workspaceColors": {
+    "colors": {
+      "SPIN Cyan": "#0E6B8C",
+      "SPIN Green": "#22C55E",
+      "SPIN Gold": "#EAB308",
+      "SPIN Red": "#EF4444",
+      "SPIN Violet": "#8A2BE2"
+    }
+  },
+  "workspaceGroups": {
+    "newWorkspacePlacement": "afterCurrent",
+    "byCwd": {
+      "~": {
+        "color": "#0E6B8C",
+        "icon": "circle.hexagongrid.fill"
+      }
+    }
+  },
+  "customSidebars": {
+    "renderer": "remote"
+  }
+}

@@ -1,0 +1,55 @@
+name: macos app artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ad-hoc-artifact:
+    name: checked ad-hoc app artifact
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Show Apple toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Vendor app dependencies
+        run: scripts/vendor-app-deps.sh
+
+      - name: Build checked ad-hoc DMG release artifact
+        run: SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux --skip-vendor
+
+      - name: Prepare open-source tester release notes
+        run: |
+          set -euo pipefail
+          artifact="$(ls -t dist/release/SPIN-*-macos-*.dmg | head -1)"
+          scripts/prepare-open-source-release.sh --artifact "$artifact"
+
+      - name: Upload SPIN macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spin-macos-ad-hoc
+          if-no-files-found: error
+          path: |
+            dist/release/*.zip
+            dist/release/*.zip.sha256
+            dist/release/*.dmg
+            dist/release/*.dmg.sha256
+            dist/release/*.manifest
+            dist/release/*-open-source-tester-notes.md

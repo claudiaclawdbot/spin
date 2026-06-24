@@ -53,7 +53,7 @@ no contract broadcasts. Those are gated to the human. Local reversible work only
 
 echo "[run-project-omp] project=$PID repo=$REPO log=$LOG" >&2
 OMP_CONFIG="$(ensure_spin_omp_config)"
-omp -p \
+spin_cmd omp -p \
   --config "$OMP_CONFIG" \
   --cwd "$REPO" \
   --no-session \

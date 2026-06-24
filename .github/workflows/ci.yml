@@ -69,7 +69,10 @@ jobs:
           out="$("$HOME/.local/bin/org" show 2>&1)"
           echo "$out" | grep -q "$(pwd)" || { echo "FAIL: org via symlink resolved wrong ROOT: $out"; exit 1; }
           "$HOME/.local/bin/spin" help >/dev/null
+          "$HOME/.local/bin/spin" version | grep -q '^SPIN '
           echo "ok: spin + org resolve correctly through the symlink"
+      - name: update command check mode
+        run: SPIN_UPDATE_NO_FETCH=1 "$HOME/.local/bin/spin" update --check
       - name: dispatcher runs clean on the queue
         run: bash scripts/omp-supervisor-once.sh
       - name: full local smoke suite
@@ -90,6 +93,9 @@ jobs:
           bash scripts/build-bootstrap.sh
           SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 bash spin-offline.sh "$RUNNER_TEMP/spin-offline"
           test -f "$RUNNER_TEMP/spin-offline/scripts/org"
+          test -f "$RUNNER_TEMP/spin-offline/scripts/spin-update.sh"
+          test -f "$RUNNER_TEMP/spin-offline/scripts/spin-migrate.sh"
+          test -f "$RUNNER_TEMP/spin-offline/VERSION"
           test -f "$RUNNER_TEMP/spin-offline/org/state.json"
           echo "ok: offline self-extract installed"
       - name: launcher pipes cleanly (curl|bash) and clones

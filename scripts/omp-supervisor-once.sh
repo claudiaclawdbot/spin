@@ -33,6 +33,7 @@ const cp   = require('child_process');
 const path = require('path');
 
 const root      = process.argv[2];
+const runtime   = require(path.join(root, 'scripts', 'lib', 'spin-runtime.js'));
 const harness   = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const queue     = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
 const now       = new Date().toISOString();
@@ -42,7 +43,9 @@ const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
 
 // ── helper: send a cmux command silently ────────────────────────────────────
 function cmux(args) {
-  try { cp.execFileSync('cmux', args, { cwd: root, stdio: 'ignore' }); return true; }
+  const bin = runtime.resolveBinary('cmux', root);
+  if (!bin) return false;
+  try { cp.execFileSync(bin, args, { cwd: root, stdio: 'ignore' }); return true; }
   catch { return false; }
 }
 

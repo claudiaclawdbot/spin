@@ -8,6 +8,7 @@
 #   stop:   touch org/ceo/runs/STATUS_WATCH_STOP   (or: pkill -f workspace-status-watch)
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 RUN_DIR="$ROOT/org/ceo/runs"
 LOCK="$RUN_DIR/.status-watch.lock"
 STOP="$RUN_DIR/STATUS_WATCH_STOP"
@@ -51,18 +52,44 @@ while true; do
   if [[ "$DSTATE" != "$PREV_DSTATE" ]]; then
     echo "$DSTATE" > "$DRIVER_STATE_F"
     case "$DSTATE" in
-      up)     cmux set-status driver "SPIN loop UP"     --workspace "$CEO_WS" --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
-      paused) cmux set-status driver "SPIN loop PAUSED" --workspace "$CEO_WS" --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
+      up)     spin_cmd cmux set-status driver "SPIN loop UP"     --workspace "$CEO_WS" --icon checkmark.circle --color '#22c55e' --priority 90 >/dev/null 2>&1 || true ;;
+      paused) spin_cmd cmux set-status driver "SPIN loop PAUSED" --workspace "$CEO_WS" --icon pause.circle     --color '#eab308' --priority 90 >/dev/null 2>&1 || true ;;
       paused-stale)
-              cmux set-status driver "SPIN PAUSED ${STALE_STOP_HRS}h+ — forgotten?" --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#f97316' --priority 95 >/dev/null 2>&1 || true
-              cmux notify --title "SPIN paused for hours" \
+              spin_cmd cmux set-status driver "SPIN PAUSED ${STALE_STOP_HRS}h+ — forgotten?" --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#f97316' --priority 95 >/dev/null 2>&1 || true
+              spin_cmd cmux notify --title "SPIN paused for hours" \
                    --body "A STOP file has paused the driver for ${STALE_STOP_HRS}h+. Resume: rm org/ceo/runs/STOP (or spin start). If intentional, ignore." \
                    --workspace "$CEO_WS" >/dev/null 2>&1 || true ;;
-      down)   cmux set-status driver "SPIN loop DOWN"   --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
-              cmux notify --title "SPIN driver DOWN" \
+      down)   spin_cmd cmux set-status driver "SPIN loop DOWN"   --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#ef4444' --priority 95 >/dev/null 2>&1 || true
+              spin_cmd cmux notify --title "SPIN driver DOWN" \
                    --body "tick loop not running — spin start (or rm org/ceo/runs/STOP if paused)" \
-                   --workspace "$CEO_WS" >/dev/null 2>&1 || true ;;
+              --workspace "$CEO_WS" >/dev/null 2>&1 || true ;;
     esac
+  fi
+
+  # ── human-approval latency: chip + one-shot notification past threshold ──
+  APPROVAL_STATE_F="$RUN_DIR/.approval-latency-state"
+  if approval_env="$(node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --env 2>/dev/null)"; then
+    eval "$approval_env"
+    if (( ${SPIN_HUMAN_WAITING_COUNT:-0} > 0 )); then
+      spin_cmd cmux set-status approvals "$SPIN_HUMAN_WAITING_SUMMARY" \
+        --workspace "$CEO_WS" --icon exclamationmark.triangle \
+        --color "${SPIN_HUMAN_WAITING_COLOR:-#eab308}" --priority 92 >/dev/null 2>&1 || true
+
+      notify_minutes="${SPIN_APPROVAL_NOTIFY_MINUTES:-1440}"
+      if [[ "$notify_minutes" =~ ^[0-9]+$ && "$notify_minutes" != "0" ]] && (( ${SPIN_HUMAN_WAITING_OLDEST_SECONDS:-0} >= notify_minutes * 60 )); then
+        notify_key="${SPIN_HUMAN_WAITING_OLDEST_AT:-unknown}|${SPIN_HUMAN_WAITING_COUNT:-0}|$notify_minutes"
+        prev_notify_key="$(cat "$APPROVAL_STATE_F" 2>/dev/null || true)"
+        if [[ "$notify_key" != "$prev_notify_key" ]]; then
+          echo "$notify_key" > "$APPROVAL_STATE_F"
+          spin_cmd cmux notify --title "SPIN is waiting on you" \
+            --body "$SPIN_HUMAN_WAITING_SUMMARY — ${SPIN_HUMAN_WAITING_OLDEST_TEXT:-open spin status}" \
+            --workspace "$CEO_WS" >/dev/null 2>&1 || true
+        fi
+      fi
+    else
+      spin_cmd cmux clear-status approvals --workspace "$CEO_WS" >/dev/null 2>&1 || true
+      rm -f "$APPROVAL_STATE_F" 2>/dev/null || true
+    fi
   fi
   sleep "$INTERVAL"
 done

@@ -46,7 +46,12 @@
   .def .tip b{color:var(--ink)} .def .tip .h{color:var(--cyan);font-weight:700}
   .def .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--line)}
   .def:hover .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
-  @media(max-width:560px){.def .tip{width:200px}}
+  @media(max-width:560px){
+    .sub{letter-spacing:.08em;line-height:2}
+    .def .tip{position:fixed;left:16px;right:16px;top:72px;bottom:auto;transform:none;width:auto;max-width:none}
+    .def:hover .tip{transform:none}
+    .def .tip::after{display:none}
+  }
   .tag{font-size:1.32rem;color:var(--ink);max-width:38ch;margin:22px auto 30px}
   .tag b{color:var(--violet)}
   .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -130,10 +135,12 @@
   <div class="cta">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin">⭐ Get it on GitHub</a>
     <a class="btn ghost" href="#install">Install in 30s</a>
+    <a class="btn ghost" href="#app">SPIN.app tester lane</a>
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
     <span class="badge">macOS · Linux</span><span class="badge">omp · claude · codex · gemini · ollama</span>
+    <span class="badge">SPIN.app tester builds</span>
   </div>
 </header>
 
@@ -192,8 +199,32 @@
   <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on — every floor agent is an omp session, and it's the <b>Pi</b> in SPIN; <a href="https://github.com/manaflow-ai/cmux">cmux</a> is the optional visual layer. The installer sets all of this up.</p>
 </section>
 
+<section id="app" class="wrap">
+  <h2><span class="n">04</span>The app lane</h2>
+  <p class="lede">The CLI/runtime path is still the stable install. In parallel, SPIN now has a checked macOS app-bundle lane: SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same plain-file SPIN runtime inside <code>SPIN.app</code>.</p>
+  <div class="grid">
+    <div class="card"><span class="ic">🖥️</span><h3>Self-contained bundle</h3><p><code>SPIN.app</code> carries its cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
+    <div class="card"><span class="ic">🧪</span><h3>Tester releases first</h3><p>Open-source tester artifacts are ad-hoc signed and not notarized. They are useful for early users who can verify checksums and accept Gatekeeper friction.</p></div>
+    <div class="card"><span class="ic">🔏</span><h3>Production later</h3><p>A polished public macOS app still needs Developer ID signing and notarization. That is a trust/installer UX step, not a blocker for open-source testing.</p></div>
+  </div>
+  <div class="term" style="margin-top:16px">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">build the checked tester DMG</span>
+      <button class="copy" data-copy="SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux && scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg">copy</button></div>
+    <pre><span class="p">$</span> <span class="c">SPIN_RELEASE_FORMAT=dmg</span> scripts/release-macos.sh --source-cmux
+<span class="p">$</span> <span class="c">scripts/prepare-open-source-release.sh</span> --artifact dist/release/SPIN-*-macos-*.dmg
+<span class="o">  ✓ dmg · sha256 · manifest · open-source tester notes</span></pre>
+  </div>
+  <p class="lede" style="margin-top:14px">When a tester DMG is attached to a GitHub release, install by verifying the SHA-256, mounting the DMG, copying <code>SPIN.app</code> to <code>/Applications</code>, and opening it. If macOS warns because the build is not notarized, use right-click Open after verifying the checksum. Full instructions live in <a href="https://github.com/claudiaclawdbot/spin/blob/main/docs/OPEN_SOURCE_TESTER_RELEASE.md">Open-Source Tester Release</a>.</p>
+  <div class="cta" style="justify-content:flex-start;margin-top:12px">
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases">Download tester DMG</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml">macOS app workflow</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
+  </div>
+</section>
+
 <section id="how" class="wrap">
-  <h2><span class="n">04</span>It's just files</h2>
+  <h2><span class="n">05</span>It's just files</h2>
   <p class="lede">No database, no message broker, no daemon you can't read. The whole org talks through plain files you can grep and audit.</p>
   <div class="flow">
     <div class="lane"><span class="you">you</span> <span class="arrow">──spin approve──▶</span> <span class="file">APPROVALS.md</span> <span class="arrow">──▶</span> <span class="box">SPIN Navigator</span> <span class="arrow">──▶</span> <span class="file">AGENT_QUEUE.json</span> <span class="arrow">──▶</span> detached agent jobs</div>
@@ -211,7 +242,7 @@
 </section>
 
 <section id="gates" class="wrap">
-  <h2><span class="n">05</span>The four gates</h2>
+  <h2><span class="n">06</span>The four gates</h2>
   <p class="lede">SPIN does local, reversible work without asking. It stops and waits for exactly four things — enforced behaviorally by every prompt, surfaced as an approval queue.</p>
   <div class="gates">
     <div class="gate"><span class="g">📤</span><div><b>External sends</b><span>email, DM, form, public post</span></div></div>
@@ -222,11 +253,12 @@
 </section>
 
 <section id="docs" class="wrap">
-  <h2><span class="n">06</span>Go deeper</h2>
+  <h2><span class="n">07</span>Go deeper</h2>
   <div class="grid">
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><span class="ic">🗺️</span><h3>Roadmap →</h3><p>Known weaknesses, honestly ranked. What's solid, what still leans on luck.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/OPEN_SOURCE_TESTER_RELEASE.md"><span class="ic">📦</span><h3>App tester release →</h3><p>How to publish and install the open-source macOS tester artifact.</p></a>
   </div>
 </section>
 

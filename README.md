@@ -7,6 +7,7 @@
 **A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.**
 
 [![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
+[![macOS app artifact](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml)
 [![site](https://img.shields.io/badge/site-claudiaclawdbot.github.io%2Fspin-a855f7)](https://claudiaclawdbot.github.io/spin/)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
@@ -53,6 +54,62 @@ curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-boot
 ```
 
 `spin-bootstrap.sh` is a tiny launcher that clones SPIN and runs the installer. Want a **single file that works fully offline** (no git, no network — everything embedded)? Download [`spin-offline.sh`](https://github.com/claudiaclawdbot/spin/raw/main/spin-offline.sh) and run `bash spin-offline.sh`.
+
+## Self-contained app track
+
+SPIN is also gaining a macOS app-bundle path where **SPIN is the product** and
+cmux/OMP are internal foundations instead of separate user-installed tools. The
+repo now has the release shape for that work: `app/` for the SPIN-branded cmux
+shell, `agent/` for the OMP/Pi-derived runtime, `runtime/` for migration notes,
+and packaging checks in `scripts/package-macos-app.sh` plus
+`scripts/check-app-release.sh`. The source-built cmux fork proof is
+`scripts/build-app-proof.sh --source-cmux`. See
+[`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md) and
+[`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md).
+
+There are now two lanes:
+
+- **CLI/runtime lane:** the stable path today. Clone the repo, run
+  `./install.sh`, then `spin init`.
+- **macOS app tester lane:** checked `SPIN.app` artifacts that bundle cmux and
+  OMP/Pi. These are for early testers until Developer ID notarization is wired.
+
+Early macOS app builds can be released as open-source tester artifacts without
+Apple Developer ID:
+
+```bash
+SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux
+scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg
+```
+
+These builds are ad-hoc signed and not notarized, so macOS may show Gatekeeper
+warnings. Download tester builds from
+[GitHub Releases](https://github.com/claudiaclawdbot/spin/releases), and see
+[`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md).
+
+## Updating SPIN
+
+Once installed, update from inside your SPIN checkout:
+
+```bash
+spin update
+```
+
+The updater is designed for consumer installs: it checks for local edits, refuses
+to update while project jobs are running, backs up `org/` and `logs/` to
+`.spin/backups/`, pauses the driver if needed, fast-forwards the repo, reruns
+`install.sh`, applies any runtime migrations, runs `spin doctor`, then restarts
+the driver if it was running before.
+
+Useful checks:
+
+```bash
+spin update --check     # see whether an update is available
+spin update --dry-run   # preview the steps without changing files
+spin version            # show VERSION + git checkout + installed marker
+```
+
+See [docs/UPGRADING.md](docs/UPGRADING.md) for rollback and maintainer notes.
 
 **Requirements:**
 
@@ -148,6 +205,7 @@ No database, no message broker, no daemon you can't `cat`.
 ```
 spin                 status: projects, what's waiting on you, recent activity
 spin watch           live dashboard, refreshing
+spin web             local browser panel for approvals, jobs, floors, receipts
 spin approve "<x>"   answer an approval   ·   spin decline / spin ask
 spin delegate --wait <project> "<task>"    send work to a live project floor
 spin start | stop    run / pause the Navigator loop
