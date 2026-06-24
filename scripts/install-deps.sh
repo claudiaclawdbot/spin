@@ -13,6 +13,9 @@
 # cmux = brew formula, claude = npm @anthropic-ai/claude-code.
 set -uo pipefail
 
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+source "$ROOT/scripts/lib/spin-runtime.sh"
+
 DRY=0; [[ "${1:-}" == "--dry-run" ]] && DRY=1
 OS="$(uname -s)"
 BUN_MIN_VERSION="1.3.14"
@@ -45,7 +48,7 @@ NODE
 
 bun_version(){ bun --version 2>/dev/null | head -1; }
 bun_ok(){ have bun && version_ge "$(bun_version)" "$BUN_MIN_VERSION"; }
-omp_ok(){ have omp && omp --help >/dev/null 2>&1; }
+omp_ok(){ spin_have_binary omp && spin_cmd omp --help >/dev/null 2>&1; }
 
 ensure_node(){
   have node && { skipped+=("node"); return; }
@@ -85,7 +88,7 @@ ensure_omp(){
 }
 
 ensure_cmux(){
-  have cmux && { skipped+=("cmux"); return; }
+  spin_have_binary cmux && { skipped+=("cmux"); return; }
   note "${c_y}• cmux missing${c_o}"
   if [[ "$OS" == Darwin ]] && have brew; then run brew install cmux && installed+=("cmux")
   else guided+=("cmux → https://github.com/manaflow-ai/cmux (brew formula on macOS; optional display layer)"); fi

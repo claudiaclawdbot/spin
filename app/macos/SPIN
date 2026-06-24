@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+MACOS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+CONTENTS_DIR="$(cd "$MACOS_DIR/.." >/dev/null 2>&1 && pwd)"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+APP_SUPPORT_ROOT="${SPIN_APP_HOME:-$HOME/Library/Application Support/SPIN}"
+RUNTIME_DIR="$APP_SUPPORT_ROOT/runtime"
+
+export SPIN_APP_RESOURCES="$RESOURCES_DIR"
+export SPIN_INTERNAL_BIN_DIR="$RESOURCES_DIR/bin"
+export SPIN_BUNDLED_RUNTIME="$RESOURCES_DIR/runtime"
+export SPIN_ROOT="$RUNTIME_DIR"
+export WORKSPACE_ROOT="$SPIN_ROOT"
+export PATH="$SPIN_INTERNAL_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+copy_runtime() {
+  mkdir -p "$APP_SUPPORT_ROOT"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude 'org' \
+      --exclude 'logs' \
+      --exclude 'dist' \
+      --exclude 'vendor/sources' \
+      "$SPIN_BUNDLED_RUNTIME"/ "$RUNTIME_DIR"/
+  else
+    mkdir -p "$RUNTIME_DIR"
+    (cd "$SPIN_BUNDLED_RUNTIME" && tar --exclude './org' --exclude './logs' --exclude './dist' --exclude './vendor/sources' -cf - .) \
+      | (cd "$RUNTIME_DIR" && tar -xf -)
+  fi
+}
+
+seed_org_if_missing() {
+  if [ ! -d "$RUNTIME_DIR/org" ]; then
+    mkdir -p "$RUNTIME_DIR"
+    if [ -d "$SPIN_BUNDLED_RUNTIME/org" ]; then
+      (cd "$SPIN_BUNDLED_RUNTIME" && tar -cf - org) | (cd "$RUNTIME_DIR" && tar -xf -)
+    fi
+  fi
+}
+
+if [ ! -x "$RUNTIME_DIR/scripts/spin" ]; then
+  copy_runtime
+  seed_org_if_missing
+elif [ -f "$SPIN_BUNDLED_RUNTIME/VERSION" ] && [ -f "$RUNTIME_DIR/VERSION" ] \
+  && ! cmp -s "$SPIN_BUNDLED_RUNTIME/VERSION" "$RUNTIME_DIR/VERSION"; then
+  copy_runtime
+  seed_org_if_missing
+fi
+
+exec "$SPIN_ROOT/scripts/spin" app-launch

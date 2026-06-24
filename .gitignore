@@ -11,7 +11,16 @@ org/AGENT_QUEUE.json
 org/state.json
 org/OMP_HARNESS.json
 org/ceo/WORKSPACE_CONTROLLER_PROMPT.md
+org/.spin-version
+org/.spin-migrations/
+.spin/
 org/ceo/CEO_CHAT_PROMPT.md
+dist/
+vendor/bin/
+vendor/sources/
+app/upstream/
+agent/upstream/
+agent/vendor/npm/
 
 # real projects you register locally (the repo ships only example-app)
 org/projects/*

@@ -1,0 +1,48 @@
+{
+  "controls": [
+    {
+      "id": "spin-status",
+      "title": "SPIN Status",
+      "command": "scripts/spin watch",
+      "cwd": ".",
+      "height": 280,
+      "env": {
+        "SPIN_DOCK": "1"
+      }
+    },
+    {
+      "id": "spin-jobs",
+      "title": "Jobs",
+      "command": "scripts/spin jobs",
+      "cwd": ".",
+      "height": 220
+    },
+    {
+      "id": "spin-health",
+      "title": "Health",
+      "command": "scripts/spin app-health",
+      "cwd": ".",
+      "height": 260
+    },
+    {
+      "id": "spin-updates",
+      "title": "Updates",
+      "command": "scripts/spin app-updates",
+      "cwd": ".",
+      "height": 300
+    },
+    {
+      "id": "spin-omp-setup",
+      "title": "OMP Setup",
+      "command": "scripts/spin omp-setup",
+      "cwd": ".",
+      "height": 420
+    },
+    {
+      "id": "spin-log",
+      "title": "Navigator Log",
+      "command": "scripts/spin log",
+      "cwd": "."
+    }
+  ]
+}

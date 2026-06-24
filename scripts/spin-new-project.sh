@@ -14,6 +14,8 @@ __src="${BASH_SOURCE[0]}"
 while [ -h "$__src" ]; do __d="$(cd -P "$(dirname "$__src")" && pwd)"; __src="$(readlink "$__src")"; [ "${__src#/}" = "$__src" ] && __src="$__d/$__src"; done
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd -P "$(dirname "$__src")/.." && pwd)}}"
 ORG="$ROOT/org"; HARNESS="$ORG/OMP_HARNESS.json"
+source "$ROOT/scripts/lib/spin-runtime.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 c_g=$'\e[32m'; c_v=$'\e[35m'; c_d=$'\e[2m'; c_o=$'\e[0m'
 
 raw="${1:?usage: spin new-project <id> \"<goal>\" [--no-floor]}"
@@ -23,9 +25,37 @@ FLOOR=1; [[ "${3:-}" == "--no-floor" ]] && FLOOR=0
 [ -z "$PID" ] && { echo "invalid project id"; exit 1; }
 
 # ── 1. create the project (bootstrap + charter + state + harness) ─────────────
+PROJECT_DIR="$ORG/projects/$PID"
+HAD_FLOOR=0; [[ -f "$PROJECT_DIR/FLOOR.md" ]] && HAD_FLOOR=1
 bash "$ROOT/scripts/bootstrap-project.sh" "$PID" >/dev/null
 CODE_DIR="$ROOT/projects/$PID"; mkdir -p "$CODE_DIR"
 [ -f "$CODE_DIR/README.md" ] || printf '# %s\n\n%s\n' "$PID" "${GOAL:-Project workspace.}" > "$CODE_DIR/README.md"
+
+if [[ "$HAD_FLOOR" == 0 ]]; then
+  cat > "$PROJECT_DIR/FLOOR.md" <<EOF
+# $PID — Floor Board
+
+_Live at-a-glance board for this project's cmux floor. The status roll-up
+daemon aggregates every project's board into \`org/ceo/WORKSPACE_STATUS.md\`._
+
+Last updated: (never)
+
+## Goal
+${GOAL:-Describe the win condition here.}
+
+## In progress
+- (nothing yet)
+
+## Recently done
+- (nothing yet)
+
+## Next
+- First step toward the goal.
+
+## Waiting on human
+- (nothing yet)
+EOF
+fi
 
 cat > "$ORG/projects/$PID/PROJECT_CONTROLLER_PROMPT.md" <<EOF
 # $PID — Project Controller Prompt
@@ -62,13 +92,18 @@ node -e '
 echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entry, projects/$PID/)${c_o}"
 
 # ── 2. open the cmux floor (the sidebar "tab") ───────────────────────────────
-if [[ "$FLOOR" == 1 ]] && command -v cmux >/dev/null 2>&1; then
-  ref="$(CMUX_QUIET=1 cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
+if [[ "$FLOOR" == 1 ]] && spin_have_binary cmux; then
+  ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
         --command "bash '$ROOT/scripts/cmux-floor.sh' '$PID'" --focus false 2>/dev/null \
         | grep -oE 'workspace:[0-9]+' | head -1)"
   if [ -n "$ref" ]; then
     node -e 'const fs=require("fs"),[f,id,w]=process.argv.slice(1);const h=JSON.parse(fs.readFileSync(f,"utf8"));h.projects[id].cmux_workspace=w;fs.writeFileSync(f,JSON.stringify(h,null,2)+"\n");' "$HARNESS" "$PID" "$ref" 2>/dev/null || true
-    echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(it's now a tab in your cmux sidebar)${c_o}"
+    sf="$(spin_cmux_terminal_surface "$ref")"
+    if spin_cmux_open_project_board "$ref" "$PID" "$sf"; then
+      echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(agent + live FLOOR.md board)${c_o}"
+    else
+      echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(terminal only; board pane unavailable)${c_o}"
+    fi
   else
     echo "${c_d}  (couldn't open a cmux floor — run 'spin up' later, or cmux isn't running)${c_o}"
   fi

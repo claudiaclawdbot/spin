@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SPIN icon">
+  <defs>
+    <linearGradient id="spin-gradient" x1="185" y1="140" x2="840" y2="884" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="#0a0a12"/>
+  <g fill="#160f28" stroke="url(#spin-gradient)" stroke-width="48">
+    <circle cx="512" cy="225" r="154"/>
+    <circle cx="758" cy="655" r="154"/>
+    <circle cx="266" cy="655" r="154"/>
+    <circle cx="512" cy="512" r="113"/>
+  </g>
+  <circle cx="512" cy="512" r="41" fill="url(#spin-gradient)"/>
+</svg>

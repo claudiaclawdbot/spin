@@ -79,4 +79,5 @@ echo "  Type a request, or let the Workspace CEO hand it work."
 echo "════════════════════════════════════════════════════════════"
 echo
 cd "$DIR"
-exec omp "${MODEL[@]}" "${SYSARG[@]}"
+OMP_BIN="$(spin_resolve_binary omp)" || { echo "omp not found; SPIN app bundles it under Resources/bin/omp or repo vendor/bin/omp"; exit 127; }
+exec "$OMP_BIN" "${MODEL[@]}" "${SYSARG[@]}"
