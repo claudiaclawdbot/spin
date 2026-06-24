@@ -181,11 +181,13 @@ hdiutil attach $(basename "$ARTIFACT")
 cp -R /Volumes/SPIN/SPIN.app /Applications/
 hdiutil detach /Volumes/SPIN
 open /Applications/SPIN.app"
+  finder_install="The DMG also includes an Applications shortcut and README.txt. In Finder, open the DMG and drag SPIN.app onto Applications."
 else
   install_steps="shasum -a 256 -c $(basename "$SOURCE_SHA")
 ditto -x -k $(basename "$ARTIFACT") .
 mv SPIN.app /Applications/
 open /Applications/SPIN.app"
+  finder_install="The zip contains SPIN.app directly. Extract it, then move SPIN.app into Applications."
 fi
 cat > "$NOTES" <<EOF
 # SPIN $version macOS Open-Source Tester Release
@@ -221,6 +223,8 @@ Download the app artifact and checksum into the same directory, then verify:
 \`\`\`bash
 $install_steps
 \`\`\`
+
+$finder_install
 
 On first launch, SPIN seeds its writable runtime under
 \`~/Library/Application Support/SPIN/runtime\` and opens the onboarding

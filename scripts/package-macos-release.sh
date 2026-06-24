@@ -96,6 +96,7 @@ archs="$(lipo -archs "$APP/Contents/Resources/bin/cmux" 2>/dev/null | tr ' ' '+'
 
 TMP="$(mktemp -d)"
 STAGE="$TMP/stage"
+DMG_STAGE="$TMP/dmg-stage"
 VERIFY="$TMP/verify"
 STAGE_APP="$STAGE/SPIN.app"
 EXTRACTED_APP="$VERIFY/SPIN.app"
@@ -209,10 +210,37 @@ if [ "$FORMAT" = "zip" ]; then
   (cd "$STAGE" && ditto -c -k --keepParent --sequesterRsrc --rsrc SPIN.app "$artifact")
   ditto -x -k "$artifact" "$VERIFY"
 else
-  hdiutil create -volname "SPIN" -srcfolder "$STAGE_APP" -ov -format UDZO "$artifact" >/dev/null
+  mkdir -p "$DMG_STAGE"
+  ditto "$STAGE_APP" "$DMG_STAGE/SPIN.app"
+  ln -s /Applications "$DMG_STAGE/Applications"
+  if [ -f "$ROOT/assets/branding/SPIN.icns" ]; then
+    cp "$ROOT/assets/branding/SPIN.icns" "$DMG_STAGE/.VolumeIcon.icns"
+    if command -v SetFile >/dev/null 2>&1; then
+      SetFile -a C "$DMG_STAGE" >/dev/null 2>&1 || true
+    fi
+  fi
+  cat > "$DMG_STAGE/README.txt" <<EOF
+SPIN.app $version macOS beta
+
+Install:
+1. Drag SPIN.app onto Applications.
+2. Eject the SPIN disk image.
+3. Open SPIN.app from Applications.
+
+If macOS says it cannot verify the developer, Control-click SPIN.app and choose
+Open after you have verified the downloaded SHA-256 checksum from GitHub.
+
+SPIN bundles its cmux workspace UI and OMP/Pi agent runtime. You still connect
+your own model/provider accounts during onboarding.
+EOF
+  hdiutil create -volname "SPIN" -srcfolder "$DMG_STAGE" -ov -format UDZO "$artifact" >/dev/null
   MOUNT="$(hdiutil attach -nobrowse -readonly "$artifact" | awk '/\/Volumes\//{print $3; exit}')"
   [ -n "$MOUNT" ] || fail "could not mount dmg for verification"
   trap 'hdiutil detach "$MOUNT" >/dev/null 2>&1 || true; cleanup' EXIT
+  [ -d "$MOUNT/SPIN.app" ] || fail "dmg missing SPIN.app"
+  [ -e "$MOUNT/Applications" ] || fail "dmg missing Applications shortcut"
+  [ -f "$MOUNT/README.txt" ] || fail "dmg missing README.txt"
+  grep -q 'Drag SPIN.app onto Applications' "$MOUNT/README.txt" || fail "dmg README missing install instruction"
   ditto "$MOUNT/SPIN.app" "$EXTRACTED_APP"
   hdiutil detach "$MOUNT" >/dev/null
   trap cleanup EXIT

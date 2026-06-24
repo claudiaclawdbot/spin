@@ -245,6 +245,16 @@ into an app issue.
    makes the app track discoverable without implying the Apple-notarized
    production channel is complete.
 
+23. **Clean beta install polish**
+
+   The app release lane now uses `4.1.0-beta.1` versioning for tester builds,
+   stages DMGs with `SPIN.app`, an Applications shortcut, and `README.txt`, and
+   verifies that layout during installed-app checks. `docs/MACOS_TESTER_INSTALL.md`
+   is the single user-facing install guide for download, checksum verification,
+   first launch, provider setup expectations, update checks, Gatekeeper fallback,
+   and uninstall. README and the GitHub Pages app lane link directly to the
+   beta release and install guide.
+
 ## Current App Proof
 
 The current bounded release proof is:
