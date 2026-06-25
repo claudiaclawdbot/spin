@@ -255,10 +255,11 @@ Update channels are intentionally narrow:
 - `local-dev`: mutable developer builds from this checkout. These are not
   user-distribution artifacts.
 - `ad-hoc`: checked unsigned/ad-hoc artifacts from `scripts/release-macos.sh` or
-  the manual macOS artifact workflow. These are for testers and internal use.
-- `production`: Developer ID signed and notarized artifacts. Production builds
-  must not be replaced by `ad-hoc` or `local-dev` builds without an explicit
-  force path in a future updater.
+  the manual macOS artifact workflow. These are the current open-source beta
+  distribution artifacts.
+- `production`: optional higher-trust artifacts if Developer ID/notarization is
+  added later. Production builds must not be replaced by `ad-hoc` or `local-dev`
+  builds without an explicit force path in a future updater.
 
 Rollback policy follows the same boundary as launcher refresh: app-managed code
 can be replaced, but provider credentials, model account state, `org/`, logs,
@@ -389,10 +390,10 @@ The release script:
 
 ## Open-Source Tester Release
 
-SPIN can publish checked open-source tester builds without Apple Developer ID.
+SPIN can publish checked open-source beta builds without Apple Developer ID.
 These are ad-hoc signed, not notarized, and may show Gatekeeper warnings, but
-they are valid early public artifacts when paired with source, checksums, and
-license notices.
+they are the current public Mac distribution path when paired with source,
+checksums, and license notices.
 
 Prepare the GitHub release assets and release notes with:
 
@@ -433,7 +434,7 @@ runtime, opens the `SPIN Onboarding` workspace through the bundled cmux-compatib
 CLI, avoids global cmux/OMP shims, and routes relaunch to `spin up` after
 `.spin-onboarded`.
 
-Production signing is environment-driven:
+Optional Developer ID/notarization signing is environment-driven:
 
 ```bash
 SPIN_CODESIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" \
@@ -456,11 +457,11 @@ scripts/check-macos-signing-env.sh
 scripts/check-macos-signing-env.sh --production
 ```
 
-Local mode reports warnings and exits successfully so development packaging
-continues to work. Production mode fails on missing Developer ID identities,
-team id, cmux entitlements, notarization enablement, or notarytool profile.
-`SPIN_RELEASE_PRODUCTION=1 scripts/package-macos-release.sh dist/SPIN.app` runs
-the same production preflight before packaging.
+Local mode reports warnings and exits successfully so beta DMG packaging
+continues to work. The optional production mode fails on missing Developer ID
+identities, team id, cmux entitlements, notarization enablement, or notarytool
+profile. `SPIN_RELEASE_PRODUCTION=1 scripts/package-macos-release.sh
+dist/SPIN.app` runs the same trust-hardening preflight before packaging.
 
 ## Licensing
 
