@@ -53,16 +53,15 @@ grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
-grep -q 'SPIN.app is the Mac product path' README.md
-grep -q 'Mac App Store or Apple Developer ID' README.md
+grep -q 'SPIN.app is the main product' README.md
+grep -q 'Download SPIN.app for Mac' README.md
+grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.1' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
-grep -q 'Mac App Store or Apple Developer ID' docs/index.html
-grep -q 'SPIN_RELEASE_FORMAT=dmg' docs/index.html
-grep -q 'scripts/prepare-open-source-release.sh.*dmg' docs/index.html
-grep -q 'actions/workflows/macos-app.yml' docs/index.html
+grep -q 'main Mac experience' docs/index.html
+grep -q 'Source / CLI install' docs/index.html
 grep -q 'v4.1.0-beta.1' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
 grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
