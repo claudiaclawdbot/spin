@@ -1,9 +1,9 @@
 # Open-Source Tester Release
 
-SPIN can ship open-source macOS tester builds before a Developer ID notarized
-production channel exists. These builds are public, inspectable, and ad-hoc
-signed, but they are not Apple-notarized. Gatekeeper may warn on first launch.
-The preferred tester artifact is a DMG.
+SPIN ships open-source macOS beta builds as the current public Mac distribution
+path. These builds are public, inspectable, and ad-hoc signed, but they are not
+Apple-notarized. Gatekeeper may warn on first launch. The preferred beta
+artifact is a DMG.
 
 User-facing install instructions live in
 [`docs/MACOS_TESTER_INSTALL.md`](MACOS_TESTER_INSTALL.md). This file is the
@@ -86,8 +86,10 @@ Public SPIN.app binaries derived from cmux must therefore be distributed in a
 GPL-compatible way. Keep `licenses/THIRD_PARTY_NOTICES.md` in source and binary
 releases.
 
-## Production Difference
+## Distribution Posture
 
-A Developer ID notarized production release is still the right later path for a
-low-friction public macOS app. The tester release path is for early users who
-are comfortable verifying checksums and accepting Gatekeeper friction.
+The current public Mac distribution path is the open-source DMG on GitHub, not
+the Mac App Store. Developer ID notarization can reduce Gatekeeper friction in a
+future release, but SPIN.app is not blocked on it. The beta release path is for
+users who are comfortable verifying checksums and accepting the documented
+first-launch Gatekeeper warning.
