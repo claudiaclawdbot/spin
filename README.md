@@ -32,11 +32,10 @@ The source/CLI install still exists, but it is the power-user lane for Linux, au
 The current public Mac build is the open-source beta DMG:
 
 1. Download the beta from [v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1).
-2. Download the matching `.sha256` file and verify it.
-3. Open the DMG and drag `SPIN.app` into Applications.
-4. Open SPIN and complete onboarding.
+2. Open the DMG and drag `SPIN.app` into Applications.
+3. Open SPIN and complete onboarding.
 
-The beta is ad-hoc signed and not notarized, so macOS may show a Gatekeeper warning on first launch. That is expected for this tester lane. Verify the checksum first, then use Finder right-click / Control-click Open if needed. Full install and uninstall steps are in [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
+The beta is ad-hoc signed and not notarized, so macOS may show a Gatekeeper warning on first launch. That is expected for this tester lane. Use Finder right-click / Control-click Open if needed. The install guide also includes optional checksum verification for testers who want extra assurance before opening the DMG.
 
 SPIN.app includes:
 
@@ -107,7 +106,7 @@ The current updater does not yet fetch a remote update feed or auto-install from
 
 ## App Docs
 
-- [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md) — download, verify, install, first launch, health checks, updates, uninstall.
+- [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md) — download, install, first launch, health checks, updates, uninstall.
 - [`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md) — bundle layout, release checks, update manifests, signing, packaging.
 - [`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md) — completed app checkpoints and remaining work.
 - [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md) — maintainer checklist for publishing the GitHub DMG.

@@ -17,17 +17,11 @@ warning. That is expected for this beta lane.
 
 ## Install
 
-1. Download the `.dmg` and `.dmg.sha256` files from the release page.
-2. Verify the checksum:
-
-```bash
-shasum -a 256 -c SPIN-4.1.0-beta.1-macos-arm64.dmg.sha256
-```
-
-3. Open the DMG.
-4. Drag `SPIN.app` onto `Applications`.
-5. Eject the SPIN disk image.
-6. Open `SPIN.app` from Applications.
+1. Download the `.dmg` from the release page.
+2. Open the DMG.
+3. Drag `SPIN.app` onto `Applications`.
+4. Eject the SPIN disk image.
+5. Open `SPIN.app` from Applications.
 
 Equivalent terminal install:
 
@@ -36,6 +30,17 @@ hdiutil attach SPIN-4.1.0-beta.1-macos-arm64.dmg
 cp -R /Volumes/SPIN/SPIN.app /Applications/
 hdiutil detach /Volumes/SPIN
 open /Applications/SPIN.app
+```
+
+## Optional Checksum Verification
+
+The release also includes a separate `.sha256` file. It is not another app
+component; it is an optional beta-tester check for confirming the DMG bytes
+before opening it. It is separate because a checksum stored inside the DMG would
+not prove anything if the DMG itself had been changed.
+
+```bash
+shasum -a 256 -c SPIN-4.1.0-beta.1-macos-arm64.dmg.sha256
 ```
 
 ## First Launch
@@ -63,11 +68,10 @@ onboarding.
 
 If macOS says it cannot verify the developer:
 
-1. Confirm the SHA-256 checksum matched the release checksum.
-2. In Finder, Control-click `/Applications/SPIN.app`.
-3. Choose Open.
+1. In Finder, Control-click `/Applications/SPIN.app`.
+2. Choose Open.
 
-If a trusted local beta is still blocked after checksum verification:
+If a trusted local beta is still blocked:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/SPIN.app
@@ -75,7 +79,8 @@ open /Applications/SPIN.app
 ```
 
 Do not use the quarantine command for random downloads. Use it only after
-checking the checksum and confirming the artifact came from this project.
+confirming the artifact came from this project. For extra assurance, use the
+optional checksum step above before removing quarantine.
 
 ## Health And Updates
 
