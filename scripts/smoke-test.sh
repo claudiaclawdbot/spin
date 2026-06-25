@@ -53,11 +53,13 @@ grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
-grep -q 'macOS app tester lane' README.md
+grep -q 'SPIN.app is the Mac product path' README.md
+grep -q 'Mac App Store or Apple Developer ID' README.md
 grep -q 'v4.1.0-beta.1' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'id="app"' docs/index.html
-grep -q 'SPIN.app tester lane' docs/index.html
+grep -q 'SPIN.app for Mac' docs/index.html
+grep -q 'Mac App Store or Apple Developer ID' docs/index.html
 grep -q 'SPIN_RELEASE_FORMAT=dmg' docs/index.html
 grep -q 'scripts/prepare-open-source-release.sh.*dmg' docs/index.html
 grep -q 'actions/workflows/macos-app.yml' docs/index.html

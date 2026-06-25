@@ -135,12 +135,12 @@
   <div class="cta">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin">⭐ Get it on GitHub</a>
     <a class="btn ghost" href="#install">Install in 30s</a>
-    <a class="btn ghost" href="#app">SPIN.app tester lane</a>
+    <a class="btn ghost" href="#app">SPIN.app for Mac</a>
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
     <span class="badge">macOS · Linux</span><span class="badge">omp · claude · codex · gemini · ollama</span>
-    <span class="badge">SPIN.app tester builds</span>
+    <span class="badge">SPIN.app beta DMG</span>
   </div>
 </header>
 
@@ -200,12 +200,12 @@
 </section>
 
 <section id="app" class="wrap">
-  <h2><span class="n">04</span>The app lane</h2>
-  <p class="lede">The CLI/runtime path is still the stable install. In parallel, SPIN now has a checked macOS app-bundle lane: SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same plain-file SPIN runtime inside <code>SPIN.app</code>.</p>
+  <h2><span class="n">04</span>SPIN.app for Mac</h2>
+  <p class="lede"><code>SPIN.app</code> is the Mac product path: a self-contained app with SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. The CLI remains available for power users, automation, debugging, and headless recovery.</p>
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>Self-contained bundle</h3><p><code>SPIN.app</code> carries its cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
-    <div class="card"><span class="ic">🧪</span><h3>Beta releases first</h3><p>Open-source beta artifacts are ad-hoc signed and not notarized. They are useful for early users who can verify checksums and accept Gatekeeper friction.</p></div>
-    <div class="card"><span class="ic">🔏</span><h3>Production later</h3><p>A polished public macOS app still needs Developer ID signing and notarization. That is a trust/installer UX step, not a blocker for open-source testing.</p></div>
+    <div class="card"><span class="ic">🧪</span><h3>Open-source DMG</h3><p>The public Mac distribution path is the GitHub beta DMG. It is ad-hoc signed and not notarized, so checksum verification and right-click Open are documented.</p></div>
+    <div class="card"><span class="ic">🔏</span><h3>No App Store wait</h3><p>SPIN is not waiting on the Mac App Store or Apple Developer ID. Developer ID notarization can reduce Gatekeeper friction later, but it is not required for this app path.</p></div>
   </div>
   <div class="term" style="margin-top:16px">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">build the checked beta DMG</span>
@@ -259,7 +259,7 @@
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><span class="ic">🗺️</span><h3>Roadmap →</h3><p>Known weaknesses, honestly ranked. What's solid, what still leans on luck.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/OPEN_SOURCE_TESTER_RELEASE.md"><span class="ic">📦</span><h3>App tester release →</h3><p>How to publish and install the open-source macOS tester artifact.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md"><span class="ic">📦</span><h3>SPIN.app install →</h3><p>Download, verify, install, first launch, health checks, updates, and uninstall.</p></a>
   </div>
 </section>
 
