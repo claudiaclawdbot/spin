@@ -55,35 +55,34 @@ curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-boot
 
 `spin-bootstrap.sh` is a tiny launcher that clones SPIN and runs the installer. Want a **single file that works fully offline** (no git, no network — everything embedded)? Download [`spin-offline.sh`](https://github.com/claudiaclawdbot/spin/raw/main/spin-offline.sh) and run `bash spin-offline.sh`.
 
-## Self-contained app track
+## SPIN.app for Mac
 
-SPIN is also gaining a macOS app-bundle path where **SPIN is the product** and
-cmux/OMP are internal foundations instead of separate user-installed tools. The
-repo now has the release shape for that work: `app/` for the SPIN-branded cmux
-shell, `agent/` for the OMP/Pi-derived runtime, `runtime/` for migration notes,
-and packaging checks in `scripts/package-macos-app.sh` plus
-`scripts/check-app-release.sh`. The source-built cmux fork proof is
-`scripts/build-app-proof.sh --source-cmux`. See
-[`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md) and
-[`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md).
+SPIN.app is the Mac product path: a self-contained app where cmux and OMP/Pi are
+internal foundations, not user-installed prerequisites. The current beta DMG
+bundles the SPIN-branded cmux workspace UI, bundled `cmux`, bundled `omp`,
+`spin-agent`, the plain-file SPIN runtime, branding, and license notices. See
+[`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md),
+[`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md), and
+[`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
 
-There are now two lanes:
+There are now two surfaces:
 
-- **CLI/runtime lane:** the stable path today. Clone the repo, run
-  `./install.sh`, then `spin init`.
-- **macOS app tester lane:** checked `SPIN.app` artifacts that bundle cmux and
-  OMP/Pi. These are for early testers until Developer ID notarization is wired.
+- **SPIN.app beta:** the primary Mac experience. Download the DMG, drag
+  `SPIN.app` to Applications, onboard providers through OMP, and run projects
+  from the app.
+- **`spin` CLI:** the same runtime for power users, automation, debugging,
+  headless operation, and recovery.
 
-Early macOS app builds can be released as open-source beta artifacts without
-Apple Developer ID:
+The public Mac distribution path is the open-source DMG. This project is not
+waiting on the Mac App Store or Apple Developer ID to be usable:
 
 ```bash
 SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux
 scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg
 ```
 
-These builds are ad-hoc signed and not notarized, so macOS may show Gatekeeper
-warnings. Download the current beta from
+The current beta is ad-hoc signed and not notarized, so macOS may show a
+Gatekeeper warning on first launch. Download it from
 [v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1),
 then follow [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
 Maintainer release notes live in

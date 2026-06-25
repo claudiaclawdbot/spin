@@ -19,7 +19,7 @@ SPIN.app owns:
 - the bundled cmux-derived native UI engine;
 - the bundled OMP/Pi-derived agent engine;
 - app-managed health checks, dependency detection, runtime seeding, updates,
-  signing, and notarization.
+  release packaging, and open-source DMG distribution.
 
 The app can ship the core runtime, but core changes should stay usable from a
 checkout and from the CLI. The app track should not turn every runtime issue
@@ -238,16 +238,17 @@ into an app issue.
 
    The repository now presents the app work as a separate visible lane from the
    stable CLI/runtime install path. `README.md` includes a macOS app artifact
-   workflow badge and explains the CLI/runtime lane versus the macOS app tester
-   lane. `docs/index.html` adds a dedicated SPIN.app tester section with the
+   workflow badge and explains SPIN.app as the Mac product path while keeping
+   the CLI as a power-user/runtime surface. `docs/index.html` adds a dedicated
+   SPIN.app beta section with the
    checked build/release-notes commands, links to the macOS app workflow, app
    bundle docs, app roadmap, and open-source tester release instructions. This
-   makes the app track discoverable without implying the Apple-notarized
-   production channel is complete.
+   makes the app track discoverable without implying the app is blocked on the
+   Mac App Store or Apple Developer ID.
 
 23. **Clean beta install polish**
 
-   The app release lane now uses `4.1.0-beta.1` versioning for tester builds,
+   The app release lane now uses `4.1.0-beta.1` versioning for beta builds,
    stages DMGs with `SPIN.app`, an Applications shortcut, and `README.txt`, and
    verifies that layout during installed-app checks. `docs/MACOS_TESTER_INSTALL.md`
    is the single user-facing install guide for download, checksum verification,
@@ -321,18 +322,19 @@ Expected result:
   GitHub-ready open-source tester release notes;
 - `scripts/spin app-release-notes --artifact dist/release/SPIN-*-macos-*.dmg`
   exposes the same tester release preparation path from the CLI;
-- `README.md` and `docs/index.html` expose a separate app tester lane with clear
-  ad-hoc/not-notarized boundaries and links to the app workflow/docs;
+- `README.md` and `docs/index.html` expose SPIN.app as the Mac product path
+  with clear ad-hoc/not-notarized boundaries and links to the app workflow/docs;
 - release checks pass with `SPIN_REQUIRE_BRANDED_CMUX_APP=1` and
   `SPIN_REQUIRE_VENDORED_OMP=1`.
 
-## Credential-Gated Checkpoint
+## Optional Trust-Hardening Checkpoint
 
-**Checkpoint 19: notarized production release execution**
+**Optional checkpoint: Developer ID/notarized release execution**
 
-Goal: run the production signing/notarization path with real Apple Developer
-credentials and prove a production artifact can pass the same install gate that
-currently fails closed locally.
+Goal: if the project later chooses Developer ID distribution, run the
+signing/notarization path with real Apple Developer credentials and prove a
+higher-trust artifact can pass the same install gate that currently fails closed
+locally. This is not required for the current open-source DMG distribution path.
 
 Bounded deliverables:
 
@@ -353,8 +355,8 @@ scripts/smoke-test.sh
 ```
 
 Those commands pass only on a machine configured with Developer ID and notary
-credentials; local smoke continues to prove production installs fail closed when
-credentials are absent.
+credentials; local smoke continues to prove higher-trust installs fail closed
+when credentials are absent.
 
 ## Later Checkpoints
 
