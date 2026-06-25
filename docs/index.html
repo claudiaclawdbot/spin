@@ -129,13 +129,14 @@
   </svg>
   <h1 class="wordmark">S<span class="pi">PI</span>N</h1>
   <p class="sub">
-    <span class="def">Super<span class="tip"><span class="h">Super</span> — combines a bunch of cutting-edge dev tools into one harness that works <b>with</b> you: you can track it, and it reports back to you. The good kind of over-engineered.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span> — the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it. The engine SPIN is built around — and the letters at the heart of the name.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span> — swap LLMs on the fly, plug-and-play. Because all state and memory live in <b>plain files</b>, any agent CLI — Claude, Codex, Gemini, Ollama — picks up the same context. No lock-in.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span> — the whole system, steering. Maximally legible for <b>humans</b> (live floors, status boards) and ordered for <b>agents</b> (clean files, validated verbs).</span></span>
+    <span class="def">Super<span class="tip"><span class="h">Super</span> — connects the dev tools you already use into one harness you can track, audit, and interrupt.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span> — the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it. The engine SPIN is built around — and the letters at the heart of the name.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span> — swap LLMs on the fly, plug-and-play. Because all state and memory live in <b>plain files</b>, any agent CLI — Claude, Codex, Gemini, Ollama — picks up the same context. No lock-in.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span> — the whole system, steering. Maximally legible for <b>humans</b> (live floors, status boards) and ordered for <b>agents</b> (clean files, validated verbs).</span></span>
   </p>
   <p class="tag">A file-based AI organization that runs your projects <b>while you sleep</b> — gated on the four things that actually matter.</p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin">⭐ Get it on GitHub</a>
-    <a class="btn ghost" href="#install">Install in 30s</a>
-    <a class="btn ghost" href="#app">SPIN.app for Mac</a>
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download SPIN.app beta</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
+    <a class="btn ghost" href="#install">Source / CLI</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin">GitHub</a>
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
@@ -145,8 +146,8 @@
 </header>
 
 <section id="what" class="wrap" style="border-top:none">
-  <h2><span class="n">01</span>The plant around your agent CLIs</h2>
-  <p class="lede">A coding agent harness — primarily omp, with direct CLIs as backup — is a brilliant <em>employee</em>: one session, one folder. SPIN is the <em>org chart, inbox, approval chain, and time clock</em> around it: it schedules, routes, budgets, gates, and audits the work.</p>
+  <h2><span class="n">01</span>The workspace around your agent CLIs</h2>
+  <p class="lede">A coding agent CLI is good at one session in one folder. SPIN adds the project system around it: floors, inboxes, approvals, queues, receipts, and a background driver that coordinates work across projects.</p>
   <div class="grid">
     <div class="card"><span class="ic">🌀</span><h3>One Navigator loop</h3><p>Claims a lock file at startup — a second launch just exits, instead of silently doubling your LLM spend.</p></div>
     <div class="card"><span class="ic">🧠</span><h3>Thinks only on change</h3><p>The brain runs only when watched inputs actually move. An idle org costs a couple of LLM calls a day.</p></div>
@@ -180,9 +181,25 @@
   </div>
 </section>
 
+<section id="app" class="wrap">
+  <h2><span class="n">03</span>SPIN.app for Mac</h2>
+  <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then onboard providers through OMP.</p>
+  <div class="grid">
+    <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles and fallback chains for coordinator and project work.</p></div>
+    <div class="card"><span class="ic">🧪</span><h3>Public beta DMG</h3><p>The current GitHub beta is ad-hoc signed and not notarized. Verify the checksum first; use right-click Open if macOS shows a warning.</p></div>
+  </div>
+  <div class="cta" style="justify-content:flex-start;margin-top:12px">
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download beta DMG</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
+  </div>
+</section>
+
 <section id="install" class="wrap">
-  <h2><span class="n">03</span>Install in 30 seconds</h2>
-  <p class="lede">The one-liner sets up everything — clones SPIN, seeds the org files, and installs any missing dependencies for you (node, omp, cmux, an agent CLI). Review it first, like any <code>curl | bash</code>. <span style="color:var(--faint)">(Prefer a single offline file? Grab <code>spin-offline.sh</code> — it embeds the whole kit.)</span></p>
+  <h2><span class="n">04</span>Source / CLI install</h2>
+  <p class="lede">The source install is the power-user path for Linux, automation, debugging, headless operation, and app development. It clones SPIN, seeds the org files, and installs any missing dependencies for you. Review the script first, like any <code>curl | bash</code>. <span style="color:var(--faint)">(Prefer a single offline file? Grab <code>spin-offline.sh</code> — it embeds the whole kit.)</span></p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
       <button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash">copy</button></div>
@@ -197,31 +214,6 @@
 <span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the cmux interface</span></pre>
   </div>
   <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on — every floor agent is an omp session, and it's the <b>Pi</b> in SPIN; <a href="https://github.com/manaflow-ai/cmux">cmux</a> is the optional visual layer. The installer sets all of this up.</p>
-</section>
-
-<section id="app" class="wrap">
-  <h2><span class="n">04</span>SPIN.app for Mac</h2>
-  <p class="lede"><code>SPIN.app</code> is the Mac product path: a self-contained app with SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. The CLI remains available for power users, automation, debugging, and headless recovery.</p>
-  <div class="grid">
-    <div class="card"><span class="ic">🖥️</span><h3>Self-contained bundle</h3><p><code>SPIN.app</code> carries its cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
-    <div class="card"><span class="ic">🧪</span><h3>Open-source DMG</h3><p>The public Mac distribution path is the GitHub beta DMG. It is ad-hoc signed and not notarized, so checksum verification and right-click Open are documented.</p></div>
-    <div class="card"><span class="ic">🔏</span><h3>No App Store wait</h3><p>SPIN is not waiting on the Mac App Store or Apple Developer ID. Developer ID notarization can reduce Gatekeeper friction later, but it is not required for this app path.</p></div>
-  </div>
-  <div class="term" style="margin-top:16px">
-    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">build the checked beta DMG</span>
-      <button class="copy" data-copy="SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux && scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg">copy</button></div>
-    <pre><span class="p">$</span> <span class="c">SPIN_RELEASE_FORMAT=dmg</span> scripts/release-macos.sh --source-cmux
-<span class="p">$</span> <span class="c">scripts/prepare-open-source-release.sh</span> --artifact dist/release/SPIN-*-macos-*.dmg
-<span class="o">  ✓ dmg · sha256 · manifest · open-source tester notes</span></pre>
-  </div>
-  <p class="lede" style="margin-top:14px">When a beta DMG is attached to a GitHub release, install by verifying the SHA-256, opening the DMG, dragging <code>SPIN.app</code> onto Applications, and opening it. If macOS warns because the build is not notarized, use right-click Open after verifying the checksum. Full instructions live in <a href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">macOS beta install guide</a>.</p>
-  <div class="cta" style="justify-content:flex-start;margin-top:12px">
-    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download beta DMG</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml">macOS app workflow</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
-  </div>
 </section>
 
 <section id="how" class="wrap">
