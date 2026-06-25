@@ -1,284 +1,303 @@
 <div align="center">
 
+<img src="assets/branding/spin-icon.svg" alt="SPIN app icon" width="112">
+
 # 🌀 SPIN
 
 ### Super Pi Interoperable Navigator
 
-**A file-based AI organization that runs your projects while you sleep — gated on the four things that actually matter.**
+**A Mac app for running a small AI org across your projects: custom cmux UI, bundled OMP, project floors, approvals, receipts, and provider fallback.**
 
 [![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
 [![macOS app artifact](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml)
 [![site](https://img.shields.io/badge/site-claudiaclawdbot.github.io%2Fspin-a855f7)](https://claudiaclawdbot.github.io/spin/)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
-![deps](https://img.shields.io/badge/deps-bash%20%2B%20node-success)
-![agents](https://img.shields.io/badge/agents-claude%20·%20codex%20·%20gemini%20·%20ollama-8a2be2)
+![agents](https://img.shields.io/badge/agents-omp%20%C2%B7%20claude%20%C2%B7%20codex%20%C2%B7%20gemini%20%C2%B7%20ollama-8a2be2)
+
+**[Download SPIN.app beta for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1)** ·
+**[Mac install guide](docs/MACOS_TESTER_INSTALL.md)** ·
+**[Website](https://claudiaclawdbot.github.io/spin/)**
 
 </div>
 
 ---
 
-SPIN is the **plant around your coding agents.** A single Navigator loop coordinates per-project agent "floors" inside [cmux](https://github.com/manaflow-ai/cmux), dispatches work to detached background jobs through [oh-my-pi](https://omp.sh) (`omp`) first, and talks to you through one command: `spin`. OMP handles the normal model/provider fallback across your authenticated Anthropic, OpenAI, OpenRouter, Cursor, local, or other accounts; direct CLIs remain an outer safety net. Everything the org knows, decides, and does lives in plain files you can read, grep, and audit.
+SPIN.app is the main product. It is a self-contained Mac app that bundles a SPIN-branded [cmux](https://github.com/manaflow-ai/cmux) workspace UI and [oh-my-pi](https://omp.sh) (`omp`) as the agent/provider engine. SPIN adds the project system around those tools: a Coordinator floor, one project floor per workspace, approval queues, background jobs, receipts, and plain-file state you can inspect.
 
+The source/CLI install still exists, but it is the power-user lane for Linux, automation, debugging, app development, and recovery. It is documented separately below.
+
+## Download SPIN.app for Mac
+
+The current public Mac build is the open-source beta DMG:
+
+1. Download the beta from [v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1).
+2. Download the matching `.sha256` file and verify it.
+3. Open the DMG and drag `SPIN.app` into Applications.
+4. Open SPIN and complete onboarding.
+
+The beta is ad-hoc signed and not notarized, so macOS may show a Gatekeeper warning on first launch. That is expected for this tester lane. Verify the checksum first, then use Finder right-click / Control-click Open if needed. Full install and uninstall steps are in [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
+
+SPIN.app includes:
+
+| Included in the app | Purpose |
+|---|---|
+| SPIN-branded cmux UI app | Native workspace window, tabs, terminals, live boards, and socket control |
+| Bundled `cmux` CLI | Internal control path for creating and driving project floors |
+| Bundled `omp` / `spin-agent` | Agent runtime and model/provider gateway |
+| SPIN runtime scripts | Project orchestration, approvals, queues, receipts, health checks, updates |
+| App icon, dock controls, notices | Product shell, app health, OMP setup, update surface, third-party notices |
+
+You still bring your own provider accounts, GitHub auth, repositories, and normal developer tools.
+
+## What The App Does
+
+Launch `SPIN.app` and it opens the workspace interface:
+
+- **Coordinator floor:** an OMP agent you talk to like a project lead.
+- **One tab per project:** each project gets its own cmux workspace and live OMP orchestrator.
+- **Background driver:** a Navigator loop routes work, watches project state, and dispatches durable jobs.
+- **Plain-file org state:** approvals, queues, project status, receipts, and handoffs live in files under the SPIN runtime.
+
+The stack is intentionally small:
+
+| Layer | Role |
+|---|---|
+| **SPIN.app** | Mac product shell, launcher, bundled runtime, health/update controls |
+| **cmux** | The GUI workspace: tabs, terminals, boards, socket control |
+| **OMP/Pi** | Agent sessions, provider auth, model selection, retry/fallback |
+| **SPIN runtime** | Project management layer: org files, gates, queues, receipts |
+
+## Provider Fallback
+
+OMP owns model/provider setup. During onboarding, SPIN hands account configuration to OMP rather than asking for keys itself.
+
+SPIN writes a runtime OMP config overlay for coordinator and project work:
+
+- `modelRoles` for default, small, slow, plan, and task work
+- `modelProviderOrder` across authenticated providers
+- `retry.fallbackChains` so usage/rate/server failures can fall through coherently
+
+If OMP itself is missing or hard-fails, SPIN still has an outer direct-CLI fallback lane through tools such as `codex`, `claude`, `gemini`, and `ollama`.
+
+## Safety Model
+
+SPIN does local, reversible work without asking. It stops and queues a human decision for exactly four categories:
+
+1. **External sends** — email, DM, forms, public posts.
+2. **Spending money** — wallets, paid APIs beyond subscriptions, purchases.
+3. **Production deploys** — anything that ships to users.
+4. **Protected pushes** — `main` or any human-owned repo.
+
+The gate is behavioral and prompt-enforced. Do not park real-money keys on an agent machine.
+
+## App Updates
+
+The app has a checked update path for downloaded future artifacts:
+
+```bash
+spin app-updates --check --candidate ~/Downloads/SPIN-<version>-macos-arm64.dmg
+spin app-updates --install --yes --allow-test-builds \
+  --candidate ~/Downloads/SPIN-<version>-macos-arm64.dmg
 ```
-you ──spin approve──▶ APPROVALS.md ──▶ ┌──────────────────┐ ──▶ AGENT_QUEUE.json ──▶ detached agent jobs
-                                       │   SPIN Navigator  │                          (run by an agent CLI)
-you ◀── spin status ◀── HUMAN_QUEUE ◀──│   tick loop       │ ◀── INBOX.md ◀────────── project receipts
-                                       └──────────────────┘
-```
 
-## What the name means
+That path verifies the candidate compatibility manifest, preserves local app state, backs up the replaced app, and writes rollback metadata before replacing app-owned code.
 
-- **Super** — combines a bunch of cutting-edge dev tools into one harness that works *with* you: you can track it, and it reports back to you.
-- **Pi** — the agentic backbone. Specifically **[oh-my-pi](https://omp.sh) (`omp`)**: every floor agent and interactive session runs on it. The engine SPIN is built around — and the letters at the heart of the name.
-- **Interoperable** — swap LLMs on the fly, plug-and-play. Because all state and memory live in **plain files**, any agent CLI (Claude, Codex, Gemini, Ollama) picks up the same context. No lock-in.
-- **Navigator** — the whole system, steering. Maximally legible for **humans** (live floors, status boards) and ordered for **agents** (clean files, validated verbs).
+The current updater does not yet fetch a remote update feed or auto-install from GitHub in the background. Download the new DMG first, then run the app update check/install command.
 
-## Install in 30 seconds
+## App Docs
+
+- [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md) — download, verify, install, first launch, health checks, updates, uninstall.
+- [`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md) — bundle layout, release checks, update manifests, signing, packaging.
+- [`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md) — completed app checkpoints and remaining work.
+- [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md) — maintainer checklist for publishing the GitHub DMG.
+
+---
+
+## Source / CLI Setup
+
+Use this lane for Linux, headless operation, automation, debugging, app development, or recovery. The source install is not required for normal Mac app testing.
+
+Requirements for the source lane:
+
+- macOS or Linux
+- `bash`
+- `node`
+- `omp` or at least one direct fallback CLI on `PATH`: `claude`, `codex`, `gemini`, or `ollama`
+- `cmux` if you want the visual workspace outside the packaged app
+
+Install from source:
 
 ```bash
 git clone https://github.com/claudiaclawdbot/spin.git ~/spin
-cd ~/spin && ./install.sh    # installs missing deps, seeds runtime files, links `spin` + `org`
+cd ~/spin && ./install.sh
 
-spin init                    # onboarding wizard: providers (+ OpenRouter), your first
-                             # project, a supervisor that keeps it alive — then starts it
-spin                         # check on it any time
+spin init
+spin
 ```
 
-`spin init` is the fast path. Prefer to wire it by hand? `spin doctor` → `scripts/bootstrap-project.sh my-app` → edit its charter → `spin service install` (keeps the driver alive across crashes/reboots) → `spin`.
-
-One-liner (review the script first, like any `curl | bash`):
+One-liner, if you prefer that flow:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash
 ```
 
-`spin-bootstrap.sh` is a tiny launcher that clones SPIN and runs the installer. Want a **single file that works fully offline** (no git, no network — everything embedded)? Download [`spin-offline.sh`](https://github.com/claudiaclawdbot/spin/raw/main/spin-offline.sh) and run `bash spin-offline.sh`.
-
-## SPIN.app for Mac
-
-SPIN.app is the Mac product path: a self-contained app where cmux and OMP/Pi are
-internal foundations, not user-installed prerequisites. The current beta DMG
-bundles the SPIN-branded cmux workspace UI, bundled `cmux`, bundled `omp`,
-`spin-agent`, the plain-file SPIN runtime, branding, and license notices. See
-[`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md),
-[`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md), and
-[`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
-
-There are now two surfaces:
-
-- **SPIN.app beta:** the primary Mac experience. Download the DMG, drag
-  `SPIN.app` to Applications, onboard providers through OMP, and run projects
-  from the app.
-- **`spin` CLI:** the same runtime for power users, automation, debugging,
-  headless operation, and recovery.
-
-The public Mac distribution path is the open-source DMG. This project is not
-waiting on the Mac App Store or Apple Developer ID to be usable:
+`spin-bootstrap.sh` is a tiny launcher that clones SPIN and runs the installer. For a single offline file, download [`spin-offline.sh`](https://github.com/claudiaclawdbot/spin/raw/main/spin-offline.sh) and run:
 
 ```bash
-SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux
-scripts/prepare-open-source-release.sh --artifact dist/release/SPIN-*-macos-*.dmg
+bash spin-offline.sh
 ```
 
-The current beta is ad-hoc signed and not notarized, so macOS may show a
-Gatekeeper warning on first launch. Download it from
-[v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1),
-then follow [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md).
-Maintainer release notes live in
-[`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md).
+### Source Updates
 
-## Updating SPIN
-
-Once installed, update from inside your SPIN checkout:
+For a source checkout, update from inside the checkout:
 
 ```bash
 spin update
 ```
 
-The updater is designed for consumer installs: it checks for local edits, refuses
-to update while project jobs are running, backs up `org/` and `logs/` to
-`.spin/backups/`, pauses the driver if needed, fast-forwards the repo, reruns
-`install.sh`, applies any runtime migrations, runs `spin doctor`, then restarts
-the driver if it was running before.
+The source updater checks for local edits, refuses to update while project jobs are running, backs up `org/` and `logs/` to `.spin/backups/`, pauses the driver if needed, fast-forwards the repo, reruns `install.sh`, applies migrations, runs `spin doctor`, then restarts the driver if it was running before.
 
 Useful checks:
 
 ```bash
-spin update --check     # see whether an update is available
-spin update --dry-run   # preview the steps without changing files
-spin version            # show VERSION + git checkout + installed marker
+spin update --check
+spin update --dry-run
+spin version
 ```
 
-See [docs/UPGRADING.md](docs/UPGRADING.md) for rollback and maintainer notes.
+See [`docs/UPGRADING.md`](docs/UPGRADING.md) for rollback notes.
 
-**Requirements:**
+### CLI Commands
 
-- **Required** — macOS/Linux, `bash`, `node`, and `omp` or at least one direct fallback CLI on `PATH`: `claude` (Claude Code), `codex` (OpenAI Codex CLI), `gemini` (Google Gemini CLI), or `ollama` (local models).
-- **[`omp`](https://omp.sh) (oh-my-pi) — the agent backbone.** SPIN is built around it: every floor agent (the Navigator you chat with, each project's live REPL, the delegate-and-watch path) is an omp session, and queued jobs try OMP first with a SPIN-generated config overlay for `modelRoles` and `retry.fallbackChains`. It's where the name comes from — oh-my-**pi** → `OMP_HARNESS.json` → the **Pi** in SPIN.
-- **[cmux](https://github.com/manaflow-ai/cmux) — the display.** The visual workspace that shows the floors, status chips, and live boards. Genuinely optional: omp floors work without it, just less visibly.
+`spin` is the human control surface:
 
-## The interface — cmux *is* your GUI
-
-SPIN isn't a CLI you babysit; it's an app whose window is [cmux](https://github.com/manaflow-ai/cmux). Run `spin up` and you get:
-
-- a **Coordinator floor** — an [omp](https://omp.sh) agent you *talk to* like a person ("build me a landing page for X"),
-- one **workspace tab per project** in the cmux sidebar — your browser-style tabs, each a live omp orchestrator for that project,
-- the **driver** coordinating in the background, relaying work between projects through the org files.
-
-Tell the Coordinator what you want and it spins up the project:
-
-```
-you (in the Coordinator floor):  "start a project for my fidget-spinner shop"
-  → spin new-project fidget-shop "an online fidget-spinner store"
-  → a new "fidget-shop" tab appears in your sidebar, with its own agent, already briefed
-```
-
-When you want that visible project coordinator to do something now, the Coordinator
-uses `spin delegate --wait <project> "<task>"`. That sends the task into the
-project's live cmux/omp floor, stamps it with a request id, and waits for the
-project to report back through the org inbox.
-
-So the stack reads cleanly: **cmux** is the screen, **omp** is the engine in each tab, and **SPIN** is the brain wiring them into one coordinated org. No Electron, no separate app to maintain — the terminal workspace *is* the product.
-
-## Why SPIN exists
-
-Running multiple AI-driven projects from chat sessions doesn't scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. SPIN replaces that with a small, inspectable org:
-
-- **One Navigator loop** — it claims a lock file at startup, so a second accidental launch just prints "already running" and exits instead of silently doubling your LLM spend.
-- **A brain that only thinks when something changed** — the LLM runs only when watched inputs move (content hash, not mtime). An idle org costs a couple of LLM calls a day.
-- **Detached background jobs** for durable background work. Explicit `spin delegate`
-  handoffs are the live, human-visible path into a project floor; queued jobs do not
-  depend on cmux panes.
-- **State changed through a CLI, never hand-edited** — agents call `org queue-job …`, `org set-state …`; the verbs validate, lock, and append so a mistyped bracket can't corrupt the queue.
-- **Four hard gates** — SPIN acts freely on local, reversible work and stops for exactly four things: external sends, spending money, production deploys, pushes to protected repos.
-- **Receipts for everything** — every brain run and job writes an append-only audit trail.
-
-## The cast (read this first — the names overlap confusingly)
-
-Several of these are both a product and a model family. Here they always mean the **CLI tool on your PATH**:
-
-| Name | What it actually is | Role in SPIN |
-|---|---|---|
-| **SPIN** (this repo) | a bash+node orchestration layer — no models of its own | schedules, routes, budgets, gates, and audits the work |
-| [**`omp`**](https://omp.sh) (oh-my-pi) | the agent harness and model gateway | runs the Coordinator/project agents and handles normal fallback across authenticated model providers |
-| **`codex`** · **`claude`** · **`gemini`** | direct vendor CLIs | outer fallback if OMP is missing or hard-fails |
-| **`ollama`** | a local model runtime | last-resort outer fallback |
-| [**cmux**](https://github.com/manaflow-ai/cmux) | a terminal multiplexer with a GUI + control socket | visual floors, status chips, live boards, and explicit `spin delegate` handoffs |
-
-The Navigator's "brain" is not a separate program: it's one OMP agent invocation per tick with the controller prompt and the org files as context. The registry file is named `OMP_HARNESS.json` for continuity with the omp-centric setup SPIN grew out of.
-
-## The five layers
-
-```mermaid
-flowchart TD
-    H["1 · HUMAN (you)<br/>sets direction · approves the 4 gated actions<br/>interface: the spin command + cmux floors"]
-    C["2 · CHAT ASSISTANT (optional)<br/>your conversational front door — reads/writes the same org files"]
-    W["3 · SPIN NAVIGATOR<br/>tick loop: render cockpit → dispatch queue → change-gated LLM brain<br/>coordinates, never codes"]
-    P["4 · PROJECT ORCHESTRATORS<br/>one per project — execute jobs, update STATE/RECEIPTS, report to INBOX"]
-    S["5 · WORKERS / SUBAGENTS<br/>per-task agent-CLI invocations: code edits, research, drafts, builds"]
-    H -->|"spin approve / decline / ask"| W
-    C --> W
-    W -->|"org queue-job / live delegate + set-handoff"| P
-    P -->|"org inbox + STATE.json"| W
-    P --> S
-    W -->|"org escalate (only the 4 gated things)"| H
-```
-
-## Communication is just files
-
-| File | Direction | Purpose |
-|---|---|---|
-| `org/projects/<p>/WORKSPACE_HANDOFF.md` | Navigator → project | current directive |
-| `org/ceo/INBOX.md` | project → Navigator | progress reports, escalations |
-| `org/HUMAN_QUEUE.md` | Navigator → you | the *only* things needing a decision |
-| `org/ceo/APPROVALS.md` | you → Navigator | your approve/decline/ask answers |
-| `org/state.json` | shared | org truth (projects, statuses) |
-| `org/AGENT_QUEUE.json` | Navigator → dispatcher | the job queue |
-| `org/ceo/runs/` | append-only | receipts (audit trail) |
-
-No database, no message broker, no daemon you can't `cat`.
-
-## The two commands
-
-**`spin`** — your control surface:
-
-```
+```text
 spin                 status: projects, what's waiting on you, recent activity
 spin watch           live dashboard, refreshing
 spin web             local browser panel for approvals, jobs, floors, receipts
-spin approve "<x>"   answer an approval   ·   spin decline / spin ask
-spin delegate --wait <project> "<task>"    send work to a live project floor
-spin start | stop    run / pause the Navigator loop
-spin up | down       launch / tear down all cmux floors + daemons
-spin doctor          health check: deps, driver, floors, watchers
+spin approve "<x>"   answer an approval
+spin decline "<x>"   decline or hold an approval
+spin ask "<q>"       ask the Navigator an async question
+spin delegate --wait <project> "<task>"
+spin start | stop    run or pause the Navigator loop
+spin up | down       launch or tear down cmux floors and daemons
+spin doctor          health check
 ```
 
-**`org`** — how agents change state safely (you rarely type this; the Navigator does):
+`org` is the state-change CLI agents use:
 
-```
+```text
 org queue-job <project> <type> "<desc>" [--max-runtime SEC]
-org set-handoff <project>        org set-state <project> --status S --next "…"
-org escalate "<item>"            org process-approval <sel> <approve|decline|ask> --note "…"
-org receipt                      org inbox <project> "<msg>"        org show
+org set-handoff <project>
+org set-state <project> --status S --next "..."
+org escalate "<item>"
+org process-approval <sel> <approve|decline|ask> --note "..."
+org receipt
+org inbox <project> "<msg>"
+org show
 ```
 
-Every `org` verb validates its input (unknown project? disallowed job type? → rejected), takes a lock, writes atomically, and never deletes history.
+Every `org` verb validates input, takes a lock, writes atomically, and keeps history append-only where history matters.
 
-## Cost & reliability design
+---
 
-- **Change-gated brain** — the LLM runs only when real inputs (approvals, inbox, project state) changed, plus a low-frequency heartbeat.
-- **OMP-first fallback** (`scripts/lib/ceo-waterfall.sh`) — SPIN writes a runtime OMP config overlay (`org/ceo/runs/spin-omp-config.yml`) with `modelRoles` and `retry.fallbackChains`. OMP retries rate/usage/server/network failures, switches authenticated credentials when available, and falls through configured models such as Anthropic → OpenAI Codex → OpenRouter. If OMP itself is absent or hard-fails, SPIN falls back to direct CLI lanes: `codex → claude → gemini → ollama`.
-- **Nothing runs twice** — the driver, the watchers, and the dispatcher each claim a lock file and exit if a live copy already holds it. Duplicate loops are the #1 silent quota killer.
-- **Job timeouts** — a hung job is killed (whole process group) after `max_runtime_seconds` (default 1 h) so it can't hold its project lane forever.
-- **Silent-exit retry** — a job that exits 0 having changed no files is retried once on claude.
-- **Driver watchdog** — a red chip + desktop notification when the loop dies without a STOP file.
-- **Kill switch** — `spin stop` (or `touch org/ceo/runs/STOP`) pauses the whole org; `spin start` resumes.
+## Under The Hood
 
-## The four gates (safety model)
+This section applies to both SPIN.app and the source/CLI lane.
 
-SPIN does local, reversible work without asking. It stops and queues a `HUMAN_QUEUE.md` item for:
+### What The Name Means
 
-1. **Sending anything external** — email, DM, form, public post.
-2. **Spending money** — gas, wallets, paid APIs beyond your subscriptions.
-3. **Production deploys.**
-4. **Pushing to `main` or any human-owned repo.**
+- **Super** — connects the dev tools you already use into one harness you can track, audit, and interrupt.
+- **Pi** — the agentic backbone. Specifically **[oh-my-pi](https://omp.sh) (`omp`)**: every floor agent and interactive session runs on it.
+- **Interoperable** — swap LLMs on the fly. Because state and memory live in plain files, different agent CLIs can read the same context.
+- **Navigator** — the system that coordinates projects, queues, approvals, and receipts.
 
-Keys stay out of the repo (`~/.config/omp.env`, chmod 600). The gate is *behavioral*, enforced by every prompt in the org — an agent with shell access can read anything you can, so never park real-money keys on an agent machine.
+### Why SPIN Exists
 
-## Repo layout
+Running multiple AI-driven projects from chat sessions does not scale: context evaporates, agents step on each other, quotas burn silently, and you become the message bus. SPIN replaces that with a small, inspectable org:
 
+- **One Navigator loop** — a lock file prevents duplicate drivers from silently doubling LLM spend.
+- **Change-gated brain** — the LLM runs only when watched inputs actually changed, plus a low-frequency heartbeat.
+- **Detached background jobs** — durable work does not depend on a visible cmux pane.
+- **State changed through a CLI** — agents call validated `org` verbs instead of hand-editing JSON.
+- **Receipts for everything** — brain runs and jobs write append-only audit trails.
+
+### Communication Is Just Files
+
+| File | Direction | Purpose |
+|---|---|---|
+| `org/projects/<p>/WORKSPACE_HANDOFF.md` | Navigator -> project | Current directive |
+| `org/ceo/INBOX.md` | Project -> Navigator | Progress reports and escalations |
+| `org/HUMAN_QUEUE.md` | Navigator -> human | Items that need a decision |
+| `org/ceo/APPROVALS.md` | Human -> Navigator | Approve / decline / ask answers |
+| `org/state.json` | Shared | Org truth: projects and statuses |
+| `org/AGENT_QUEUE.json` | Navigator -> dispatcher | Job queue |
+| `org/ceo/runs/` | Append-only | Run receipts and logs |
+
+No database, no message broker, no daemon you cannot inspect.
+
+### The Cast
+
+| Name | What it is | Role |
+|---|---|---|
+| **SPIN** | Bash + Node orchestration layer | Schedules, routes, gates, audits |
+| **SPIN.app** | Mac app bundle | Packages cmux, OMP, and the SPIN runtime |
+| [`omp`](https://omp.sh) | Agent harness and model gateway | Runs floors/jobs and handles provider fallback |
+| `codex` / `claude` / `gemini` | Direct vendor CLIs | Outer fallback if OMP is missing or hard-fails |
+| `ollama` | Local model runtime | Last-resort local fallback |
+| [cmux](https://github.com/manaflow-ai/cmux) | Terminal workspace with GUI and socket control | Visual floors, tabs, boards, delegate handoffs |
+
+### The Five Layers
+
+```mermaid
+flowchart TD
+    H["1 · Human<br/>sets direction · approves gated actions"]
+    A["2 · SPIN.app / spin CLI<br/>front door and control surface"]
+    W["3 · SPIN Navigator<br/>tick loop · dispatch queue · change-gated brain"]
+    P["4 · Project floors<br/>one OMP orchestrator per project"]
+    S["5 · Workers<br/>per-task agent invocations"]
+    H -->|"approve / decline / ask"| A
+    A --> W
+    W -->|"handoffs / jobs"| P
+    P -->|"receipts / state"| W
+    P --> S
+    W -->|"only the four gated categories"| H
 ```
-spin-bootstrap.sh    tiny launcher for the curl|bash one-liner (clones + installs)
-spin-offline.sh      fully-offline single file (embeds everything; generated)
-install.sh           setup for a git clone
-scripts/             the engine (bash + node, no build step)
-  spin                 your command (status, approve, init, service, …)
-  org                  the state CLI agents call
-  spin-init.sh         onboarding wizard (spin init)
-  spin-service.sh      supervisor installer — launchd (macOS) / systemd (Linux)
-  lib/ceo-waterfall.sh provider selection, benching, timeouts
-org/
-  OMP_HARNESS.json     registry: projects, job types, dispatch config
-  ceo/                 Navigator prompt, approvals, inbox, runs/ (receipts)
-  projects/example-app/ what a registered project looks like
-docs/
-  ARCHITECTURE.md      the five layers + one tick, in detail
-  LESSONS.md           v1 → v4: what broke and what fixed it
-  ROADMAP.md           known weaknesses, honestly ranked
+
+### Cost And Reliability
+
+- **OMP-first fallback** — SPIN writes a runtime OMP config overlay with `modelRoles` and `retry.fallbackChains`.
+- **Provider benching** — rate/usage/session-limit failures temporarily bench that provider so work can fall through.
+- **Duplicate-loop prevention** — driver, watchers, and dispatcher claim locks and exit if already running.
+- **Job timeouts** — hung jobs are killed after `max_runtime_seconds`.
+- **Kill switch** — `spin stop` or `org/ceo/runs/STOP` pauses the org.
+
+### Repo Layout
+
+```text
+app/                  Mac app shell, cmux config/sidebar assets, bundle templates
+agent/                OMP/Pi-derived agent runtime home
+assets/branding/      SPIN icon and app branding
+docs/                 app install, app bundle, architecture, roadmap, release docs
+install.sh            source checkout setup
+scripts/              SPIN runtime, app health, update, release, org CLI
+  spin                human command
+  org                 validated state-change command
+  lib/                runtime helpers and provider fallback
+org/                  seed org files for source installs and app runtime
+runtime/              runtime migration notes
 ```
 
 ## Acknowledgments
 
-SPIN is glue. It's worthless without the open tools it stands on — full credit and thanks to the people who built them:
+SPIN stands on open tools:
 
-- **[oh-my-pi / omp](https://omp.sh)** — the agent CLI that is SPIN's interactive backbone (the *Pi*) and its gateway to ~15 model backends.
-- **[cmux](https://github.com/manaflow-ai/cmux)** — the agent-oriented terminal workspace that gives SPIN its visual floors, built on **[Ghostty](https://ghostty.org)** by Mitchell Hashimoto.
-- The agent CLIs SPIN dispatches to: **[Claude Code](https://claude.com/claude-code)** (Anthropic), **[OpenAI Codex CLI](https://github.com/openai/codex)**, **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** (Google), and **[Ollama](https://ollama.com)** for local models.
-- **[OpenRouter](https://openrouter.ai)** and the other backends reachable through omp.
-
-If you maintain one of these and want the credit adjusted or a link fixed, open an issue — happy to get it right.
+- **[oh-my-pi / omp](https://omp.sh)** — the agent CLI and model gateway at the center of SPIN.
+- **[cmux](https://github.com/manaflow-ai/cmux)** — the agent-oriented terminal workspace, built on **[Ghostty](https://ghostty.org)**.
+- **[Claude Code](https://claude.com/claude-code)**, **[OpenAI Codex CLI](https://github.com/openai/codex)**, **[Gemini CLI](https://github.com/google-gemini/gemini-cli)**, and **[Ollama](https://ollama.com)** — direct agent/runtime lanes.
+- **[OpenRouter](https://openrouter.ai)** and the other backends reachable through OMP.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Built in the open; issues and PRs welcome (see [CONTRIBUTING](CONTRIBUTING.md)). SPIN's MIT license covers this repo only; each upstream tool keeps its own license.
+MIT — see [LICENSE](LICENSE). SPIN's MIT license covers this repo only; bundled or upstream tools keep their own licenses and notices.
