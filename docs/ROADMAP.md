@@ -41,13 +41,17 @@ a recycled PID could make a stale lock look alive. Record
 
 SPIN's central claim is not just that one job can dispatch. It is that multiple
 scoped project agents can stay context-isolated while the Navigator maintains the
-organization-level view. The smoke test now proves this org protocol offline
-with deterministic project-agent stubs for `example-app` and `workspace`.
+organization-level view. The smoke test now proves the org protocol offline with
+deterministic project-agent stubs for `example-app` and `workspace`, and the app
+release checks prove first launch creates the `SPIN Onboarding` workspace through
+the bundled cmux-compatible CLI.
 
 For demos and tests: dispatcher prints what it *would* spawn; brain runs against
-a sandbox copy of `org/`. CI covers plumbing, symlink/launcher paths, and the
-multi-project org protocol, but not live OMP provider execution or the cmux
-floor-spawn (no GUI in CI — currently manual-verified only).
+a sandbox copy of `org/`. CI covers plumbing, symlink/launcher paths, app
+onboarding launch, and the multi-project org protocol. It still does not run live
+OMP provider execution because that requires user accounts, credentials, and a
+GUI session; those remain release validation items until there is an integration
+rig for them.
 
 ## 6. Job-level provider/model overrides in the queue schema
 

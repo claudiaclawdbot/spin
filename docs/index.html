@@ -160,12 +160,12 @@
 
 <section id="interface" class="wrap">
   <h2><span class="n">02</span>One coordinator, many project agents</h2>
-  <p class="lede">SPIN puts a Coordinator above the project agents. The Coordinator owns routing, org state, approvals, and cross-project awareness. Each project agent stays scoped to its own repository and working context. cmux is the visible workspace that makes those lanes easy to watch and interrupt.</p>
+  <p class="lede">SPIN opens one controlled workspace above your project agents. First launch routes to SPIN Onboarding, then normal launches open the Coordinator and project floors. The Coordinator owns routing, org state, approvals, and cross-project awareness while each OMP-backed project agent stays scoped to its own repository and context.</p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">your first minute</span>
       <button class="copy" data-copy="spin init && spin up">copy</button></div>
     <pre><span class="p">$</span> <span class="c">spin</span> init            <span class="o"># wizard: providers, OpenRouter, your first project</span>
-<span class="p">$</span> <span class="c">spin</span> up              <span class="o"># opens the cmux interface</span>
+<span class="p">$</span> <span class="c">spin</span> up              <span class="o"># opens the SPIN workspace</span>
 <span class="o">  ✓ Coordinator floor open: talk to it like a person</span>
 <span class="o">  ✓ driver supervised · live boards up</span></pre>
   </div>
@@ -183,7 +183,7 @@
 
 <section id="app" class="wrap">
   <h2><span class="n">03</span>SPIN.app for Mac</h2>
-  <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with SPIN-branded cmux as the native workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then onboard providers through OMP.</p>
+  <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with a SPIN-branded workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then open SPIN to enter the onboarding workspace instead of a generic terminal.</p>
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
     <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles and fallback chains for coordinator and project work.</p></div>
@@ -211,9 +211,9 @@
     <pre><span class="p">$</span> <span class="c">git</span> clone https://github.com/claudiaclawdbot/spin.git ~/spin
 <span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&&</span> <span class="c">./install.sh</span>
 <span class="o">  ✓ linked: spin, org → ~/.local/bin/</span>
-<span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the cmux interface</span></pre>
+<span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the SPIN workspace</span></pre>
   </div>
-  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on: every floor agent is an OMP session, and it is the <b>Pi</b> in SPIN. <a href="https://github.com/manaflow-ai/cmux">cmux</a> is the visual multiplexer. The installer sets all of this up.</p>
+  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on: every floor agent is an OMP session, and it is the <b>Pi</b> in SPIN. The cmux-derived UI is the workspace surface; SPIN owns onboarding, routing, queues, receipts, and project state.</p>
 </section>
 
 <section id="how" class="wrap">
@@ -230,7 +230,7 @@
     <tr><td><code>omp</code></td><td class="dimcell">agent harness + model gateway (oh-my-pi)</td><td class="dimcell">runs Coordinator, project floors, and jobs first; handles model/provider fallback across signed-in services</td></tr>
     <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">direct vendor CLIs</td><td class="dimcell">outer fallback if OMP is missing or hard-fails</td></tr>
     <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort outer fallback</td></tr>
-    <tr><td>cmux</td><td class="dimcell">terminal multiplexer + GUI</td><td class="dimcell">visual floors, status chips, live boards, and explicit delegate handoffs</td></tr>
+    <tr><td>cmux-derived UI</td><td class="dimcell">bundled workspace surface</td><td class="dimcell">shows Coordinator and project floors while SPIN controls launch routing, state, and handoffs</td></tr>
   </table>
 </section>
 

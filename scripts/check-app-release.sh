@@ -78,6 +78,10 @@ ok "app icon"
 cmux_bundle_id="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIdentifier || true)"
 if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
   [ "$cmux_bundle_id" = "dev.spin.app" ] || fail "bundled cmux app bundle id is not dev.spin.app: ${cmux_bundle_id:-missing}"
+  cmux_feed_url="$(plist_string "$CMUX_APP/Contents/Info.plist" SUFeedURL || true)"
+  if grep -q 'manaflow-ai/cmux' <<<"$cmux_feed_url"; then
+    fail "bundled cmux app still uses the upstream cmux update feed"
+  fi
 else
   case "$cmux_bundle_id" in
     dev.spin.app|com.cmuxterm.app) ;;
@@ -105,6 +109,14 @@ if [ "${SPIN_SKIP_BINARY_EXEC_CHECK:-0}" != "1" ]; then
   "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute"
   env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute without user PATH"
   ok "bundled cmux executes"
+  if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
+    cmux_welcome="$("$RES/bin/cmux" welcome 2>/dev/null || true)"
+    grep -q 'SPIN' <<<"$cmux_welcome" || fail "bundled cmux welcome is not SPIN-branded"
+    if grep -q 'https://cmux.com/docs' <<<"$cmux_welcome"; then
+      fail "bundled cmux welcome still points users to cmux docs"
+    fi
+    ok "bundled cmux welcome is SPIN-branded"
+  fi
   "$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute"
   env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute without user PATH"
   ok "bundled omp executes"
@@ -195,6 +207,44 @@ grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not rout
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
 ok "first-launch runtime seed"
 SEEDED_RUNTIME="$TMP/home/runtime"
+
+socket_env_out="$(env -i HOME="$TMP/socket-home" PATH="$SYSTEM_PATH" SPIN_ROOT="$SEEDED_RUNTIME" /bin/bash -c '
+  set -euo pipefail
+  source "$SPIN_ROOT/scripts/lib/spin-runtime.sh"
+  spin_prepare_cmux_environment
+  printf "%s\n%s\n%s\n%s\n" "$CMUX_SOCKET_PATH" "$CMUX_ALLOW_SOCKET_OVERRIDE" "$CMUX_SOCKET_ENABLE" "$CMUX_SOCKET_MODE"
+')"
+prepared_socket="$(printf '%s\n' "$socket_env_out" | sed -n '1p')"
+prepared_override="$(printf '%s\n' "$socket_env_out" | sed -n '2p')"
+prepared_enable="$(printf '%s\n' "$socket_env_out" | sed -n '3p')"
+prepared_mode="$(printf '%s\n' "$socket_env_out" | sed -n '4p')"
+case "$prepared_socket" in
+  "$TMP/socket-home/.local/state/cmux/spin.sock") ;;
+  *) fail "runtime did not prepare SPIN-owned cmux socket: ${prepared_socket:-missing}" ;;
+esac
+[ "$prepared_override" = "1" ] || fail "runtime did not allow SPIN socket override"
+[ "$prepared_enable" = "1" ] || fail "runtime did not enable cmux socket"
+[ "$prepared_mode" = "allowall" ] || fail "runtime did not request controllable cmux socket mode"
+ok "runtime prepares SPIN-owned cmux socket"
+
+cat > "$TMP/fake-cmux" <<EOF
+#!/usr/bin/env bash
+printf 'args=%s\n' "\$*" >> "$TMP/fake-cmux.calls"
+printf 'socket=%s\n' "\${CMUX_SOCKET_PATH:-}" >> "$TMP/fake-cmux.calls"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "cmux fake release-check"; exit 0 ;;
+  new-workspace) echo "workspace:42"; exit 0 ;;
+  list-workspaces) echo "workspace:42 SPIN Onboarding"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/fake-cmux"
+first_run_out="$(env -i HOME="$TMP/live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_CMUX_BIN="$TMP/fake-cmux" "$APP/Contents/MacOS/SPIN")"
+grep -q 'SPIN onboarding opened in cmux' <<<"$first_run_out" || fail "real app launcher did not report onboarding workspace creation"
+grep -q 'args=new-workspace --name SPIN Onboarding' "$TMP/fake-cmux.calls" || fail "real app launcher did not create the SPIN Onboarding workspace"
+grep -q "socket=$TMP/live-home/.local/state/cmux/spin.sock" "$TMP/fake-cmux.calls" || fail "real app launcher did not pass the SPIN-owned cmux socket to cmux"
+ok "real first-launch path creates SPIN onboarding workspace"
 
 SESSION_ORG="$SEEDED_RUNTIME/org"
 SESSION_MARKER="spin-restart-proof-$$"

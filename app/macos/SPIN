@@ -6,6 +6,7 @@ CONTENTS_DIR="$(cd "$MACOS_DIR/.." >/dev/null 2>&1 && pwd)"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 APP_SUPPORT_ROOT="${SPIN_APP_HOME:-$HOME/Library/Application Support/SPIN}"
 RUNTIME_DIR="$APP_SUPPORT_ROOT/runtime"
+LOG_DIR="$APP_SUPPORT_ROOT/logs"
 
 export SPIN_APP_RESOURCES="$RESOURCES_DIR"
 export SPIN_INTERNAL_BIN_DIR="$RESOURCES_DIR/bin"
@@ -13,6 +14,21 @@ export SPIN_BUNDLED_RUNTIME="$RESOURCES_DIR/runtime"
 export SPIN_ROOT="$RUNTIME_DIR"
 export WORKSPACE_ROOT="$SPIN_ROOT"
 export PATH="$SPIN_INTERNAL_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+SOCKET_DIR="${SPIN_CMUX_SOCKET_DIR:-$HOME/.local/state/cmux}"
+mkdir -p "$SOCKET_DIR"
+export CMUX_SOCKET_PATH="${CMUX_SOCKET_PATH:-$SOCKET_DIR/spin.sock}"
+export CMUX_ALLOW_SOCKET_OVERRIDE="${CMUX_ALLOW_SOCKET_OVERRIDE:-1}"
+export CMUX_SOCKET_ENABLE="${CMUX_SOCKET_ENABLE:-1}"
+export CMUX_SOCKET_MODE="${CMUX_SOCKET_MODE:-allowall}"
+export CMUX_BUNDLED_CLI_PATH="$SPIN_INTERNAL_BIN_DIR/cmux"
+
+if [ "${SPIN_APP_LAUNCH_DRY_RUN:-0}" != "1" ] && [ "${SPIN_APP_NO_LOG_REDIRECT:-0}" != "1" ]; then
+  mkdir -p "$LOG_DIR"
+  exec >> "$LOG_DIR/app-launch.log" 2>&1
+  printf '\n[%s] SPIN.app launch\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'runtime=%s\nresources=%s\nsocket=%s\n' "$SPIN_ROOT" "$SPIN_APP_RESOURCES" "$CMUX_SOCKET_PATH"
+fi
 
 copy_runtime() {
   mkdir -p "$APP_SUPPORT_ROOT"

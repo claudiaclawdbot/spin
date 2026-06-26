@@ -429,7 +429,7 @@ scripts/check-installed-app.sh dist/release/SPIN-*-macos-*.dmg
 That script extracts the artifact into a temporary Applications-like directory,
 verifies the signed app contract, then runs `SPIN.app/Contents/MacOS/SPIN` from
 a clean `SPIN_APP_HOME`. For deterministic automation it uses a controlled copy
-with bundled fake cmux/OMP shims, proving first launch seeds the writable
+with bundled test cmux/OMP shims, proving first launch seeds the writable
 runtime, opens the `SPIN Onboarding` workspace through the bundled cmux-compatible
 CLI, avoids global cmux/OMP shims, and routes relaunch to `spin up` after
 `.spin-onboarded`.

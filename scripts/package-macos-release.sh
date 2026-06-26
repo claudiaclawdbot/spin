@@ -101,9 +101,9 @@ VERIFY="$TMP/verify"
 STAGE_APP="$STAGE/SPIN.app"
 EXTRACTED_APP="$VERIFY/SPIN.app"
 mkdir -p "$STAGE" "$VERIFY" "$OUT_DIR"
-ditto "$APP" "$STAGE_APP"
+ditto --noqtn --noextattr "$APP" "$STAGE_APP"
 if command -v xattr >/dev/null 2>&1; then
-  xattr -dr com.apple.quarantine "$STAGE_APP" 2>/dev/null || true
+  xattr -cr "$STAGE_APP" 2>/dev/null || true
 fi
 ok "staged app copy"
 
@@ -207,11 +207,11 @@ artifact="$OUT_DIR/$artifact_base.$FORMAT"
 rm -f "$artifact" "$artifact.sha256" "$OUT_DIR/$artifact_base.manifest"
 
 if [ "$FORMAT" = "zip" ]; then
-  (cd "$STAGE" && ditto -c -k --keepParent --sequesterRsrc --rsrc SPIN.app "$artifact")
-  ditto -x -k "$artifact" "$VERIFY"
+  (cd "$STAGE" && ditto -c -k --keepParent --sequesterRsrc --rsrc --noqtn --noextattr SPIN.app "$artifact")
+  ditto --noqtn --noextattr -x -k "$artifact" "$VERIFY"
 else
   mkdir -p "$DMG_STAGE"
-  ditto "$STAGE_APP" "$DMG_STAGE/SPIN.app"
+  ditto --noqtn --noextattr "$STAGE_APP" "$DMG_STAGE/SPIN.app"
   ln -s /Applications "$DMG_STAGE/Applications"
   if [ -f "$ROOT/assets/branding/SPIN.icns" ]; then
     cp "$ROOT/assets/branding/SPIN.icns" "$DMG_STAGE/.VolumeIcon.icns"
@@ -241,7 +241,7 @@ EOF
   [ -e "$MOUNT/Applications" ] || fail "dmg missing Applications shortcut"
   [ -f "$MOUNT/README.txt" ] || fail "dmg missing README.txt"
   grep -q 'Drag SPIN.app onto Applications' "$MOUNT/README.txt" || fail "dmg README missing install instruction"
-  ditto "$MOUNT/SPIN.app" "$EXTRACTED_APP"
+  ditto --noqtn --noextattr "$MOUNT/SPIN.app" "$EXTRACTED_APP"
   hdiutil detach "$MOUNT" >/dev/null
   trap cleanup EXIT
 fi

@@ -95,6 +95,7 @@ ditto "$INSTALLED_APP" "$CONTROL_APP"
 cat > "$CONTROL_APP/Contents/Resources/bin/cmux" <<EOF
 #!/usr/bin/env bash
 printf 'cmux|%s|%s\n' "\$0" "\$*" >> "$CMUX_CALLS"
+printf 'socket=%s\n' "\${CMUX_SOCKET_PATH:-}" >> "$CMUX_CALLS"
 case "\${1:-}" in
   ping) exit 0 ;;
   version) echo "installed-proof cmux"; exit 0 ;;
@@ -133,6 +134,7 @@ env -i \
   HOME="$HOME_DIR" \
   PATH="$GLOBAL_BIN:$SYSTEM_PATH" \
   SPIN_APP_HOME="$APP_HOME" \
+  SPIN_APP_NO_LOG_REDIRECT=1 \
   "$CONTROL_APP/Contents/MacOS/SPIN" > "$first_out"
 
 grep -q 'SPIN onboarding opened in cmux (workspace:512)' "$first_out" \
@@ -143,6 +145,8 @@ grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|ping" "$CMUX_CALLS" \
   || fail "installed first launch did not call bundled cmux ping"
 grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|new-workspace --name SPIN Onboarding" "$CMUX_CALLS" \
   || fail "installed first launch did not call bundled cmux onboarding workspace"
+grep -Fq "socket=$HOME_DIR/.local/state/cmux/spin.sock" "$CMUX_CALLS" \
+  || fail "installed first launch did not pass the SPIN-owned cmux socket"
 [ ! -s "$GLOBAL_CALLS" ] || fail "installed launch called a global cmux/omp shim: $(cat "$GLOBAL_CALLS")"
 ok "installed first launch uses bundled cmux and seeds runtime"
 
