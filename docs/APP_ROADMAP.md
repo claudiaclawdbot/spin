@@ -267,6 +267,7 @@ scripts/release-macos.sh --source-cmux
 Expected result:
 
 - outer app: `dist/SPIN.app`;
+- outer launcher bundle id: `dev.spin.launcher`;
 - nested native UI app: `dist/SPIN.app/Contents/Resources/SPIN.app`;
 - nested native UI bundle id: `dev.spin.app`;
 - outer app icon: `dist/SPIN.app/Contents/Resources/SPIN.icns`;

@@ -66,6 +66,8 @@ NODE
 [ -f "$RUNTIME/scripts/org" ] || fail "missing runtime org CLI"
 
 grep -q '<string>SPIN</string>' "$APP/Contents/Info.plist" || fail "app identity is not SPIN"
+outer_bundle_id="$(plist_string "$APP/Contents/Info.plist" CFBundleIdentifier || true)"
+[ "$outer_bundle_id" = "dev.spin.launcher" ] || fail "outer launcher bundle id is not dev.spin.launcher: ${outer_bundle_id:-missing}"
 ok "app identity"
 
 app_icon_file="$(plist_string "$APP/Contents/Info.plist" CFBundleIconFile || true)"
