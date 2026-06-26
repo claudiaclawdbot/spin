@@ -98,6 +98,35 @@ cmux_icon_file="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconFile 
 cmp -s "$RES/SPIN.icns" "$CMUX_APP/Contents/Resources/AppIcon.icns" || fail "bundled cmux app icon does not match SPIN icon"
 ok "bundled cmux app icon"
 
+if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
+  cmux_brand_strings="$(mktemp)"
+  while IFS= read -r -d '' file; do
+    case "$file" in
+      *.icns|*.png|*.jpg|*.jpeg|*.gif|*.ttf|*.otf|*.car|*.framework/*|*.xcframework/*) continue ;;
+    esac
+    case "$file" in
+      *.strings)
+        plutil -p "$file" >> "$cmux_brand_strings" 2>/dev/null || /usr/bin/strings "$file" >> "$cmux_brand_strings" 2>/dev/null || true ;;
+      *)
+        /usr/bin/strings "$file" >> "$cmux_brand_strings" 2>/dev/null || true ;;
+    esac
+  done < <(find "$CMUX_APP/Contents" -type f -print0)
+  for forbidden in 'About cmux' 'Ghostty Settings' 'Open cmux.json' 'Quit cmux' 'Make cmux the Default Terminal'; do
+    if grep -q "$forbidden" "$cmux_brand_strings"; then
+      rm -f "$cmux_brand_strings"
+      fail "bundled cmux app still exposes upstream UI branding: $forbidden"
+    fi
+  done
+  for required in 'About SPIN' 'Terminal Engine Settings' 'Open SPIN Workspace Config' 'Quit SPIN'; do
+    if ! grep -q "$required" "$cmux_brand_strings"; then
+      rm -f "$cmux_brand_strings"
+      fail "bundled cmux app is missing SPIN UI branding: $required"
+    fi
+  done
+  rm -f "$cmux_brand_strings"
+  ok "bundled cmux app UI branding"
+fi
+
 for bin in cmux omp; do
   [ -x "$RES/bin/$bin" ] || fail "missing bundled $bin at Resources/bin/$bin"
   ok "bundled $bin"
