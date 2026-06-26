@@ -217,11 +217,13 @@ The writable runtime is split between replaceable app code and user state:
 - remembered cmux workspace refs live in `org/OMP_HARNESS.json` and are treated
   as user state, not bundle-owned defaults.
 
-When the bundled runtime `VERSION` changes, the launcher refreshes the seeded
-runtime code but preserves `org/` and `logs/`. `scripts/check-app-release.sh`
+On every launch, the wrapper refreshes app-owned runtime code while preserving
+`org/` and `logs/`. This matters for same-version hotfixes: a corrected app
+bundle must not keep running stale seeded scripts from
+`~/Library/Application Support/SPIN/runtime`. `scripts/check-app-release.sh`
 proves this with a fresh `SPIN_APP_HOME`: first launch routes to onboarding,
 relaunch routes to `spin up`, and onboarding state, workspace refs, approvals,
-queue entries, receipts, and logs survive a simulated runtime refresh.
+queue entries, receipts, and logs survive runtime refresh.
 
 ## Compatibility Manifest
 
