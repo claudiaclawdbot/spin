@@ -37,12 +37,17 @@ Locks and job liveness use `kill -0 <pid>`. After a reboot (or very long uptime)
 a recycled PID could make a stale lock look alive. Record
 `<pid>:<boot-epoch>:<start-time>` and compare all three. (Pairs with #1.)
 
-## 5. A `--dry-run` org mode
+## 5. Live OMP/cmux product proof and a `--dry-run` org mode
+
+SPIN's central claim is not just that one job can dispatch. It is that multiple
+scoped project agents can stay context-isolated while the Navigator maintains the
+organization-level view. The smoke test now proves this org protocol offline
+with deterministic project-agent stubs for `example-app` and `workspace`.
 
 For demos and tests: dispatcher prints what it *would* spawn; brain runs against
-a sandbox copy of `org/`. CI covers plumbing and the symlink/launcher paths, but
-not a full simulated tick with a fake agent, nor the cmux floor-spawn (no GUI in
-CI — currently manual-verified only).
+a sandbox copy of `org/`. CI covers plumbing, symlink/launcher paths, and the
+multi-project org protocol, but not live OMP provider execution or the cmux
+floor-spawn (no GUI in CI — currently manual-verified only).
 
 ## 6. Job-level provider/model overrides in the queue schema
 

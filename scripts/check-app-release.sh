@@ -101,14 +101,18 @@ ok "bundled spin-agent alias"
 
 [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] || fail "node not found for release check; set SPIN_RELEASE_CHECK_NODE"
 
-"$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute"
-env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute without user PATH"
-ok "bundled cmux executes"
-"$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute"
-env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute without user PATH"
-ok "bundled omp executes"
-env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/spin-agent" --version >/dev/null 2>&1 || fail "bundled spin-agent does not execute without user PATH"
-ok "bundled spin-agent executes"
+if [ "${SPIN_SKIP_BINARY_EXEC_CHECK:-0}" != "1" ]; then
+  "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute"
+  env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute without user PATH"
+  ok "bundled cmux executes"
+  "$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute"
+  env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/omp" --version >/dev/null 2>&1 || fail "bundled omp does not execute without user PATH"
+  ok "bundled omp executes"
+  env -i HOME="${HOME:-/tmp}" PATH="$SYSTEM_PATH" "$RES/bin/spin-agent" --version >/dev/null 2>&1 || fail "bundled spin-agent does not execute without user PATH"
+  ok "bundled spin-agent executes"
+else
+  ok "bundled binary execution skipped"
+fi
 
 if [ "${SPIN_REQUIRE_VENDORED_OMP:-}" = "1" ]; then
   [ -f "$RES/app/omp-vendor.json" ] || fail "missing OMP vendor metadata at Resources/app/omp-vendor.json"

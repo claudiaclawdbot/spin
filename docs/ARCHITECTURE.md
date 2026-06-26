@@ -3,6 +3,21 @@
 How the org actually works, layer by layer. If you're an agent reading this:
 this describes the system you're part of.
 
+## Product definition
+
+SPIN is a lightweight harness above multiple scoped OMP project agents. It uses a
+SPIN-branded cmux workspace for the human-visible multiplexer, OMP as the primary
+agent/provider engine, and plain files as the org protocol.
+
+The architecture exists to preserve context isolation. Each project agent keeps
+its own repository, handoff, state, queue, memory, and receipts. The SPIN
+Navigator keeps the organization-level map across those projects and routes work
+without collapsing every project into one giant shared prompt.
+
+The first target is OMP-backed project floors. Direct `codex`, `claude`,
+`gemini`, and `ollama` lanes are outer fallback paths when OMP is unavailable or
+hard-fails, not the main product identity.
+
 ## The five layers
 
 1. **Human (owner).** Sets direction, answers the four gated asks, funds wallets.
