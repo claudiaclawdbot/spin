@@ -192,7 +192,7 @@ ok "code signatures verify"
 
 outer_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$STAGE_APP/Contents/Info.plist" 2>/dev/null || true)"
 inner_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$STAGE_APP/Contents/Resources/SPIN.app/Contents/Info.plist" 2>/dev/null || true)"
-[ "$outer_id" = "dev.spin.app" ] || fail "outer bundle id is not dev.spin.app: ${outer_id:-missing}"
+[ "$outer_id" = "dev.spin.launcher" ] || fail "outer bundle id is not dev.spin.launcher: ${outer_id:-missing}"
 [ "$inner_id" = "dev.spin.app" ] || fail "inner bundle id is not dev.spin.app: ${inner_id:-missing}"
 ok "bundle identifiers"
 

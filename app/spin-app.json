@@ -1,6 +1,7 @@
 {
   "name": "SPIN",
-  "bundleIdentifier": "dev.spin.app",
+  "bundleIdentifier": "dev.spin.launcher",
+  "workspaceBundleIdentifier": "dev.spin.app",
   "product": "Self-contained macOS app bundle",
   "licensePosture": "GPL-compatible app distribution because the cmux UI engine is GPL-3.0-or-later unless commercially licensed.",
   "components": {

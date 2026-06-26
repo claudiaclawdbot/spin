@@ -10,7 +10,7 @@
   <key>CFBundleExecutable</key>
   <string>SPIN</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.spin.app</string>
+  <string>dev.spin.launcher</string>
   <key>CFBundleIconFile</key>
   <string>SPIN</string>
   <key>CFBundleInfoDictionaryVersion</key>
