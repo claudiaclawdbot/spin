@@ -292,6 +292,24 @@ grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/runs/restart-proof.receipt" || fail
 grep -Fq "$SESSION_MARKER" "$SEEDED_RUNTIME/logs/restart-proof.log" || fail "logs did not persist across relaunch"
 ok "app relaunch preserves onboarding, workspace refs, and org state"
 
+cat > "$SEEDED_RUNTIME/scripts/spin" <<'EOF'
+#!/usr/bin/env bash
+echo "stale same-version runtime"
+exit 71
+EOF
+chmod +x "$SEEDED_RUNTIME/scripts/spin"
+same_version_refresh_out="$(app_launcher_dry_run)"
+grep -q 'app-launch: spin up' <<<"$same_version_refresh_out" || fail "launcher did not refresh same-version runtime code"
+grep -Fq "$SESSION_MARKER" "$SESSION_ORG/.spin-onboarded" || fail "onboarding marker was overwritten during same-version runtime refresh"
+grep -Fq 'workspace:restart-ceo' "$SESSION_ORG/OMP_HARNESS.json" || fail "Coordinator cmux workspace ref was overwritten during same-version runtime refresh"
+grep -Fq 'workspace:restart-project' "$SESSION_ORG/OMP_HARNESS.json" || fail "project cmux workspace ref was overwritten during same-version runtime refresh"
+grep -Fq "$SESSION_MARKER" "$SESSION_ORG/state.json" || fail "org state was overwritten during same-version runtime refresh"
+grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/APPROVALS.md" || fail "approvals were overwritten during same-version runtime refresh"
+grep -Fq "$SESSION_MARKER" "$SESSION_ORG/HUMAN_QUEUE.md" || fail "human queue was overwritten during same-version runtime refresh"
+grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/runs/restart-proof.receipt" || fail "receipt was overwritten during same-version runtime refresh"
+grep -Fq "$SESSION_MARKER" "$SEEDED_RUNTIME/logs/restart-proof.log" || fail "logs were overwritten during same-version runtime refresh"
+ok "same-version runtime refresh preserves user state"
+
 if [ -f "$RUNTIME/VERSION" ]; then
   printf 'stale-local-runtime-version\n' > "$SEEDED_RUNTIME/VERSION"
   refresh_out="$(app_launcher_dry_run)"

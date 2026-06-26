@@ -55,13 +55,7 @@ seed_org_if_missing() {
   fi
 }
 
-if [ ! -x "$RUNTIME_DIR/scripts/spin" ]; then
-  copy_runtime
-  seed_org_if_missing
-elif [ -f "$SPIN_BUNDLED_RUNTIME/VERSION" ] && [ -f "$RUNTIME_DIR/VERSION" ] \
-  && ! cmp -s "$SPIN_BUNDLED_RUNTIME/VERSION" "$RUNTIME_DIR/VERSION"; then
-  copy_runtime
-  seed_org_if_missing
-fi
+copy_runtime
+seed_org_if_missing
 
 exec "$SPIN_ROOT/scripts/spin" app-launch
