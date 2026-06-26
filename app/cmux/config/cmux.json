@@ -15,11 +15,16 @@
     "showPullRequests": true
   },
   "sidebarAppearance": {
-    "tintColor": "#112B35",
-    "darkModeTintColor": "#112B35",
-    "tintOpacity": 0.12
+    "matchTerminalBackground": false,
+    "tintColor": "#061922",
+    "lightModeTintColor": "#D7F3FA",
+    "darkModeTintColor": "#061922",
+    "tintOpacity": 0.34
   },
   "workspaceColors": {
+    "indicatorStyle": "washRail",
+    "selectionColor": "#0E3A46",
+    "notificationBadgeColor": "#22D3EE",
     "colors": {
       "SPIN Cyan": "#0E6B8C",
       "SPIN Green": "#22C55E",
