@@ -178,9 +178,11 @@ grep -q '"value": "About SPIN"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q '"value": "Terminal Engine Settings…"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q 'CmuxTerminalGhosttyRuntimeTestStubs' "$FAKE_CMUX/Packages/macOS/CmuxTerminal/Package.swift"
 grep -q 'CmuxMobileGhosttyKit' "$FAKE_CMUX/Packages/iOS/CmuxMobileTerminal/Package.swift"
-test -s "$FAKE_CMUX/Assets.xcassets/AppIcon.appiconset/512@2x.png"
-test -s "$FAKE_CMUX/Assets.xcassets/AppIconLight.imageset/AppIconLight.png"
-test -s "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset/AppIconDark.png"
+if command -v qlmanage >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
+  test -s "$FAKE_CMUX/Assets.xcassets/AppIcon.appiconset/512@2x.png"
+  test -s "$FAKE_CMUX/Assets.xcassets/AppIconLight.imageset/AppIconLight.png"
+  test -s "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset/AppIconDark.png"
+fi
 test -f "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
