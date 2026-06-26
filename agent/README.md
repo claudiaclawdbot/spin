@@ -1,7 +1,7 @@
 # SPIN Agent Runtime
 
-This directory is the product home for the OMP/Pi-derived internal agent
-runtime.
+This directory is the home for the OMP/Pi-derived internal agent runtime that
+SPIN uses inside its lightweight orchestration harness.
 
 Target state:
 
@@ -9,6 +9,8 @@ Target state:
 - The app bundle carries an internal agent binary at `Resources/bin/omp`.
 - SPIN defaults own model roles, fallback chains, Coordinator behavior, project
   agents, worker jobs, approvals, and receipts.
+- Multiple project agents remain context-isolated; SPIN coordinates between
+  them through org files rather than merging their working context.
 - Upstream OMP/Pi structure stays recognizable enough that security and feature
   updates can be merged deliberately.
 

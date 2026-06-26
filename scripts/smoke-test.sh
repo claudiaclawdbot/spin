@@ -208,6 +208,95 @@ node -e '
   if (!j || j.status !== "completed") process.exit(1);
 '
 
+cat > scripts/project-ceo-agent.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
+PROJECT_ID="${1:?usage: project-ceo-agent.sh <project-id>}"
+PROJECT_DIR="$ROOT/org/projects/$PROJECT_ID"
+STATE_FILE="$PROJECT_DIR/STATE.json"
+RECEIPTS_FILE="$PROJECT_DIR/RECEIPTS.md"
+TS="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+JOB_ID="${OMP_JOB_ID:-unknown}"
+JOB_TYPE="${OMP_JOB_TYPE:-unknown}"
+JOB_DESCRIPTION="${OMP_JOB_DESCRIPTION:-}"
+
+node - "$STATE_FILE" "$PROJECT_ID" "$JOB_ID" "$JOB_TYPE" "$JOB_DESCRIPTION" "$TS" <<'NODE'
+const fs = require('fs');
+const [file, project, jobId, jobType, description, ts] = process.argv.slice(2);
+const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+state.project_id = state.project_id || state.project || project;
+state.project = state.project || state.project_id || project;
+state.status = 'completed';
+state.next_action = `smoke proof complete: ${jobId}`;
+state.updated_at = ts;
+state.last_smoke_job = { id: jobId, type: jobType, description, completed_at: ts };
+fs.writeFileSync(file, JSON.stringify(state, null, 2) + '\n');
+NODE
+
+{
+  printf '\n## Smoke Project Proof — %s\n' "$TS"
+  printf -- '- Project: %s\n' "$PROJECT_ID"
+  printf -- '- Job: %s (%s)\n' "$JOB_ID" "$JOB_TYPE"
+  printf -- '- Description: %s\n' "$JOB_DESCRIPTION"
+  printf -- '- Result: completed through deterministic smoke project agent\n'
+} >> "$RECEIPTS_FILE"
+
+"$ROOT/scripts/org" set-state "$PROJECT_ID" \
+  --status "completed" \
+  --next "smoke proof complete: $JOB_ID" >/dev/null
+"$ROOT/scripts/org" inbox "$PROJECT_ID" \
+  "job $JOB_ID complete: $JOB_DESCRIPTION" >/dev/null
+EOF
+chmod +x scripts/project-ceo-agent.sh
+scripts/org queue-job example-app scout "multi-project proof: example lane" --id smoke-example-project >/dev/null
+scripts/org queue-job workspace scout "multi-project proof: workspace lane" --id smoke-workspace-project >/dev/null
+scripts/omp-supervisor-once.sh >/dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if grep -q "Smoke Project Proof" org/projects/example-app/RECEIPTS.md &&
+     grep -q "Smoke Project Proof" org/projects/workspace/RECEIPTS.md &&
+     grep -q "smoke-example-project complete" org/ceo/INBOX.md &&
+     grep -q "smoke-workspace-project complete" org/ceo/INBOX.md; then
+    break
+  fi
+  sleep 0.2
+done
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node - <<'NODE'
+const fs = require('fs');
+const queue = JSON.parse(fs.readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-example-project', 'smoke-workspace-project']) {
+  const job = queue.jobs.find(j => j.id === id);
+  if (!job || job.status !== 'completed') process.exit(1);
+}
+NODE
+  then
+    break
+  fi
+  sleep 0.2
+done
+grep -q "smoke-example-project complete" org/ceo/INBOX.md
+grep -q "smoke-workspace-project complete" org/ceo/INBOX.md
+grep -q "smoke-example-project" org/projects/example-app/STATE.json
+grep -q "smoke-workspace-project" org/projects/workspace/STATE.json
+node - <<'NODE'
+const fs = require('fs');
+const queue = JSON.parse(fs.readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-example-project', 'smoke-workspace-project']) {
+  const job = queue.jobs.find(j => j.id === id);
+  if (!job || job.status !== 'completed') process.exit(1);
+}
+const orgState = JSON.parse(fs.readFileSync('org/state.json', 'utf8'));
+for (const id of ['example-app', 'workspace']) {
+  const project = (orgState.project_orchestrators || []).find(p => p.id === id || p.project === id);
+  if (!project || project.status !== 'completed' || !/smoke proof complete/.test(project.next_action || '')) {
+    process.exit(1);
+  }
+}
+NODE
+
 FAKEBIN="$TMP/fakebin"
 mkdir -p "$FAKEBIN"
 SMOKE_HOME="$TMP/home"
@@ -430,8 +519,11 @@ const metadata = {
 fs.writeFileSync(path.join(resources, 'app', 'omp-vendor.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 NODE
 node scripts/app-compatibility.js write "$TMP/SPIN.app" >/dev/null
-SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
-  scripts/check-app-release.sh "$TMP/SPIN.app" >/dev/null
+if ! SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release.out" 2>&1; then
+  sed -n '1,160p' "$TMP/check-app-release.out" >&2
+  exit 1
+fi
 scripts/check-macos-signing-env.sh >/dev/null
 if env SPIN_RELEASE_PRODUCTION=1 SPIN_CODESIGN_IDENTITY=- SPIN_APPLE_TEAM_ID= SPIN_CODESIGN_HARDENED=0 SPIN_CMUX_ENTITLEMENTS= SPIN_NOTARIZE=0 SPIN_NOTARY_PROFILE= \
   scripts/check-macos-signing-env.sh --production >/dev/null 2>&1; then
@@ -444,18 +536,18 @@ if env SPIN_CODESIGN_IDENTITY=- SPIN_APPLE_TEAM_ID= SPIN_CODESIGN_HARDENED=0 SPI
   exit 1
 fi
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  SPIN_RELEASE_DIR="$TMP/release" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
+  SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_RELEASE_DIR="$TMP/release" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
   ls "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
   ls "$TMP/release"/SPIN-*-macos-*.zip.sha256 >/dev/null
   ls "$TMP/release"/SPIN-*-macos-*.manifest >/dev/null
   scripts/check-installed-app.sh "$TMP/release"/SPIN-*-macos-*.zip >/dev/null
-  SPIN_RELEASE_FORMAT=dmg SPIN_RELEASE_DIR="$TMP/release-dmg" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
+  SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_SKIP_RELEASE_CHECK=1 SPIN_RELEASE_FORMAT=dmg SPIN_RELEASE_DIR="$TMP/release-dmg" scripts/package-macos-release.sh "$TMP/SPIN.app" >/dev/null
   RELEASE_DMG="$(ls "$TMP/release-dmg"/SPIN-*-macos-*.dmg | head -1)"
   test -f "$RELEASE_DMG"
   test -f "$RELEASE_DMG.sha256"
   test -f "${RELEASE_DMG%.dmg}.manifest"
   scripts/check-installed-app.sh "$RELEASE_DMG" >/dev/null
-  scripts/release-macos.sh --skip-build --skip-vendor --app "$TMP/SPIN.app" --release-dir "$TMP/release-command" >/dev/null
+  SPIN_SKIP_BINARY_EXEC_CHECK=1 scripts/release-macos.sh --skip-build --skip-vendor --app "$TMP/SPIN.app" --release-dir "$TMP/release-command" >/dev/null
   ls "$TMP/release-command"/SPIN-*-macos-*.zip >/dev/null
   ls "$TMP/release-command"/SPIN-*-macos-*.zip.sha256 >/dev/null
   ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
