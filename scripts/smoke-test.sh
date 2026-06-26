@@ -88,6 +88,11 @@ mkdir -p \
   "$FAKE_CMUX/Resources/bin" \
   "$FAKE_CMUX/Sources" \
   "$FAKE_CMUX/CLI" \
+  "$FAKE_CMUX/Assets.xcassets/AppIcon.appiconset" \
+  "$FAKE_CMUX/Assets.xcassets/AppIcon-Debug.appiconset" \
+  "$FAKE_CMUX/Assets.xcassets/AppIcon-Nightly.appiconset" \
+  "$FAKE_CMUX/Assets.xcassets/AppIconLight.imageset" \
+  "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset" \
   "$FAKE_CMUX/Packages/macOS/CmuxTerminal" \
   "$FAKE_CMUX/Packages/iOS/CmuxMobileTerminal" \
   "$FAKE_CMUX/vendor/bonsplit" \
@@ -112,7 +117,44 @@ A program running within cmux would like to use AppleScript.
 cmux Sidebar Tab Reorder
 cmux File Preview Transfer
 EOF
-: > "$FAKE_CMUX/Sources/cmuxApp.swift"
+cat > "$FAKE_CMUX/Sources/cmuxApp.swift" <<'EOF'
+Button(String(localized: "menu.app.openCmuxSettingsFile", defaultValue: "Open cmux.json")) {}
+Button(String(localized: "menu.app.ghosttySettings", defaultValue: "Ghostty Settings…")) {}
+Button(String(localized: "menu.app.makeDefaultTerminal", defaultValue: "Make cmux the Default Terminal")) {}
+Button(String(localized: "menu.app.about", defaultValue: "About cmux")) {}
+splitCommandButton(title: String(localized: "menu.quitCmux", defaultValue: "Quit cmux")) {}
+Text(String(localized: "about.appName", defaultValue: "cmux"))
+Text(String(localized: "about.description", defaultValue: "A Ghostty-based terminal with vertical tabs\nand a notification panel for macOS."))
+private let githubURL = URL(string: "https://github.com/manaflow-ai/cmux")
+private let docsURL = URL(string: "https://cmux.com/docs")
+let commitURL = commit.flatMap { hash in
+  URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")
+}
+EOF
+cat > "$FAKE_CMUX/Sources/ContentView.swift" <<'EOF'
+title: constant(String(localized: "settings.settingsJSON.openFile", defaultValue: "Open cmux.json"))
+subtitle: constant(String(localized: "command.cmuxConfig.subtitle", defaultValue: "cmux.json"))
+keywords: ["open", "cmux", "json", "config", "configuration", "settings", "file", "editor", "dotfile"]
+defaultValue: "Open Ghostty Settings in TextEdit"
+defaultValue: "Ghostty Config Files"
+keywords: ["open", "ghostty", "settings", "config", "configuration", "file", "textedit", "terminal"]
+defaultValue: "Make cmux the Default Terminal"
+EOF
+cat > "$FAKE_CMUX/Resources/Localizable.xcstrings" <<'EOF'
+{
+  "strings": {
+    "about.appName": { "localizations": { "en": { "stringUnit": { "value": "cmux" } } } },
+    "about.description": { "localizations": { "en": { "stringUnit": { "value": "A Ghostty-based terminal with vertical tabs\nand a notification panel for macOS." } } } },
+    "menu.app.about": { "localizations": { "en": { "stringUnit": { "value": "About cmux" } } } },
+    "menu.app.ghosttySettings": { "localizations": { "en": { "stringUnit": { "value": "Ghostty Settings…" } } } },
+    "menu.app.openCmuxSettingsFile": { "localizations": { "en": { "stringUnit": { "value": "Open cmux.json" } } } },
+    "menu.app.makeDefaultTerminal": { "localizations": { "en": { "stringUnit": { "value": "Make cmux the Default Terminal" } } } },
+    "menu.quitCmux": { "localizations": { "en": { "stringUnit": { "value": "Quit cmux" } } } },
+    "command.openGhosttySettings.title": { "localizations": { "en": { "stringUnit": { "value": "Open Ghostty Settings in TextEdit" } } } },
+    "command.openGhosttySettings.subtitle": { "localizations": { "en": { "stringUnit": { "value": "Ghostty Config Files" } } } }
+  }
+}
+EOF
 : > "$FAKE_CMUX/CLI/cmux.swift"
 cat > "$FAKE_CMUX/Packages/macOS/CmuxTerminal/Package.swift" <<'EOF'
 "GhosttyRuntimeTestStubs"
@@ -129,8 +171,16 @@ grep -q 'PRODUCT_BUNDLE_IDENTIFIER = dev.spin.app;' "$FAKE_CMUX/cmux.xcodeproj/p
 grep -q 'CMUX_AUTH_CALLBACK_SCHEME = spin;' "$FAKE_CMUX/cmux.xcodeproj/project.pbxproj"
 grep -q 'CMUX_SIDEBAR_EXTENSION_POINT_ID = dev.spin.app.cmux.sidebar;' "$FAKE_CMUX/cmux.xcodeproj/project.pbxproj"
 grep -q 'SPIN Sidebar Tab Reorder' "$FAKE_CMUX/Resources/Info.plist"
+grep -q 'About SPIN' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'Terminal Engine Settings' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'Open SPIN Workspace Config' "$FAKE_CMUX/Sources/ContentView.swift"
+grep -q '"value": "About SPIN"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
+grep -q '"value": "Terminal Engine Settings…"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q 'CmuxTerminalGhosttyRuntimeTestStubs' "$FAKE_CMUX/Packages/macOS/CmuxTerminal/Package.swift"
 grep -q 'CmuxMobileGhosttyKit' "$FAKE_CMUX/Packages/iOS/CmuxMobileTerminal/Package.swift"
+test -s "$FAKE_CMUX/Assets.xcassets/AppIcon.appiconset/512@2x.png"
+test -s "$FAKE_CMUX/Assets.xcassets/AppIconLight.imageset/AppIconLight.png"
+test -s "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset/AppIconDark.png"
 test -f "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
@@ -450,7 +500,7 @@ HOME="$SMOKE_HOME" bash -c "
 grep -q '^omp$' "$TMP/provider"
 
 FAKE_CMUX_APP="$TMP/fake-cmux-app/SPIN.app"
-mkdir -p "$FAKE_CMUX_APP/Contents/MacOS"
+mkdir -p "$FAKE_CMUX_APP/Contents/MacOS" "$FAKE_CMUX_APP/Contents/Resources/en.lproj"
 cat > "$FAKE_CMUX_APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -466,6 +516,12 @@ cat > "$FAKE_CMUX_APP/Contents/Info.plist" <<'EOF'
   <string>SPIN</string>
 </dict>
 </plist>
+EOF
+cat > "$FAKE_CMUX_APP/Contents/Resources/en.lproj/Localizable.strings" <<'EOF'
+"menu.app.about" = "About SPIN";
+"menu.app.ghosttySettings" = "Terminal Engine Settings…";
+"menu.app.openCmuxSettingsFile" = "Open SPIN Workspace Config";
+"menu.quitCmux" = "Quit SPIN";
 EOF
 cat > "$FAKE_CMUX_APP/Contents/MacOS/SPIN" <<'EOF'
 #!/usr/bin/env bash

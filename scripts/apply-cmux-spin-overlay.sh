@@ -143,6 +143,77 @@ replace_text() {
   FROM="$from" TO="$to" perl -0pi -e 's/\Q$ENV{FROM}\E/$ENV{TO}/g' "$CMUX_DIR/$file"
 }
 
+install_spin_app_icon_assets() {
+  local src="$ROOT/assets/branding/spin-icon.svg"
+  local assets_dir="$CMUX_DIR/Assets.xcassets"
+  local tmp master
+
+  [ -d "$assets_dir" ] || {
+    echo "warning: cmux asset catalog not found; skipping nested app icon skin" >&2
+    return
+  }
+  [ -f "$src" ] || {
+    echo "warning: SPIN icon source missing: $src" >&2
+    return
+  }
+  command -v qlmanage >/dev/null 2>&1 || {
+    echo "warning: qlmanage not found; skipping nested app icon skin" >&2
+    return
+  }
+  command -v sips >/dev/null 2>&1 || {
+    echo "warning: sips not found; skipping nested app icon skin" >&2
+    return
+  }
+
+  tmp="$(mktemp -d)"
+  if ! qlmanage -t -s 1024 -o "$tmp" "$src" >/dev/null 2>&1; then
+    rm -rf "$tmp"
+    echo "warning: Quick Look could not render $src; skipping nested app icon skin" >&2
+    return
+  fi
+  master="$(find "$tmp" -maxdepth 1 -name '*.png' -print -quit)"
+  if [ ! -f "$master" ]; then
+    rm -rf "$tmp"
+    echo "warning: Quick Look did not produce a PNG for $src; skipping nested app icon skin" >&2
+    return
+  fi
+
+  make_png() {
+    local pixels="$1" out="$2"
+    sips -z "$pixels" "$pixels" "$master" --out "$out" >/dev/null
+  }
+
+  install_iconset() {
+    local iconset="$1"
+    [ -d "$iconset" ] || return 0
+    make_png 16 "$iconset/16.png"
+    make_png 32 "$iconset/16@2x.png"
+    make_png 32 "$iconset/32.png"
+    make_png 64 "$iconset/32@2x.png"
+    make_png 128 "$iconset/128.png"
+    make_png 256 "$iconset/128@2x.png"
+    make_png 256 "$iconset/256.png"
+    make_png 512 "$iconset/256@2x.png"
+    make_png 512 "$iconset/512.png"
+    make_png 1024 "$iconset/512@2x.png"
+    for base in 16 32 128 256 512; do
+      if [ -f "$iconset/${base}_dark.png" ]; then
+        make_png "$base" "$iconset/${base}_dark.png"
+      fi
+      if [ -f "$iconset/${base}@2x_dark.png" ]; then
+        make_png "$((base * 2))" "$iconset/${base}@2x_dark.png"
+      fi
+    done
+  }
+
+  install_iconset "$assets_dir/AppIcon.appiconset"
+  install_iconset "$assets_dir/AppIcon-Debug.appiconset"
+  install_iconset "$assets_dir/AppIcon-Nightly.appiconset"
+  [ -d "$assets_dir/AppIconLight.imageset" ] && make_png 1024 "$assets_dir/AppIconLight.imageset/AppIconLight.png"
+  [ -d "$assets_dir/AppIconDark.imageset" ] && make_png 1024 "$assets_dir/AppIconDark.imageset/AppIconDark.png"
+  rm -rf "$tmp"
+}
+
 clone_cmux
 hydrate_cmux_build_inputs
 
@@ -187,9 +258,60 @@ replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux --help\(reset)\(subdued) fo
 replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux shortcuts\(reset)\(subdued) to edit shortcuts.' 'Run \(reset)\(bold)spin app-health\(reset)\(subdued) to verify the bundled runtime.'
 replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux feedback\(reset)\(subdued) to report a bug.' 'Run \(reset)\(bold)spin up\(reset)\(subdued) to open the Coordinator.'
 
+echo "patching nested app UI branding"
+replace_text Sources/cmuxApp.swift 'Open cmux.json' 'Open SPIN Workspace Config'
+replace_text Sources/cmuxApp.swift 'Ghostty Settings…' 'Terminal Engine Settings…'
+replace_text Sources/cmuxApp.swift 'Make cmux the Default Terminal' 'Make SPIN the Default Terminal'
+replace_text Sources/cmuxApp.swift 'About cmux' 'About SPIN'
+replace_text Sources/cmuxApp.swift 'Quit cmux' 'Quit SPIN'
+replace_text Sources/cmuxApp.swift 'defaultValue: "cmux"' 'defaultValue: "SPIN"'
+replace_text Sources/cmuxApp.swift 'A Ghostty-based terminal with vertical tabs\nand a notification panel for macOS.' 'SPIN coordinates OMP project agents\non top of the cmux terminal engine.'
+replace_text Sources/cmuxApp.swift 'private let githubURL = URL(string: "https://github.com/manaflow-ai/cmux")' 'private let githubURL = URL(string: "https://github.com/claudiaclawdbot/spin")'
+replace_text Sources/cmuxApp.swift 'private let docsURL = URL(string: "https://cmux.com/docs")' 'private let docsURL = URL(string: "https://github.com/claudiaclawdbot/spin#readme")'
+replace_text Sources/cmuxApp.swift 'URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")' 'URL(string: "https://github.com/claudiaclawdbot/spin")'
+
+if [ -f "$CMUX_DIR/Sources/ContentView.swift" ]; then
+  replace_text Sources/ContentView.swift 'Open cmux.json' 'Open SPIN Workspace Config'
+  replace_text Sources/ContentView.swift 'defaultValue: "cmux.json"' 'defaultValue: "SPIN workspace config"'
+  replace_text Sources/ContentView.swift '"open", "cmux", "json", "config", "configuration", "settings", "file", "editor", "dotfile"' '"open", "spin", "workspace", "config", "configuration", "settings", "file", "editor", "dotfile"'
+  replace_text Sources/ContentView.swift 'Open Ghostty Settings in TextEdit' 'Open Terminal Engine Settings in TextEdit'
+  replace_text Sources/ContentView.swift 'Ghostty Config Files' 'Terminal Engine Config Files'
+  replace_text Sources/ContentView.swift '"open", "ghostty", "settings", "config", "configuration", "file", "textedit", "terminal"' '"open", "terminal", "engine", "settings", "config", "configuration", "file", "textedit"'
+  replace_text Sources/ContentView.swift 'Make cmux the Default Terminal' 'Make SPIN the Default Terminal'
+fi
+
+if [ -f "$CMUX_DIR/Sources/App/MenuBarExtraController.swift" ]; then
+  replace_text Sources/App/MenuBarExtraController.swift 'Quit cmux' 'Quit SPIN'
+fi
+if [ -f "$CMUX_DIR/Sources/KeyboardShortcutSettings.swift" ]; then
+  replace_text Sources/KeyboardShortcutSettings.swift 'Quit cmux' 'Quit SPIN'
+fi
+if [ -f "$CMUX_DIR/Sources/QuitConfirmationAlertPresenter.swift" ]; then
+  replace_text Sources/QuitConfirmationAlertPresenter.swift 'Quit cmux?' 'Quit SPIN?'
+fi
+if [ -f "$CMUX_DIR/Sources/SettingsNavigation.swift" ]; then
+  replace_text Sources/SettingsNavigation.swift 'Open cmux.json' 'Open SPIN Workspace Config'
+fi
+
+if [ -f "$CMUX_DIR/Resources/Localizable.xcstrings" ]; then
+  replace_text Resources/Localizable.xcstrings '"value": "cmux"' '"value": "SPIN"'
+  replace_text Resources/Localizable.xcstrings '"value": "About cmux"' '"value": "About SPIN"'
+  replace_text Resources/Localizable.xcstrings '"value": "Ghostty Settings…"' '"value": "Terminal Engine Settings…"'
+  replace_text Resources/Localizable.xcstrings '"value": "Open cmux.json"' '"value": "Open SPIN Workspace Config"'
+  replace_text Resources/Localizable.xcstrings '"value": "Make cmux the Default Terminal"' '"value": "Make SPIN the Default Terminal"'
+  replace_text Resources/Localizable.xcstrings '"value": "Quit cmux?"' '"value": "Quit SPIN?"'
+  replace_text Resources/Localizable.xcstrings '"value": "Quit cmux"' '"value": "Quit SPIN"'
+  replace_text Resources/Localizable.xcstrings '"value": "A Ghostty-based terminal with vertical tabs\nand a notification panel for macOS."' '"value": "SPIN coordinates OMP project agents\non top of the cmux terminal engine."'
+  replace_text Resources/Localizable.xcstrings '"value": "Open Ghostty Settings in TextEdit"' '"value": "Open Terminal Engine Settings in TextEdit"'
+  replace_text Resources/Localizable.xcstrings '"value": "Ghostty Config Files"' '"value": "Terminal Engine Config Files"'
+fi
+
 echo "patching app-build SwiftPM target collisions"
 replace_text Packages/macOS/CmuxTerminal/Package.swift '"GhosttyRuntimeTestStubs"' '"CmuxTerminalGhosttyRuntimeTestStubs"'
 replace_text Packages/iOS/CmuxMobileTerminal/Package.swift '"GhosttyKit"' '"CmuxMobileGhosttyKit"'
+
+echo "installing SPIN nested app icon assets"
+install_spin_app_icon_assets
 
 echo "installing SPIN default cmux config assets"
 mkdir -p "$CMUX_DIR/Resources/spin"
