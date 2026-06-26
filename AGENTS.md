@@ -70,7 +70,8 @@ the intended product:
 
 Current automated coverage: `scripts/smoke-test.sh` validates install seeding,
 org CLI plumbing, web approvals, app overlay checks, single-job dispatcher
-plumbing, and a deterministic multi-project org proof across `example-app` and
-`workspace`. That proof uses a local project-agent stub so it can run offline in
-CI; live OMP provider runs and the cmux GUI floor-spawn remain manual/product
+plumbing, first-launch routing into `SPIN Onboarding`, and a deterministic
+multi-project org proof across `example-app` and `workspace`. The project-agent
+stub is test-only so CI can run without real OMP credentials or a GUI session;
+live OMP provider runs and the cmux GUI floor-spawn remain manual/product
 verification paths.

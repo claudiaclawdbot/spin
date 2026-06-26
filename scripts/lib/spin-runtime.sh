@@ -87,6 +87,31 @@ spin_prepend_internal_path() {
   export PATH
 }
 
+spin_cmux_socket_path() {
+  local dir
+  if [ -n "${CMUX_SOCKET_PATH:-}" ]; then
+    printf '%s\n' "$CMUX_SOCKET_PATH"
+    return 0
+  fi
+  dir="${SPIN_CMUX_SOCKET_DIR:-$HOME/.local/state/cmux}"
+  mkdir -p "$dir"
+  printf '%s\n' "$dir/spin.sock"
+}
+
+spin_prepare_cmux_environment() {
+  CMUX_SOCKET_PATH="$(spin_cmux_socket_path)"
+  export CMUX_SOCKET_PATH
+  export CMUX_ALLOW_SOCKET_OVERRIDE="${CMUX_ALLOW_SOCKET_OVERRIDE:-1}"
+  export CMUX_SOCKET_ENABLE="${CMUX_SOCKET_ENABLE:-1}"
+  export CMUX_SOCKET_MODE="${CMUX_SOCKET_MODE:-allowall}"
+  if [ -z "${CMUX_BUNDLED_CLI_PATH:-}" ]; then
+    local cmux_bin=""
+    cmux_bin="$(spin_resolve_binary cmux 2>/dev/null || true)"
+    [ -n "$cmux_bin" ] && export CMUX_BUNDLED_CLI_PATH="$cmux_bin"
+  fi
+  return 0
+}
+
 spin_cmux_app_path() {
   local app
   for app in \
@@ -104,7 +129,29 @@ spin_cmux_app_path() {
 
 spin_open_cmux_app() {
   local app
+  spin_prepare_cmux_environment
   if app="$(spin_cmux_app_path 2>/dev/null)"; then
+    if [ "${SPIN_OPEN_FRESH:-0}" = "1" ]; then
+      open -F \
+        --env "CMUX_SOCKET_PATH=$CMUX_SOCKET_PATH" \
+        --env "CMUX_ALLOW_SOCKET_OVERRIDE=$CMUX_ALLOW_SOCKET_OVERRIDE" \
+        --env "CMUX_SOCKET_ENABLE=$CMUX_SOCKET_ENABLE" \
+        --env "CMUX_SOCKET_MODE=$CMUX_SOCKET_MODE" \
+        --env "CMUX_BUNDLED_CLI_PATH=${CMUX_BUNDLED_CLI_PATH:-}" \
+        --env "SPIN_ROOT=${SPIN_ROOT:-$SPIN_RUNTIME_ROOT}" \
+        --env "WORKSPACE_ROOT=${WORKSPACE_ROOT:-${SPIN_ROOT:-$SPIN_RUNTIME_ROOT}}" \
+        "$app" >/dev/null 2>&1 && return 0
+    else
+      open \
+        --env "CMUX_SOCKET_PATH=$CMUX_SOCKET_PATH" \
+        --env "CMUX_ALLOW_SOCKET_OVERRIDE=$CMUX_ALLOW_SOCKET_OVERRIDE" \
+        --env "CMUX_SOCKET_ENABLE=$CMUX_SOCKET_ENABLE" \
+        --env "CMUX_SOCKET_MODE=$CMUX_SOCKET_MODE" \
+        --env "CMUX_BUNDLED_CLI_PATH=${CMUX_BUNDLED_CLI_PATH:-}" \
+        --env "SPIN_ROOT=${SPIN_ROOT:-$SPIN_RUNTIME_ROOT}" \
+        --env "WORKSPACE_ROOT=${WORKSPACE_ROOT:-${SPIN_ROOT:-$SPIN_RUNTIME_ROOT}}" \
+        "$app" >/dev/null 2>&1 && return 0
+    fi
     open "$app" >/dev/null 2>&1
     return $?
   fi

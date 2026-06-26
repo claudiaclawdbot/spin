@@ -13,6 +13,7 @@ RUN="$ROOT/org/ceo/runs"; c_v=$'\e[35m'; c_g=$'\e[32m'; c_d=$'\e[2m'; c_o=$'\e[0
 source "$ROOT/scripts/lib/spin-runtime.sh"
 source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
+spin_prepare_cmux_environment
 spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or install cmux for the development visual interface. Headless: spin start" || exit 1
 
 echo "${c_v}Opening the SPIN interface…${c_o}"

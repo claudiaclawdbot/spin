@@ -140,7 +140,7 @@ require_file() {
 
 replace_text() {
   local file="$1" from="$2" to="$3"
-  perl -0pi -e "s/\\Q$from\\E/$to/g" "$CMUX_DIR/$file"
+  FROM="$from" TO="$to" perl -0pi -e 's/\Q$ENV{FROM}\E/$ENV{TO}/g' "$CMUX_DIR/$file"
 }
 
 clone_cmux
@@ -172,6 +172,20 @@ replace_text Resources/Info.plist 'A program running within cmux would like to u
 replace_text Resources/Info.plist 'A program running within cmux would like to use AppleScript.' 'A program running within SPIN would like to use AppleScript.'
 replace_text Resources/Info.plist 'cmux Sidebar Tab Reorder' 'SPIN Sidebar Tab Reorder'
 replace_text Resources/Info.plist 'cmux File Preview Transfer' 'SPIN File Preview Transfer'
+replace_text Resources/Info.plist 'https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml' 'https://github.com/claudiaclawdbot/spin/releases/latest/download/appcast.xml'
+replace_text Resources/Info.plist 'com.cmux.sidebar-tab-reorder' 'dev.spin.sidebar-tab-reorder'
+replace_text Resources/Info.plist 'com.cmux.filepreview.transfer' 'dev.spin.filepreview.transfer'
+
+echo "patching bundled CLI welcome copy"
+replace_text CLI/cmux.swift '\(c1)c\(c2)m\(c3)u\(c7)x\(reset)' '\(c1)S\(c2)P\(c3)I\(c7)N\(reset)'
+replace_text CLI/cmux.swift 'the open source terminal' 'the SPIN workspace'
+replace_text CLI/cmux.swift 'built for coding agents' 'for OMP project agents'
+replace_text CLI/cmux.swift 'https://cmux.com/docs' 'https://github.com/claudiaclawdbot/spin#readme'
+replace_text CLI/cmux.swift 'https://github.com/manaflow-ai/cmux (please leave a star ⭐)' 'https://github.com/claudiaclawdbot/spin'
+replace_text CLI/cmux.swift 'founders@manaflow.com' 'SPIN owns orchestration; cmux powers the workspace'
+replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux --help\(reset)\(subdued) for all commands.' 'Run \(reset)\(bold)spin help\(reset)\(subdued) for SPIN commands.'
+replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux shortcuts\(reset)\(subdued) to edit shortcuts.' 'Run \(reset)\(bold)spin app-health\(reset)\(subdued) to verify the bundled runtime.'
+replace_text CLI/cmux.swift 'Run \(reset)\(bold)cmux feedback\(reset)\(subdued) to report a bug.' 'Run \(reset)\(bold)spin up\(reset)\(subdued) to open the Coordinator.'
 
 echo "patching app-build SwiftPM target collisions"
 replace_text Packages/macOS/CmuxTerminal/Package.swift '"GhosttyRuntimeTestStubs"' '"CmuxTerminalGhosttyRuntimeTestStubs"'

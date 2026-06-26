@@ -331,6 +331,7 @@ grep -q 'ceo -> example-app: delegate smoke-delegate: make ascii art' org/ceo/ru
 cat > "$TMP/internal-cmux" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$TMP/internal-cmux.calls"
+printf 'socket=%s\n' "\${CMUX_SOCKET_PATH:-}" >> "$TMP/internal-cmux.calls"
 case "\${1:-}" in
   ping) exit 0 ;;
   version) echo "cmux internal fake 1.0"; exit 0 ;;
@@ -688,9 +689,10 @@ SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-after.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-after.out"
 rm -f org/.spin-onboarded
 
-SPIN_APP_HOME="$TMP/app-home" "$TMP/SPIN.app/Contents/MacOS/SPIN" > "$TMP/app-launch.out"
+HOME="$TMP/app-home" SPIN_APP_HOME="$TMP/app-home" SPIN_APP_NO_LOG_REDIRECT=1 "$TMP/SPIN.app/Contents/MacOS/SPIN" > "$TMP/app-launch.out"
 test -x "$TMP/app-home/runtime/scripts/spin"
 grep -q 'SPIN onboarding opened in cmux' "$TMP/app-launch.out"
 grep -q 'new-workspace --name SPIN Onboarding' "$TMP/internal-cmux.calls"
+grep -q "socket=$TMP/app-home/.local/state/cmux/spin.sock" "$TMP/internal-cmux.calls"
 
 echo "smoke ok"
