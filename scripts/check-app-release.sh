@@ -209,6 +209,8 @@ ok "bundled cmux app identity ($cmux_bundle_id)"
 
 cmux_icon_file="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconFile || true)"
 [ "$cmux_icon_file" = "AppIcon" ] || fail "bundled cmux app icon plist key is not AppIcon: ${cmux_icon_file:-missing}"
+cmux_icon_name="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconName || true)"
+[ -z "$cmux_icon_name" ] || fail "bundled cmux app still uses asset-catalog icon name: $cmux_icon_name"
 [ -s "$CMUX_APP/Contents/Resources/AppIcon.icns" ] || fail "missing bundled cmux app icon at Resources/SPIN.app/Contents/Resources/AppIcon.icns"
 cmp -s "$RES/SPIN.icns" "$CMUX_APP/Contents/Resources/AppIcon.icns" || fail "bundled cmux app icon does not match SPIN icon"
 ok "bundled cmux app icon"
