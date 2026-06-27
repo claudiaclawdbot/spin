@@ -101,24 +101,20 @@ func onboardingButton(_ w) -> some View {
 }
 
 func projectRow(_ w) -> some View {
-    HStack(spacing: 4) {
+    HStack(spacing: 3) {
         Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
             HStack(spacing: 6) {
                 Circle()
                     .foregroundColor(w.selected ? "#00E5FF" : (w.unread > 0 ? "#EAB308" : "#8A7280"))
                     .frame(width: 5, height: 5)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(w.title)
-                        .font(.system(size: 12))
-                        .fontWeight(w.selected ? .semibold : .regular)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Text(workspaceSubtitle(w))
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
+                Text(w.title)
+                    .font(.system(size: 12))
+                    .fontWeight(w.selected ? .semibold : .regular)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
                 Spacer()
                 if w.unread > 0 {
                     Text("\(w.unread)")
@@ -140,7 +136,7 @@ func projectRow(_ w) -> some View {
                 .font(.system(size: 8))
                 .fontWeight(.semibold)
                 .foregroundColor(w.selected ? "#FFFFFF" : "#FFD1F5")
-                .frame(width: 16, height: 16)
+                .frame(width: 14, height: 14)
                 .background { Circle().foregroundColor(w.selected ? "#FF7ADF" : "#2B1325").opacity(w.selected ? 0.58 : 0.44) }
                 .overlay {
                     Circle()
@@ -152,8 +148,8 @@ func projectRow(_ w) -> some View {
         .help("Close project tab. This only removes the visible cmux floor; it does not delete project files or the repository.")
     }
     .padding(.leading, 5)
-    .padding(.trailing, 3)
-    .padding(.vertical, 3)
+    .padding(.trailing, 2)
+    .padding(.vertical, 1)
     .background { RoundedRectangle(cornerRadius: 6).foregroundColor(w.selected ? "#2A1830" : "#1B1118").opacity(w.selected ? 0.66 : 0.40) }
     .overlay {
         RoundedRectangle(cornerRadius: 6)
