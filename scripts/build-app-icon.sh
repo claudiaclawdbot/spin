@@ -112,13 +112,13 @@ func strokeEllipse(centerX: CGFloat, centerY: CGFloat, radius: CGFloat, width: C
     context.restoreGState()
 }
 
-for circle in [(512.0, 302.0, 112.0), (692.0, 656.0, 122.0), (332.0, 656.0, 122.0), (512.0, 512.0, 84.0)] {
+for circle in [(512.0, 352.0, 116.0), (680.0, 672.0, 116.0), (344.0, 672.0, 116.0), (512.0, 536.0, 82.0)] {
     fillEllipse(centerX: CGFloat(circle.0), centerY: CGFloat(circle.1), radius: CGFloat(circle.2), fill: color("#18102b"))
     strokeEllipse(centerX: CGFloat(circle.0), centerY: CGFloat(circle.1), radius: CGFloat(circle.2), width: 46)
 }
 
 context.saveGState()
-context.addEllipse(in: CGRect(x: 478, y: 478, width: 68, height: 68))
+context.addEllipse(in: CGRect(x: 478, y: 502, width: 68, height: 68))
 context.clip()
 context.drawLinearGradient(neon, start: CGPoint(x: 176, y: 148), end: CGPoint(x: 848, y: 884), options: [])
 context.restoreGState()
