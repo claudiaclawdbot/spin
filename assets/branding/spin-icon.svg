@@ -11,10 +11,10 @@
   </defs>
   <rect x="112" y="112" width="800" height="800" rx="226" fill="url(#spin-surface)" stroke="url(#spin-gradient)" stroke-width="22"/>
   <g fill="#18102b" stroke="url(#spin-gradient)" stroke-width="46">
-    <circle cx="512" cy="302" r="112"/>
-    <circle cx="692" cy="656" r="122"/>
-    <circle cx="332" cy="656" r="122"/>
-    <circle cx="512" cy="512" r="84"/>
+    <circle cx="512" cy="352" r="116"/>
+    <circle cx="680" cy="672" r="116"/>
+    <circle cx="344" cy="672" r="116"/>
+    <circle cx="512" cy="536" r="82"/>
   </g>
-  <circle cx="512" cy="512" r="34" fill="url(#spin-gradient)"/>
+  <circle cx="512" cy="536" r="34" fill="url(#spin-gradient)"/>
 </svg>
