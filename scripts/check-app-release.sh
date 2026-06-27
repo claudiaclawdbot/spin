@@ -404,7 +404,8 @@ grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not rout
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
 [ -x "$TMP/home/runtime/scripts/org" ] || fail "launcher did not seed writable org CLI"
 [ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
-grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not neon SPIN-branded"
+grep -q '"darkModeTintColor": "#FF7ADF"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not soft SPIN-branded"
+grep -q '"tintOpacity": 0.24' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not using the soft SPIN tint opacity"
 [ -f "$TMP/home/.config/cmux/sidebars/spin-navigator.swift" ] || fail "launcher did not seed SPIN Navigator sidebar"
 assert_spin_sidebar_defaults_seeded "$TMP/home"
 ok "first-launch runtime seed"
@@ -424,10 +425,11 @@ cat > "$TMP/template-home/.config/cmux/cmux.json" <<'EOF'
 EOF
 template_out="$(env -i HOME="$TMP/template-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/template-home" SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
 grep -q 'app-launch: onboarding' <<<"$template_out" || fail "launcher did not route template-home launch to onboarding"
-grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with SPIN neon config"
+grep -q '"darkModeTintColor": "#FF7ADF"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with soft SPIN config"
+grep -q '"tintOpacity": 0.24' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with soft SPIN tint opacity"
 ls "$TMP/template-home/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "launcher did not back up generated cmux template"
 assert_spin_sidebar_defaults_seeded "$TMP/template-home"
-ok "generated cmux template refreshes to SPIN neon config"
+ok "generated cmux template refreshes to soft SPIN config"
 
 omp_ready_out="$(env -i HOME="$TMP/omp-ready-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-ready-home" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
 grep -q 'app-launch: spin up' <<<"$omp_ready_out" || fail "launcher did not route existing OMP config to spin up"

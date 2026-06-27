@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPIN: Super Pi Interoperable Navigator</title>
-<meta name="description" content="A lightweight OMP/cmux harness that coordinates multiple scoped project agents without merging their contexts.">
+<meta name="description" content="A lightweight OMP/cmux harness that coordinates isolated project agents and lets work fall through across configured models and providers.">
 <meta property="og:title" content="SPIN: Super Pi Interoperable Navigator">
-<meta property="og:description" content="A lightweight OMP/cmux harness that coordinates multiple scoped project agents without turning the human into the router.">
+<meta property="og:description" content="Coordinate scoped project agents, keep contexts isolated, and use OMP model/provider fallback without turning the human into the router.">
 <style>
   :root{
     --bg:#0a0a12; --bg2:#0f0f1c; --panel:#15152a; --line:#262645;
@@ -129,9 +129,9 @@
   </svg>
   <h1 class="wordmark">S<span class="pi">PI</span>N</h1>
   <p class="sub">
-    <span class="def">Super<span class="tip"><span class="h">Super</span>: the lightweight harness around agent CLIs that you can track, audit, and interrupt.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span>: the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it. The engine SPIN is built around and the letters at the heart of the name.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span>: separate OMP project agents cooperate through plain files, queues, receipts, and Navigator decisions without sharing every working token.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span>: the high-level routing system for projects, approvals, receipts, and human attention.</span></span>
+    <span class="def">Super<span class="tip"><span class="h">Super</span>: the lightweight harness around agent CLIs that you can track, audit, and interrupt.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span>: the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span>: project agents cooperate through SPIN files, and OMP can fall through across configured models/providers.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span>: the routing system for projects, approvals, receipts, and human attention.</span></span>
   </p>
-  <p class="tag">One coordinator for many scoped OMP project agents. <b>Context stays isolated</b> while SPIN tracks the org.</p>
+  <p class="tag">One coordinator for many scoped OMP project agents. <b>Contexts stay isolated</b>, and model fallback stays inside the harness.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download SPIN.app beta</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
@@ -140,7 +140,7 @@
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
-    <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span>
+    <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span><span class="badge">model fallback</span>
     <span class="badge">SPIN.app beta DMG</span>
   </div>
 </header>
@@ -153,17 +153,27 @@
     <div class="card"><span class="ic">🧠</span><h3>Context overload</h3><p>One huge shared prompt is not the answer. Project agents should stay focused on their own repositories.</p></div>
     <div class="card"><span class="ic">🗂️</span><h3>Scattered state</h3><p>Queues, receipts, blockers, approvals, and progress reports need one place to come together.</p></div>
     <div class="card"><span class="ic">🚦</span><h3>Only real decisions</h3><p>The human should see approvals that matter, not babysit every local edit, test run, or status update.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Automatic fallback</h3><p>Model, provider, quota, and retry behavior should be handled inside the harness, not by tab juggling.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Model portability</h3><p>Model, provider, quota, and retry behavior should be handled inside the harness, not by tab juggling.</p></div>
     <div class="card"><span class="ic">🧾</span><h3>Audit trail</h3><p>Every meaningful run needs receipts so the org can be inspected after the fact.</p></div>
   </div>
 </section>
 
+<section id="interoperability" class="wrap">
+  <h2><span class="n">02</span>Two meanings of interoperable</h2>
+  <p class="lede">SPIN uses both meanings deliberately. It coordinates isolated project agents, and it uses OMP so those agents are not pinned to one model, provider, vendor CLI, or subscription window.</p>
+  <div class="grid">
+    <div class="card"><span class="ic">🧩</span><h3>Project interoperability</h3><p>Each project keeps its own repository, context, queue, memory, and receipts. SPIN lets those agents cooperate through plain files and Navigator decisions.</p></div>
+    <div class="card"><span class="ic">🔀</span><h3>Model interoperability</h3><p>OMP owns provider auth, roles, order, and fallback chains. If one lane is unavailable, work can fall through to another configured model or provider.</p></div>
+    <div class="card"><span class="ic">✍️</span><h3>Refined handoffs</h3><p>Before SPIN sends work to a project floor, the Navigator turns your raw request into a concrete directive with paths, constraints, checks, and reporting instructions.</p></div>
+  </div>
+</section>
+
 <section id="interface" class="wrap">
-  <h2><span class="n">02</span>One coordinator, many project agents</h2>
-  <p class="lede">SPIN opens one controlled workspace above your project agents. First launch routes to SPIN Onboarding, then normal launches open the Coordinator and project floors. The Coordinator owns routing, org state, approvals, and cross-project awareness while each OMP-backed project agent stays scoped to its own repository and context.</p>
+  <h2><span class="n">03</span>One coordinator, many project agents</h2>
+  <p class="lede">SPIN opens one controlled workspace above your project agents. First launch routes to SPIN Onboarding, then normal launches open the Coordinator and project floors. The Coordinator owns routing, org state, approvals, prompt refinement, and cross-project awareness while each OMP-backed project agent stays scoped to its own repository and context.</p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">your first minute</span>
-      <button class="copy" data-copy="spin init && spin up">copy</button></div>
+      <button class="copy" data-copy="spin init &amp;&amp; spin up">copy</button></div>
     <pre><span class="p">$</span> <span class="c">spin</span> init            <span class="o"># wizard: providers, OpenRouter, your first project</span>
 <span class="p">$</span> <span class="c">spin</span> up              <span class="o"># opens the SPIN workspace</span>
 <span class="o">  ✓ Coordinator floor open: talk to it like a person</span>
@@ -175,18 +185,18 @@
     <div class="lane"><span class="arrow">└▶</span> <span class="box">spin new-project fidget-shop</span> <span class="arrow">▶</span> a new <span class="file">fidget-shop</span> tab appears with its own agent, already briefed</div>
   </div>
   <div class="grid" style="margin-top:16px">
-    <div class="card"><span class="ic">🎛️</span><h3>Coordinator</h3><p>The high-level agent you talk to. It creates projects, routes work, tracks blockers, and decides what needs attention.</p></div>
+    <div class="card"><span class="ic">🎛️</span><h3>Coordinator</h3><p>The high-level agent you talk to. It creates projects, rewrites handoff prompts, routes work, tracks blockers, and decides what needs attention.</p></div>
     <div class="card"><span class="ic">🗂️</span><h3>Project agents</h3><p>Each project gets its own OMP-backed lane with its own repository context, state, queue, board, and receipts.</p></div>
     <div class="card"><span class="ic">♾️</span><h3>Background driver</h3><p>Queued work runs through a supervised dispatcher, so durable jobs do not depend on a visible terminal pane staying open.</p></div>
   </div>
 </section>
 
 <section id="app" class="wrap">
-  <h2><span class="n">03</span>SPIN.app for Mac</h2>
+  <h2><span class="n">04</span>SPIN.app for Mac</h2>
   <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with a SPIN-branded workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then open SPIN to enter the onboarding workspace instead of a generic terminal.</p>
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles and fallback chains for coordinator and project work.</p></div>
+    <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles, provider order, and fallback chains for coordinator and project work.</p></div>
     <div class="card"><span class="ic">🧪</span><h3>Public beta DMG</h3><p>The current GitHub beta is ad-hoc signed and not notarized. Use right-click Open if macOS shows a warning; optional checksum steps are in the install guide.</p></div>
   </div>
   <div class="cta" style="justify-content:flex-start;margin-top:12px">
@@ -198,7 +208,7 @@
 </section>
 
 <section id="install" class="wrap">
-  <h2><span class="n">04</span>Source / CLI install</h2>
+  <h2><span class="n">05</span>Source / CLI install</h2>
   <p class="lede">The source install is the power-user path for Linux, automation, debugging, headless operation, and app development. It clones SPIN, seeds the org files, and installs any missing dependencies for you. Review the script first, like any <code>curl | bash</code>. <span style="color:var(--faint)">(Prefer a single offline file? Grab <code>spin-offline.sh</code>; it embeds the whole kit.)</span></p>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
@@ -207,9 +217,9 @@
   </div>
   <div class="term">
     <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">or clone</span>
-      <button class="copy" data-copy="git clone https://github.com/claudiaclawdbot/spin.git ~/spin && cd ~/spin && ./install.sh">copy</button></div>
+      <button class="copy" data-copy="git clone https://github.com/claudiaclawdbot/spin.git ~/spin &amp;&amp; cd ~/spin &amp;&amp; ./install.sh">copy</button></div>
     <pre><span class="p">$</span> <span class="c">git</span> clone https://github.com/claudiaclawdbot/spin.git ~/spin
-<span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&&</span> <span class="c">./install.sh</span>
+<span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&amp;&amp;</span> <span class="c">./install.sh</span>
 <span class="o">  ✓ linked: spin, org → ~/.local/bin/</span>
 <span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the SPIN workspace</span></pre>
   </div>
@@ -217,7 +227,7 @@
 </section>
 
 <section id="how" class="wrap">
-  <h2><span class="n">05</span>It's just files</h2>
+  <h2><span class="n">06</span>It's just files</h2>
   <p class="lede">No database, no message broker, no daemon you can't read. The whole org talks through plain files you can grep and audit.</p>
   <div class="flow">
     <div class="lane"><span class="you">you</span> <span class="arrow">──spin approve──▶</span> <span class="file">APPROVALS.md</span> <span class="arrow">──▶</span> <span class="box">SPIN Navigator</span> <span class="arrow">──▶</span> <span class="file">AGENT_QUEUE.json</span> <span class="arrow">──▶</span> detached agent jobs</div>
@@ -226,7 +236,7 @@
   <h3 style="margin:26px 0 0;font-size:1.05rem">The cast: names that overlap, pinned down</h3>
   <table>
     <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
-    <tr><td><b>SPIN</b></td><td class="dimcell">a lightweight bash+node harness above project agents</td><td class="dimcell">schedules, routes, gates, audits, and preserves context isolation</td></tr>
+    <tr><td><b>SPIN</b></td><td class="dimcell">a lightweight bash+node harness above project agents</td><td class="dimcell">schedules, routes, gates, refines handoffs, audits, and preserves context isolation</td></tr>
     <tr><td><code>omp</code></td><td class="dimcell">agent harness + model gateway (oh-my-pi)</td><td class="dimcell">runs Coordinator, project floors, and jobs first; handles model/provider fallback across signed-in services</td></tr>
     <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">direct vendor CLIs</td><td class="dimcell">outer fallback if OMP is missing or hard-fails</td></tr>
     <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort outer fallback</td></tr>
@@ -235,7 +245,7 @@
 </section>
 
 <section id="gates" class="wrap">
-  <h2><span class="n">06</span>The four gates</h2>
+  <h2><span class="n">07</span>The four gates</h2>
   <p class="lede">SPIN does local, reversible work without asking. It stops and waits for exactly four things, enforced behaviorally by every prompt and surfaced as an approval queue.</p>
   <div class="gates">
     <div class="gate"><span class="g">📤</span><div><b>External sends</b><span>email, DM, form, public post</span></div></div>
@@ -246,7 +256,7 @@
 </section>
 
 <section id="docs" class="wrap">
-  <h2><span class="n">07</span>Go deeper</h2>
+  <h2><span class="n">08</span>Go deeper</h2>
   <div class="grid">
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>

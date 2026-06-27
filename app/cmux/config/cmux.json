@@ -16,10 +16,10 @@
   },
   "sidebarAppearance": {
     "matchTerminalBackground": false,
-    "tintColor": "#FF2BD6",
-    "lightModeTintColor": "#FFD1F5",
-    "darkModeTintColor": "#FF2BD6",
-    "tintOpacity": 0.62
+    "tintColor": "#FF7ADF",
+    "lightModeTintColor": "#FFE2F8",
+    "darkModeTintColor": "#FF7ADF",
+    "tintOpacity": 0.24
   },
   "workspaceColors": {
     "indicatorStyle": "washRail",

@@ -47,6 +47,12 @@ node --check scripts/spin-app-updates.js >/dev/null
 node --check scripts/lib/spin-runtime.js >/dev/null
 node --check scripts/lib/human-queue-summary.js >/dev/null
 node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
+node - <<'NODE'
+const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
+if (cfg.sidebarAppearance.tintColor !== '#FF7ADF') process.exit(1);
+if (cfg.sidebarAppearance.darkModeTintColor !== '#FF7ADF') process.exit(1);
+if (cfg.sidebarAppearance.tintOpacity !== 0.24) process.exit(1);
+NODE
 node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1);'
 grep -q 'prepare-open-source-release.sh --artifact' .github/workflows/macos-app.yml
 grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
@@ -67,6 +73,8 @@ grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
 grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
 grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
 test -f app/cmux/sidebars/spin-navigator.swift
+grep -q 'workspace.close' app/cmux/sidebars/spin-navigator.swift
+grep -q 'Close project tab' app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
 node - <<'NODE'
@@ -210,6 +218,7 @@ if command -v qlmanage >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
   test -s "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset/AppIconDark.png"
 fi
 test -f "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
+grep -q 'workspace.close' "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
 scripts/org escalate "smoke approval needed" >/dev/null

@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="assets/branding/spin-icon.svg?v=20260627-production-geometry" alt="SPIN app icon" width="112">
+<img src="assets/branding/spin-icon.svg?v=20260627-centered-interop" alt="SPIN app icon" width="88" height="88">
 
 # 🌀 SPIN
 
 ### Super Pi Interoperable Navigator
 
-**A lightweight OS for AI software work: SPIN coordinates multiple scoped OMP project agents through a SPIN-branded cmux workspace without merging their contexts.**
+**A lightweight OS for AI software work: SPIN coordinates scoped OMP project agents, keeps their contexts isolated, and lets work fall through across the models and providers you have configured.**
 
 [![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
 [![macOS app artifact](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml)
@@ -23,7 +23,7 @@
 
 ---
 
-SPIN.app is the main product. It is a self-contained Mac app that bundles a SPIN-branded [cmux](https://github.com/manaflow-ai/cmux) workspace UI and [oh-my-pi](https://omp.sh) (`omp`) as the agent/provider engine. SPIN adds the lightweight harness around those tools: a Coordinator floor, one project floor per workspace, approval queues, background jobs, receipts, and plain-file state you can inspect.
+SPIN.app is the main product. It is a self-contained Mac app that bundles a SPIN-branded [cmux](https://github.com/manaflow-ai/cmux) workspace UI and [oh-my-pi](https://omp.sh) (`omp`) as the agent/provider engine. SPIN adds the lightweight harness around those tools: a Coordinator floor, one project floor per workspace, approval queues, background jobs, receipts, model fallback policy, and plain-file state you can inspect.
 
 SPIN is built for the moment one terminal agent stops being enough. A single OMP session works well for one repository, one working directory, one objective, and one focused context. Multiple projects change the job. The human starts managing terminal tabs, remembering which agent owns which work, checking receipts, relaying updates, tracking blockers, and deciding what needs attention next.
 
@@ -31,7 +31,12 @@ SPIN is the orchestration layer above those scoped agents. Each project keeps it
 
 SPIN does not merge contexts. It orchestrates them.
 
-In this repo, **interoperable** primarily means internal interoperability between otherwise isolated OMP agents. OMP's provider and model interoperability is an important runtime capability, but SPIN's product goal is the higher-level coordination layer that lets many OMP-backed project agents cooperate without becoming one overloaded shared context.
+In this repo, **interoperable** means two related things:
+
+- **Project interoperability:** isolated OMP agents cooperate through SPIN's files, queues, receipts, and Navigator decisions without sharing every working token.
+- **Model/provider interoperability:** because those agents run through OMP first, SPIN can use OMP roles, provider order, and fallback chains across authenticated services. If a model, quota window, or provider lane is unavailable, work can fall through to another configured lane instead of locking the whole org to one CLI, one model, or one subscription window.
+
+When you ask the Coordinator to send work into a project floor, SPIN also rewrites the raw human request into a project-facing directive before it is typed into that project's OMP agent. The refined directive keeps your intent, then adds the concrete goal, local paths, constraints, acceptance checks, things not to touch, and the expected reporting shape.
 
 The source/CLI install still exists, but it is the power-user lane for Linux, automation, debugging, app development, and recovery. It is documented separately below.
 
@@ -64,6 +69,7 @@ Launch `SPIN.app` and it opens the workspace interface:
 - **Coordinator floor:** a high-level OMP agent you talk to like a project lead.
 - **One tab per project:** each project gets its own cmux workspace, live OMP orchestrator, queue, state, and receipts.
 - **Context isolation:** project agents stay focused on their own repositories instead of sharing one giant working context.
+- **Refined delegation:** the Navigator turns your request into a concrete project prompt before it hands work to a project floor.
 - **Background driver:** the Navigator loop routes work, watches project state, and dispatches durable jobs.
 - **Plain-file org state:** approvals, queues, project status, receipts, and handoffs live in files under the SPIN runtime.
 
@@ -76,7 +82,7 @@ The stack is intentionally small:
 | **OMP/Pi** | Agent sessions, provider auth, model selection, retry/fallback |
 | **SPIN runtime** | Lightweight harness: project registry, org files, gates, queues, receipts |
 
-## Provider Fallback
+## Model And Provider Fallback
 
 OMP owns model/provider setup. During onboarding, SPIN hands account configuration to OMP rather than asking for keys itself.
 
@@ -84,9 +90,9 @@ SPIN writes a runtime OMP config overlay for coordinator and project work:
 
 - `modelRoles` for default, small, slow, plan, and task work
 - `modelProviderOrder` across authenticated providers
-- `retry.fallbackChains` so usage/rate/server failures can fall through coherently
+- `retry.fallbackChains` so usage, rate, quota, server, and network failures can fall through coherently
 
-If OMP itself is missing or hard-fails, SPIN still has an outer direct-CLI fallback lane through tools such as `codex`, `claude`, `gemini`, and `ollama`.
+The intended waterfall is OMP first. Inside OMP, fallback can move between authenticated model/provider lanes such as Anthropic, OpenAI Codex, OpenRouter, Gemini, or local runtimes, depending on what you configured. If OMP itself is missing or hard-fails, SPIN still has an outer direct-CLI fallback lane through tools such as `codex`, `claude`, `gemini`, and `ollama`.
 
 ## Safety Model
 
@@ -117,7 +123,6 @@ The current updater does not yet fetch a remote update feed or auto-install from
 
 - [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md): download, install, first launch, health checks, updates, uninstall.
 - [`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md): bundle layout, release checks, update manifests, signing, packaging.
-- [`docs/APP_ROADMAP.md`](docs/APP_ROADMAP.md): completed app checkpoints and remaining work.
 - [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md): maintainer checklist for publishing the GitHub DMG.
 
 ---
@@ -218,7 +223,7 @@ This section applies to both SPIN.app and the source/CLI lane.
 
 - **Super:** a higher-level harness you can track, audit, and interrupt.
 - **Pi:** the agentic backbone. Specifically **[oh-my-pi](https://omp.sh) (`omp`)**: every floor agent and interactive session runs on it.
-- **Interoperable:** otherwise isolated OMP project agents coordinate through plain files, queues, receipts, and Navigator decisions without sharing every working token.
+- **Interoperable:** isolated project agents cooperate through SPIN's org files, while OMP gives those agents model/provider portability and fallback across the services you have configured.
 - **Navigator:** the system that coordinates projects, queues, approvals, and receipts.
 
 ### Why SPIN Exists
@@ -232,6 +237,7 @@ SPIN replaces that human routing overhead with a small, inspectable org:
 - **One Navigator loop:** a lock file prevents duplicate drivers from silently doubling LLM spend.
 - **Change-gated brain:** the LLM runs only when watched inputs actually changed, plus a low-frequency heartbeat.
 - **Detached background jobs:** durable work does not depend on a visible cmux pane.
+- **Prompt refinement:** live project-floor handoffs are rewritten into concrete project directives before they are sent.
 - **State changed through a CLI:** agents call validated `org` verbs instead of hand-editing JSON.
 - **Context isolation:** each project agent works from its own repository, handoff, state, and receipts.
 - **Receipts for everything:** brain runs and jobs write append-only audit trails.
@@ -256,7 +262,7 @@ No database, no message broker, no daemon you cannot inspect.
 |---|---|---|
 | **SPIN** | Bash + Node orchestration layer | Schedules, routes, gates, audits |
 | **SPIN.app** | Mac app bundle | Packages cmux, OMP, and the SPIN runtime |
-| [`omp`](https://omp.sh) | Agent harness and model gateway | Runs floors/jobs and handles provider fallback |
+| [`omp`](https://omp.sh) | Agent harness and model gateway | Runs floors/jobs and handles model/provider fallback |
 | `codex` / `claude` / `gemini` | Direct vendor CLIs | Outer fallback if OMP is missing or hard-fails |
 | `ollama` | Local model runtime | Last-resort local fallback |
 | [cmux](https://github.com/manaflow-ai/cmux) | Terminal workspace with GUI and socket control | Visual floors, tabs, boards, delegate handoffs |
@@ -282,6 +288,7 @@ flowchart TD
 
 - **OMP-first fallback:** SPIN writes a runtime OMP config overlay with `modelRoles` and `retry.fallbackChains`.
 - **Provider benching:** rate/usage/session-limit failures temporarily bench that provider so work can fall through.
+- **Refined handoffs:** live delegations carry a rewritten directive with goal, paths, constraints, checks, and reporting instructions.
 - **Duplicate-loop prevention:** driver, watchers, and dispatcher claim locks and exit if already running.
 - **Job timeouts:** hung jobs are killed after `max_runtime_seconds`.
 - **Kill switch:** `spin stop` or `org/ceo/runs/STOP` pauses the org.
