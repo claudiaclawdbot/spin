@@ -58,7 +58,10 @@ NODE
 
 assert_icon_has_transparent_corners() {
   local icon="$1" label="$2" work png
-  command -v iconutil >/dev/null 2>&1 || fail "iconutil not found for icon alpha check"
+  if ! command -v iconutil >/dev/null 2>&1; then
+    echo "  warning: iconutil not found; skipping $label icon alpha check" >&2
+    return 0
+  fi
   work="$(mktemp -d)"
   if ! iconutil -c iconset "$icon" -o "$work/icon.iconset" >/dev/null 2>&1; then
     rm -rf "$work"
