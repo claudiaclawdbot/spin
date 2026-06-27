@@ -56,6 +56,115 @@ NODE
   return 1
 }
 
+assert_icon_has_transparent_corners() {
+  local icon="$1" label="$2" work png
+  command -v iconutil >/dev/null 2>&1 || fail "iconutil not found for icon alpha check"
+  work="$(mktemp -d)"
+  if ! iconutil -c iconset "$icon" -o "$work/icon.iconset" >/dev/null 2>&1; then
+    rm -rf "$work"
+    fail "could not expand $label icon for alpha check"
+  fi
+  png="$work/icon.iconset/icon_512x512@2x.png"
+  [ -f "$png" ] || png="$work/icon.iconset/icon_512x512.png"
+  [ -f "$png" ] || {
+    rm -rf "$work"
+    fail "$label iconset is missing a 512px PNG for alpha check"
+  }
+  "$NODE_BIN" - "$png" "$label" <<'NODE'
+const fs = require('fs');
+const zlib = require('zlib');
+const [pngPath, label] = process.argv.slice(2);
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+const data = fs.readFileSync(pngPath);
+if (data.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') fail(`${label} icon PNG is invalid`);
+
+let offset = 8;
+let width = 0;
+let height = 0;
+let bitDepth = 0;
+let colorType = 0;
+const idat = [];
+while (offset < data.length) {
+  const length = data.readUInt32BE(offset);
+  offset += 4;
+  const type = data.subarray(offset, offset + 4).toString('ascii');
+  offset += 4;
+  const chunk = data.subarray(offset, offset + length);
+  offset += length + 4;
+  if (type === 'IHDR') {
+    width = chunk.readUInt32BE(0);
+    height = chunk.readUInt32BE(4);
+    bitDepth = chunk[8];
+    colorType = chunk[9];
+  } else if (type === 'IDAT') {
+    idat.push(chunk);
+  } else if (type === 'IEND') {
+    break;
+  }
+}
+
+if (bitDepth !== 8 || colorType !== 6) {
+  fail(`${label} icon PNG must be 8-bit RGBA for alpha check`);
+}
+
+const raw = zlib.inflateSync(Buffer.concat(idat));
+const bpp = 4;
+const stride = width * bpp;
+const rows = [];
+let previous = Buffer.alloc(stride);
+let input = 0;
+
+function paeth(left, up, upLeft) {
+  const p = left + up - upLeft;
+  const pa = Math.abs(p - left);
+  const pb = Math.abs(p - up);
+  const pc = Math.abs(p - upLeft);
+  if (pa <= pb && pa <= pc) return left;
+  if (pb <= pc) return up;
+  return upLeft;
+}
+
+for (let y = 0; y < height; y += 1) {
+  const filter = raw[input];
+  input += 1;
+  const row = Buffer.from(raw.subarray(input, input + stride));
+  input += stride;
+  for (let x = 0; x < stride; x += 1) {
+    const left = x >= bpp ? row[x - bpp] : 0;
+    const up = previous[x];
+    const upLeft = x >= bpp ? previous[x - bpp] : 0;
+    if (filter === 1) row[x] = (row[x] + left) & 0xff;
+    else if (filter === 2) row[x] = (row[x] + up) & 0xff;
+    else if (filter === 3) row[x] = (row[x] + Math.floor((left + up) / 2)) & 0xff;
+    else if (filter === 4) row[x] = (row[x] + paeth(left, up, upLeft)) & 0xff;
+    else if (filter !== 0) fail(`${label} icon PNG uses unsupported filter ${filter}`);
+  }
+  rows.push(row);
+  previous = row;
+}
+
+function alphaAt(x, y) {
+  return rows[y][x * bpp + 3];
+}
+
+const corners = [
+  alphaAt(0, 0),
+  alphaAt(width - 1, 0),
+  alphaAt(0, height - 1),
+  alphaAt(width - 1, height - 1),
+];
+if (corners.some((alpha) => alpha !== 0)) {
+  fail(`${label} icon corners are opaque: ${corners.join(',')}`);
+}
+NODE
+  rm -rf "$work"
+}
+
 [ -d "$APP" ] || fail "missing app bundle: $APP"
 [ -f "$APP/Contents/Info.plist" ] || fail "missing Info.plist"
 [ -x "$APP/Contents/MacOS/SPIN" ] || fail "missing executable launcher"
@@ -70,9 +179,12 @@ outer_bundle_id="$(plist_string "$APP/Contents/Info.plist" CFBundleIdentifier ||
 [ "$outer_bundle_id" = "dev.spin.launcher" ] || fail "outer launcher bundle id is not dev.spin.launcher: ${outer_bundle_id:-missing}"
 ok "app identity"
 
+[ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] || fail "node not found for release check; set SPIN_RELEASE_CHECK_NODE"
+
 app_icon_file="$(plist_string "$APP/Contents/Info.plist" CFBundleIconFile || true)"
 [ "$app_icon_file" = "SPIN" ] || fail "app icon plist key is not SPIN: ${app_icon_file:-missing}"
 [ -s "$RES/SPIN.icns" ] || fail "missing app icon at Resources/SPIN.icns"
+assert_icon_has_transparent_corners "$RES/SPIN.icns" "SPIN"
 ok "app icon"
 
 [ -d "$CMUX_APP" ] || fail "missing bundled cmux app at Resources/SPIN.app"
@@ -133,8 +245,6 @@ for bin in cmux omp; do
 done
 [ -x "$RES/bin/spin-agent" ] || fail "missing bundled spin-agent alias"
 ok "bundled spin-agent alias"
-
-[ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] || fail "node not found for release check; set SPIN_RELEASE_CHECK_NODE"
 
 if [ "${SPIN_SKIP_BINARY_EXEC_CHECK:-0}" != "1" ]; then
   "$RES/bin/cmux" version >/dev/null 2>&1 || fail "bundled cmux does not execute"
@@ -236,8 +346,34 @@ app_launcher_dry_run() {
 launch_out="$(app_launcher_dry_run)"
 grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not route fresh app home to onboarding"
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
+[ -x "$TMP/home/runtime/scripts/org" ] || fail "launcher did not seed writable org CLI"
+[ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
+grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not neon SPIN-branded"
+[ -f "$TMP/home/.config/cmux/sidebars/spin-navigator.swift" ] || fail "launcher did not seed SPIN Navigator sidebar"
 ok "first-launch runtime seed"
 SEEDED_RUNTIME="$TMP/home/runtime"
+
+mkdir -p "$TMP/template-home/.config/cmux"
+cat > "$TMP/template-home/.config/cmux/cmux.json" <<'EOF'
+{
+  "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+  "schemaVersion": 1,
+  // cmux creates this template on launch when ~/.config/cmux/cmux.json is missing.
+  //   "sidebarAppearance" : {
+  //     "darkModeTintColor" : null,
+  //     "tintColor" : "#000000"
+  //   }
+}
+EOF
+template_out="$(env -i HOME="$TMP/template-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/template-home" SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
+grep -q 'app-launch: onboarding' <<<"$template_out" || fail "launcher did not route template-home launch to onboarding"
+grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with SPIN neon config"
+ls "$TMP/template-home/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "launcher did not back up generated cmux template"
+ok "generated cmux template refreshes to SPIN neon config"
+
+omp_ready_out="$(env -i HOME="$TMP/omp-ready-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-ready-home" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
+grep -q 'app-launch: spin up' <<<"$omp_ready_out" || fail "launcher did not route existing OMP config to spin up"
+ok "existing OMP setup routes to spin up"
 
 socket_env_out="$(env -i HOME="$TMP/socket-home" PATH="$SYSTEM_PATH" SPIN_ROOT="$SEEDED_RUNTIME" /bin/bash -c '
   set -euo pipefail

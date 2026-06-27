@@ -378,6 +378,8 @@ PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id smoke-delegate example-app "make ascii art" > "$TMP/delegate.out"
 grep -q 'delegated smoke-delegate to example-app' "$TMP/delegate.out"
 grep -q 'delegate smoke-delegate complete:' "$TMP/cmux.calls"
+grep -q 'SPIN live delegation: smoke-delegate' org/projects/example-app/WORKSPACE_HANDOFF.md
+grep -q 'cd "$SPIN_ROOT" && scripts/org inbox example-app "delegate smoke-delegate complete:' org/projects/example-app/WORKSPACE_HANDOFF.md
 grep -q 'ceo -> example-app: delegate smoke-delegate: make ascii art' org/ceo/runs/delegations.log
 
 cat > "$TMP/internal-cmux" <<EOF
@@ -399,6 +401,8 @@ SPIN_CMUX_BIN="$TMP/internal-cmux" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id internal-cmux-delegate example-app "use bundled cmux" > "$TMP/internal-delegate.out"
 grep -q 'delegated internal-cmux-delegate to example-app' "$TMP/internal-delegate.out"
 grep -q 'delegate internal-cmux-delegate complete:' "$TMP/internal-cmux.calls"
+grep -q 'SPIN live delegation: internal-cmux-delegate' org/projects/example-app/WORKSPACE_HANDOFF.md
+grep -q 'cd "$SPIN_ROOT" && scripts/org inbox example-app "delegate internal-cmux-delegate complete:' org/projects/example-app/WORKSPACE_HANDOFF.md
 
 cat > "$FAKEBIN/codex" <<EOF
 #!/usr/bin/env bash
@@ -740,14 +744,16 @@ NODE
   fi
 fi
 
-SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-before.out"
+env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-before.out"
 grep -q 'app-launch: onboarding' "$TMP/app-launch-before.out"
+env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-omp-ready.out"
+grep -q 'app-launch: spin up' "$TMP/app-launch-omp-ready.out"
 touch org/.spin-onboarded
-SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-after.out"
+env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-after.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-after.out"
 rm -f org/.spin-onboarded
 
-HOME="$TMP/app-home" SPIN_APP_HOME="$TMP/app-home" SPIN_APP_NO_LOG_REDIRECT=1 "$TMP/SPIN.app/Contents/MacOS/SPIN" > "$TMP/app-launch.out"
+env -i HOME="$TMP/app-home" PATH="$PATH" SPIN_APP_HOME="$TMP/app-home" SPIN_APP_NO_LOG_REDIRECT=1 "$TMP/SPIN.app/Contents/MacOS/SPIN" > "$TMP/app-launch.out"
 test -x "$TMP/app-home/runtime/scripts/spin"
 grep -q 'SPIN onboarding opened in cmux' "$TMP/app-launch.out"
 grep -q 'new-workspace --name SPIN Onboarding' "$TMP/internal-cmux.calls"

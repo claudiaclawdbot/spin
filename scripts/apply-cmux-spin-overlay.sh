@@ -146,7 +146,7 @@ replace_text() {
 install_spin_app_icon_assets() {
   local src="$ROOT/assets/branding/spin-icon.svg"
   local assets_dir="$CMUX_DIR/Assets.xcassets"
-  local tmp master
+  local tmp iconset_dir
 
   [ -d "$assets_dir" ] || {
     echo "warning: cmux asset catalog not found; skipping nested app icon skin" >&2
@@ -156,52 +156,53 @@ install_spin_app_icon_assets() {
     echo "warning: SPIN icon source missing: $src" >&2
     return
   }
-  command -v qlmanage >/dev/null 2>&1 || {
-    echo "warning: qlmanage not found; skipping nested app icon skin" >&2
+  [ -x "$ROOT/scripts/build-app-icon.sh" ] || {
+    echo "warning: scripts/build-app-icon.sh not found; skipping nested app icon skin" >&2
     return
   }
-  command -v sips >/dev/null 2>&1 || {
-    echo "warning: sips not found; skipping nested app icon skin" >&2
+  command -v iconutil >/dev/null 2>&1 || {
+    echo "warning: iconutil not found; skipping nested app icon skin" >&2
     return
   }
 
   tmp="$(mktemp -d)"
-  if ! qlmanage -t -s 1024 -o "$tmp" "$src" >/dev/null 2>&1; then
+  if ! "$ROOT/scripts/build-app-icon.sh" "$src" "$tmp/SPIN.icns" >/dev/null 2>&1; then
     rm -rf "$tmp"
-    echo "warning: Quick Look could not render $src; skipping nested app icon skin" >&2
+    echo "warning: could not render $src; skipping nested app icon skin" >&2
     return
   fi
-  master="$(find "$tmp" -maxdepth 1 -name '*.png' -print -quit)"
-  if [ ! -f "$master" ]; then
+  if ! iconutil -c iconset "$tmp/SPIN.icns" -o "$tmp/SPIN.iconset" >/dev/null 2>&1; then
     rm -rf "$tmp"
-    echo "warning: Quick Look did not produce a PNG for $src; skipping nested app icon skin" >&2
+    echo "warning: could not expand rendered SPIN iconset; skipping nested app icon skin" >&2
     return
   fi
+  iconset_dir="$tmp/SPIN.iconset"
 
-  make_png() {
-    local pixels="$1" out="$2"
-    sips -z "$pixels" "$pixels" "$master" --out "$out" >/dev/null
+  copy_png() {
+    local name="$1" out="$2"
+    [ -f "$iconset_dir/$name" ] || return 0
+    cp "$iconset_dir/$name" "$out"
   }
 
   install_iconset() {
     local iconset="$1"
     [ -d "$iconset" ] || return 0
-    make_png 16 "$iconset/16.png"
-    make_png 32 "$iconset/16@2x.png"
-    make_png 32 "$iconset/32.png"
-    make_png 64 "$iconset/32@2x.png"
-    make_png 128 "$iconset/128.png"
-    make_png 256 "$iconset/128@2x.png"
-    make_png 256 "$iconset/256.png"
-    make_png 512 "$iconset/256@2x.png"
-    make_png 512 "$iconset/512.png"
-    make_png 1024 "$iconset/512@2x.png"
+    copy_png icon_16x16.png "$iconset/16.png"
+    copy_png icon_16x16@2x.png "$iconset/16@2x.png"
+    copy_png icon_32x32.png "$iconset/32.png"
+    copy_png icon_32x32@2x.png "$iconset/32@2x.png"
+    copy_png icon_128x128.png "$iconset/128.png"
+    copy_png icon_128x128@2x.png "$iconset/128@2x.png"
+    copy_png icon_256x256.png "$iconset/256.png"
+    copy_png icon_256x256@2x.png "$iconset/256@2x.png"
+    copy_png icon_512x512.png "$iconset/512.png"
+    copy_png icon_512x512@2x.png "$iconset/512@2x.png"
     for base in 16 32 128 256 512; do
       if [ -f "$iconset/${base}_dark.png" ]; then
-        make_png "$base" "$iconset/${base}_dark.png"
+        copy_png "icon_${base}x${base}.png" "$iconset/${base}_dark.png"
       fi
       if [ -f "$iconset/${base}@2x_dark.png" ]; then
-        make_png "$((base * 2))" "$iconset/${base}@2x_dark.png"
+        copy_png "icon_${base}x${base}@2x.png" "$iconset/${base}@2x_dark.png"
       fi
     done
   }
@@ -209,8 +210,8 @@ install_spin_app_icon_assets() {
   install_iconset "$assets_dir/AppIcon.appiconset"
   install_iconset "$assets_dir/AppIcon-Debug.appiconset"
   install_iconset "$assets_dir/AppIcon-Nightly.appiconset"
-  [ -d "$assets_dir/AppIconLight.imageset" ] && make_png 1024 "$assets_dir/AppIconLight.imageset/AppIconLight.png"
-  [ -d "$assets_dir/AppIconDark.imageset" ] && make_png 1024 "$assets_dir/AppIconDark.imageset/AppIconDark.png"
+  [ -d "$assets_dir/AppIconLight.imageset" ] && copy_png icon_512x512@2x.png "$assets_dir/AppIconLight.imageset/AppIconLight.png"
+  [ -d "$assets_dir/AppIconDark.imageset" ] && copy_png icon_512x512@2x.png "$assets_dir/AppIconDark.imageset/AppIconDark.png"
   rm -rf "$tmp"
 }
 
