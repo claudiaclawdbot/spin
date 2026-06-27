@@ -518,6 +518,8 @@ cat > "$FAKE_CMUX_APP/Contents/Info.plist" <<'EOF'
   <string>dev.spin.app</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <key>CFBundleName</key>
   <string>SPIN</string>
 </dict>

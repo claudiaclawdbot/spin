@@ -132,8 +132,16 @@ copy_app_icon_if_present() {
 apply_icon_to_bundled_cmux_app() {
   [ -f "$RES/SPIN.icns" ] || return 0
   [ -d "$RES/SPIN.app/Contents" ] || return 0
+  local plist="$RES/SPIN.app/Contents/Info.plist"
   mkdir -p "$RES/SPIN.app/Contents/Resources"
   cp "$RES/SPIN.icns" "$RES/SPIN.app/Contents/Resources/AppIcon.icns"
+  if [ -f "$plist" ] && [ -x /usr/libexec/PlistBuddy ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" >/dev/null 2>&1 ||
+      /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist" >/dev/null
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$plist" >/dev/null 2>&1 || true
+  elif [ -f "$plist" ]; then
+    echo "  warning: PlistBuddy not found; bundled cmux app may retain asset-catalog icon name" >&2
+  fi
   echo "  applied SPIN icon to bundled cmux app"
 }
 
