@@ -26,18 +26,18 @@ func spinWord() -> some View {
         Text("N").foregroundColor("#EAB308")
         Text("!").foregroundColor("#A855F7")
     }
-    .font(.system(size: 24, design: .rounded))
+    .font(.system(size: 22, design: .rounded))
     .fontWeight(.heavy)
     .lineLimit(1)
 }
 
 func coordinatorButton(_ w) -> some View {
     Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
-        HStack(alignment: .center, spacing: 9) {
+        HStack(alignment: .center, spacing: 8) {
             RoundedRectangle(cornerRadius: 3)
                 .foregroundColor(w.selected ? "#7EEBFF" : "#FF7ADF")
-                .frame(width: 5, height: 50)
-            VStack(alignment: .leading, spacing: 3) {
+                .frame(width: 4, height: 42)
+            VStack(alignment: .leading, spacing: 2) {
                 spinWord()
                 HStack(spacing: 5) {
                     Label("Navigator", systemImage: "circle.hexagongrid.fill")
@@ -56,12 +56,12 @@ func coordinatorButton(_ w) -> some View {
             Spacer()
             Image(systemName: "arrow.up.forward.circle.fill")
                 .foregroundColor(w.selected ? "#7EEBFF" : "#00E5FF")
-                .imageScale(.large)
+                .font(.system(size: 14))
         }
-        .padding(7)
-        .background { RoundedRectangle(cornerRadius: 9).foregroundColor(w.selected ? "#2A1830" : "#1A1018").opacity(w.selected ? 0.74 : 0.50) }
+        .padding(6)
+        .background { RoundedRectangle(cornerRadius: 8).foregroundColor(w.selected ? "#2A1830" : "#1A1018").opacity(w.selected ? 0.74 : 0.50) }
         .overlay {
-            RoundedRectangle(cornerRadius: 9)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 1)
                 .opacity(w.selected ? 0.82 : 0.34)
         }
@@ -71,11 +71,12 @@ func coordinatorButton(_ w) -> some View {
 
 func onboardingButton(_ w) -> some View {
     Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: "sparkles")
                 .foregroundColor("#EAB308")
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 2) {
+                .font(.system(size: 11))
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Onboarding")
                     .font(.system(size: 12))
                     .fontWeight(w.selected ? .semibold : .regular)
@@ -88,10 +89,11 @@ func onboardingButton(_ w) -> some View {
             }
             Spacer()
         }
-        .padding(5)
-        .background { RoundedRectangle(cornerRadius: 8).foregroundColor(w.selected ? "#3A2A00" : "#171009").opacity(w.selected ? 0.70 : 0.42) }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .background { RoundedRectangle(cornerRadius: 6).foregroundColor(w.selected ? "#3A2A00" : "#171009").opacity(w.selected ? 0.70 : 0.42) }
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .stroke(w.selected ? "#EAB308" : "#FF7ADF", lineWidth: 0.75)
                 .opacity(w.selected ? 0.68 : 0.20)
         }
@@ -99,13 +101,13 @@ func onboardingButton(_ w) -> some View {
 }
 
 func projectRow(_ w) -> some View {
-    HStack(spacing: 6) {
+    HStack(spacing: 4) {
         Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Circle()
                     .foregroundColor(w.selected ? "#00E5FF" : (w.unread > 0 ? "#EAB308" : "#8A7280"))
-                    .frame(width: 7, height: 7)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: 5, height: 5)
+                VStack(alignment: .leading, spacing: 1) {
                     Text(w.title)
                         .font(.system(size: 12))
                         .fontWeight(w.selected ? .semibold : .regular)
@@ -120,46 +122,47 @@ func projectRow(_ w) -> some View {
                 Spacer()
                 if w.unread > 0 {
                     Text("\(w.unread)")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 8, design: .monospaced))
                         .fontWeight(.semibold)
                         .foregroundColor("#101014")
-                        .padding(4)
+                        .padding(3)
                         .background { Circle().foregroundColor("#EAB308") }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .help("Open this project floor")
 
         Button(action: { cmux("workspace.close", workspace_id: w.id) }) {
             Image(systemName: "xmark")
-                .font(.system(size: 10))
+                .font(.system(size: 8))
                 .fontWeight(.semibold)
                 .foregroundColor(w.selected ? "#FFFFFF" : "#FFD1F5")
-                .frame(width: 22, height: 22)
+                .frame(width: 16, height: 16)
                 .background { Circle().foregroundColor(w.selected ? "#FF7ADF" : "#2B1325").opacity(w.selected ? 0.58 : 0.44) }
                 .overlay {
                     Circle()
-                        .stroke("#FFB8EA", lineWidth: 0.75)
+                        .stroke("#FFB8EA", lineWidth: 0.6)
                         .opacity(w.selected ? 0.54 : 0.28)
                 }
         }
         .buttonStyle(.plain)
         .help("Close project tab. This only removes the visible cmux floor; it does not delete project files or the repository.")
     }
-    .padding(.leading, 6)
-    .padding(.trailing, 5)
-    .padding(.vertical, 5)
-    .background { RoundedRectangle(cornerRadius: 8).foregroundColor(w.selected ? "#2A1830" : "#1B1118").opacity(w.selected ? 0.66 : 0.40) }
+    .padding(.leading, 5)
+    .padding(.trailing, 3)
+    .padding(.vertical, 3)
+    .background { RoundedRectangle(cornerRadius: 6).foregroundColor(w.selected ? "#2A1830" : "#1B1118").opacity(w.selected ? 0.66 : 0.40) }
     .overlay {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 0.75)
+        RoundedRectangle(cornerRadius: 6)
+            .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 0.6)
             .opacity(w.selected ? 0.72 : 0.24)
     }
 }
 
-VStack(alignment: .leading, spacing: 6) {
+VStack(alignment: .leading, spacing: 4) {
     let coordinators = workspaces.filter { isSpinCoordinator($0) }
     let onboarding = workspaces.filter { isSpinOnboarding($0) }
     let projectFloors = workspaces.filter { isProjectFloor($0) }
@@ -181,11 +184,11 @@ VStack(alignment: .leading, spacing: 6) {
         }
     } else {
         Button(action: { cmux("sidebar.custom.open", name: "spin-navigator") }) {
-            HStack(alignment: .center, spacing: 9) {
+            HStack(alignment: .center, spacing: 8) {
                 RoundedRectangle(cornerRadius: 3)
                     .foregroundColor("#FF7ADF")
-                    .frame(width: 5, height: 50)
-                VStack(alignment: .leading, spacing: 3) {
+                    .frame(width: 4, height: 42)
+                VStack(alignment: .leading, spacing: 2) {
                     spinWord()
                     Text("Navigator floor offline")
                         .font(.system(size: 10))
@@ -193,10 +196,10 @@ VStack(alignment: .leading, spacing: 6) {
                 }
                 Spacer()
             }
-            .padding(7)
-            .background { RoundedRectangle(cornerRadius: 9).foregroundColor("#1A1018").opacity(0.50) }
+            .padding(6)
+            .background { RoundedRectangle(cornerRadius: 8).foregroundColor("#1A1018").opacity(0.50) }
             .overlay {
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke("#FF7ADF", lineWidth: 1)
                     .opacity(0.34)
             }
@@ -219,7 +222,7 @@ VStack(alignment: .leading, spacing: 6) {
             .foregroundColor("#EAB308")
         Spacer()
     }
-    .padding(.horizontal, 6)
+    .padding(.horizontal, 5)
     .padding(.top, 0)
 
     Divider()
