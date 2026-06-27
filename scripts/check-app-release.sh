@@ -168,6 +168,56 @@ NODE
   rm -rf "$work"
 }
 
+assert_spin_sidebar_defaults_seeded() {
+  local home="$1" domain plist provider enabled
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ -x /usr/libexec/PlistBuddy ] || return 0
+  for domain in dev.spin.app com.cmuxterm.app; do
+    plist="$home/Library/Preferences/$domain.plist"
+    [ -f "$plist" ] || fail "launcher did not seed $domain preferences for SPIN Navigator rail"
+    provider="$(/usr/libexec/PlistBuddy -c "Print :cmuxExtensionSidebar.providerId" "$plist" 2>/dev/null || true)"
+    [ "$provider" = "cmux.sidebar.custom.spin-navigator" ] || fail "$domain did not select SPIN Navigator rail: ${provider:-missing}"
+    enabled="$(/usr/libexec/PlistBuddy -c "Print :customSidebars.beta.enabled" "$plist" 2>/dev/null || true)"
+    [ "$enabled" = "1" ] || [ "$enabled" = "true" ] || fail "$domain did not enable custom sidebars: ${enabled:-missing}"
+  done
+}
+
+assert_asset_car_spin_icon_assets() {
+  local car="$1"
+  [ -f "$car" ] || return 0
+  command -v xcrun >/dev/null 2>&1 || {
+    echo "  warning: xcrun not found; skipping bundled cmux Assets.car icon check" >&2
+    return 0
+  }
+  "$NODE_BIN" - "$car" <<'NODE'
+const { spawnSync } = require('child_process');
+const car = process.argv[2];
+const result = spawnSync('xcrun', ['assetutil', '--info', car], { encoding: 'utf8' });
+if (result.status !== 0) {
+  console.error(result.stderr || `assetutil failed for ${car}`);
+  process.exit(1);
+}
+let entries;
+try {
+  entries = JSON.parse(result.stdout);
+} catch (error) {
+  console.error(`could not parse assetutil output for ${car}: ${error.message}`);
+  process.exit(1);
+}
+for (const name of ['AppIconLight', 'AppIconDark']) {
+  const image = entries.find((entry) => entry.Name === name && entry.AssetType === 'Image');
+  if (!image) {
+    console.error(`bundled cmux Assets.car is missing ${name}`);
+    process.exit(1);
+  }
+  if (image.Opaque !== false) {
+    console.error(`bundled cmux ${name} is opaque in Assets.car; Dock icon will show square corners`);
+    process.exit(1);
+  }
+}
+NODE
+}
+
 [ -d "$APP" ] || fail "missing app bundle: $APP"
 [ -f "$APP/Contents/Info.plist" ] || fail "missing Info.plist"
 [ -x "$APP/Contents/MacOS/SPIN" ] || fail "missing executable launcher"
@@ -213,6 +263,7 @@ cmux_icon_name="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconName 
 [ -z "$cmux_icon_name" ] || fail "bundled cmux app still uses asset-catalog icon name: $cmux_icon_name"
 [ -s "$CMUX_APP/Contents/Resources/AppIcon.icns" ] || fail "missing bundled cmux app icon at Resources/SPIN.app/Contents/Resources/AppIcon.icns"
 cmp -s "$RES/SPIN.icns" "$CMUX_APP/Contents/Resources/AppIcon.icns" || fail "bundled cmux app icon does not match SPIN icon"
+assert_asset_car_spin_icon_assets "$CMUX_APP/Contents/Resources/Assets.car"
 ok "bundled cmux app icon"
 
 if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
@@ -355,6 +406,7 @@ grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not rout
 [ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
 grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not neon SPIN-branded"
 [ -f "$TMP/home/.config/cmux/sidebars/spin-navigator.swift" ] || fail "launcher did not seed SPIN Navigator sidebar"
+assert_spin_sidebar_defaults_seeded "$TMP/home"
 ok "first-launch runtime seed"
 SEEDED_RUNTIME="$TMP/home/runtime"
 
@@ -374,6 +426,7 @@ template_out="$(env -i HOME="$TMP/template-home" PATH="$SYSTEM_PATH" SPIN_APP_HO
 grep -q 'app-launch: onboarding' <<<"$template_out" || fail "launcher did not route template-home launch to onboarding"
 grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with SPIN neon config"
 ls "$TMP/template-home/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "launcher did not back up generated cmux template"
+assert_spin_sidebar_defaults_seeded "$TMP/template-home"
 ok "generated cmux template refreshes to SPIN neon config"
 
 omp_ready_out="$(env -i HOME="$TMP/omp-ready-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-ready-home" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"

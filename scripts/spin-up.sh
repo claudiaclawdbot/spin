@@ -18,6 +18,50 @@ spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or insta
 
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
+seed_spin_navigator_sidebar() {
+  local source="$ROOT/app/cmux/sidebars/spin-navigator.swift"
+  local target_dir="$HOME/.config/cmux/sidebars"
+  local target="$target_dir/spin-navigator.swift"
+  [ -f "$source" ] || return 0
+  mkdir -p "$target_dir"
+  if [ ! -s "$target" ] || grep -Fq 'Text("SPIN")' "$target" 2>/dev/null; then
+    cp "$source" "$target"
+    chmod 600 "$target" 2>/dev/null || true
+  fi
+
+  if [[ "$(uname -s)" == Darwin ]] && [ -x /usr/libexec/PlistBuddy ]; then
+    local domain plist prefs_dir
+    for domain in dev.spin.app com.cmuxterm.app; do
+      prefs_dir="$HOME/Library/Preferences"
+      plist="$prefs_dir/$domain.plist"
+      mkdir -p "$prefs_dir"
+      if [ ! -f "$plist" ]; then
+        cat > "$plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict/>
+</plist>
+EOF
+      fi
+      /usr/libexec/PlistBuddy -c "Delete :customSidebars.beta.enabled" "$plist" >/dev/null 2>&1 || true
+      /usr/libexec/PlistBuddy -c "Add :customSidebars.beta.enabled bool true" "$plist" >/dev/null 2>&1 || true
+      /usr/libexec/PlistBuddy -c "Delete :cmuxExtensionSidebar.providerId" "$plist" >/dev/null 2>&1 || true
+      /usr/libexec/PlistBuddy -c "Add :cmuxExtensionSidebar.providerId string cmux.sidebar.custom.spin-navigator" "$plist" >/dev/null 2>&1 || true
+      chmod 600 "$plist" 2>/dev/null || true
+      if command -v defaults >/dev/null 2>&1; then
+        defaults write "$domain" customSidebars.beta.enabled -bool true >/dev/null 2>&1 || true
+        defaults write "$domain" cmuxExtensionSidebar.providerId "cmux.sidebar.custom.spin-navigator" >/dev/null 2>&1 || true
+      fi
+    done
+  fi
+}
+
+select_spin_navigator_sidebar() {
+  spin_cmd cmux sidebar validate spin-navigator >/dev/null 2>&1 || true
+  spin_cmd cmux sidebar select spin-navigator >/dev/null 2>&1
+}
+
 start_daemon() {
   local label="$1" log="$2" script="$3"; shift 3
   mkdir -p "$(dirname "$log")"
@@ -31,6 +75,8 @@ start_daemon() {
   disown $! 2>/dev/null || true
 }
 
+seed_spin_navigator_sidebar
+
 # ── 1. cmux app/socket ───────────────────────────────────────────────────────
 cmux_ready(){ CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; }
 if cmux_ready; then
@@ -41,6 +87,11 @@ else
   for _ in 1 2 3 4 5 6 7 8 9 10; do cmux_ready && break; sleep 1; done
   cmux_ready || { echo "  ${c_d}· cmux app is not reachable yet — open cmux, then rerun: spin up${c_o}"; exit 1; }
   echo "  ${c_g}✓${c_o} cmux running"
+fi
+if select_spin_navigator_sidebar; then
+  echo "  ${c_g}✓${c_o} SPIN Navigator rail selected"
+else
+  echo "  ${c_d}· SPIN Navigator rail not selectable yet; right-click the sidebar switcher and choose spin-navigator${c_o}"
 fi
 
 # ── 2. driver ────────────────────────────────────────────────────────────────
