@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/branding/spin-icon.svg" alt="SPIN app icon" width="112">
+<img src="assets/branding/spin-icon.svg?v=20260627-production-geometry" alt="SPIN app icon" width="112">
 
 # 🌀 SPIN
 
