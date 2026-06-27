@@ -62,12 +62,20 @@ cat > "$ORG/projects/$PID/PROJECT_CONTROLLER_PROMPT.md" <<EOF
 
 You are \`$PID-ceo\`, the orchestrator for **$PID**, sitting on this cmux floor. You
 take direction from the SPIN coordinator (WORKSPACE_HANDOFF.md) and the human typing here.
+You are intentionally visible: the human may watch this terminal to see what input
+the Coordinator sent, what context you used, and how you reported back.
 
 ## Mission
 ${GOAL:-TBD — set the goal in this file.}
 
 ## Working dir
 \`projects/$PID/\` — the code lives here. Do local, reversible work freely.
+
+## Live delegation
+When this terminal receives \`SPIN delegation <id>\`, read
+\`org/projects/$PID/WORKSPACE_HANDOFF.md\`, do the project-scoped work visibly in
+this floor, update FLOOR.md/RECEIPTS.md, verify claimed artifacts, and close the
+handshake with the exact reporting command for that delegate id.
 
 ## Hard Rules (only gate the 4 below)
 Escalate (\`scripts/org inbox $PID "…"\`) only for: external sends · spending money ·

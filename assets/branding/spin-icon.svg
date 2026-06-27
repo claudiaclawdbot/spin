@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SPIN icon">
   <defs>
-    <linearGradient id="spin-gradient" x1="185" y1="140" x2="840" y2="884" gradientUnits="userSpaceOnUse">
+    <linearGradient id="spin-gradient" x1="176" y1="148" x2="848" y2="884" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ff2bd6"/>
       <stop offset="1" stop-color="#00e5ff"/>
     </linearGradient>
-    <linearGradient id="spin-surface" x1="148" y1="92" x2="876" y2="928" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#19001f"/>
-      <stop offset="1" stop-color="#050009"/>
+    <linearGradient id="spin-surface" x1="150" y1="112" x2="874" y2="912" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a0035"/>
+      <stop offset="1" stop-color="#07000d"/>
     </linearGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="202" fill="url(#spin-surface)" stroke="url(#spin-gradient)" stroke-width="18"/>
-  <g fill="#160f28" stroke="url(#spin-gradient)" stroke-width="48">
-    <circle cx="512" cy="225" r="154"/>
-    <circle cx="758" cy="655" r="154"/>
-    <circle cx="266" cy="655" r="154"/>
-    <circle cx="512" cy="512" r="113"/>
+  <rect x="112" y="112" width="800" height="800" rx="226" fill="url(#spin-surface)" stroke="url(#spin-gradient)" stroke-width="22"/>
+  <g fill="#18102b" stroke="url(#spin-gradient)" stroke-width="46">
+    <circle cx="512" cy="302" r="112"/>
+    <circle cx="692" cy="656" r="122"/>
+    <circle cx="332" cy="656" r="122"/>
+    <circle cx="512" cy="512" r="84"/>
   </g>
-  <circle cx="512" cy="512" r="41" fill="url(#spin-gradient)"/>
+  <circle cx="512" cy="512" r="34" fill="url(#spin-gradient)"/>
 </svg>
