@@ -23,25 +23,32 @@ scripts/spin-new-project.sh <id> "<one-line goal>"
 ```
 
 This registers the project (charter, state, harness entry) **and opens a new cmux
-floor for it** — a new tab in their sidebar with its own omp orchestrator. Then set
-its first directive with `scripts/org set-handoff <id>`.
+floor for it**: a new sidebar tab with its own terminal running that project's OMP
+orchestrator. This visible terminal is part of the product. It gives the human
+traceability: they can watch the project agent receive input, work in its scoped
+context, update its board, and report back.
 
-If the human is chatting live and wants the project coordinator to act visibly, hand
-the first task to the floor with:
+After creating the floor, set its first directive with
+`scripts/org set-handoff <id>`.
+
+If the human is chatting live in the app/cmux UI, hand the first task to the
+visible project floor with:
 
 ```
 scripts/delegate.sh --wait --timeout 900 <id> "<task>"
 ```
 
-If the org is running headless or this is routine background work, queue the first
-step with `scripts/org queue-job <id> …`. Walk a new human through this: ask what
-they want to build, suggest an id, create it, and tell them to check the new floor
-in their sidebar.
+Use `scripts/org queue-job <id> ...` only for routine background work, scheduled
+ticks, or when the app/cmux floor is unavailable. Do not substitute a hidden
+headless queue item when the human asked to see the project agent act. Walk a new
+human through this: ask what they want to build, suggest an id, create it, send
+the first visible task if appropriate, and tell them to check the new floor in
+their sidebar.
 
 ## Live floor delegation
 
 When the human explicitly says to "send a message to", "tell", "ask", or "have"
-a named project coordinator do something in its visual floor, use:
+a named project coordinator do something, use the visual floor path:
 
 ```
 scripts/delegate.sh --wait --timeout 900 <project-id> "<task>"
@@ -50,19 +57,22 @@ scripts/delegate.sh --wait --timeout 900 <project-id> "<task>"
 That types into the project's live cmux/omp agent, includes a request id, and waits
 for the project to report back through `scripts/org inbox <project-id> "delegate
 <id> complete: …"` or `"delegate <id> blocked: …"`. Treat this as a visible
-subagent handoff: relay the returned line to the human. If cmux or that floor is
-not reachable, say the live floor is unavailable and tell the human to run
-`spin up`; do not pretend a queued job is the same thing.
+subagent handoff. The project agent must receive the task in its own terminal; the
+human should be able to see the input, the project-scoped work, and the final
+report. Relay the returned line to the human. If cmux or that floor is not
+reachable, say the live floor is unavailable and tell the human to run `spin up`;
+do not pretend a queued job is the same thing.
 
 ## Autonomy policy (tune this to your owner)
 
 Default to **action, not asking.** Authorize projects to do all local,
 reversible work on their own — write/edit code in their repo, run local tests,
-research, draft content, commit to non-main branches. Queue such work directly
-(`org/AGENT_QUEUE.json`, type `implementation-worker` or `read-only-worker`);
-do NOT route it through the human. Use live floor delegation instead of queueing
-only when the human explicitly asks for a project coordinator/floor interaction or
-when you need them to watch that subagent work in cmux.
+research, draft content, commit to non-main branches. In background ticks, queue
+such work directly (`org/AGENT_QUEUE.json`, type `implementation-worker` or
+`read-only-worker`). In live app conversations, prefer live floor delegation for
+project-agent tasks so SPIN remains visible and traceable. Do NOT route safe local
+work through the human for approval, but also do NOT hide work in headless queues
+when the human asked to watch or talk to a project coordinator.
 
 **Only** put something in `org/HUMAN_QUEUE.md` and wait when the action is:
 

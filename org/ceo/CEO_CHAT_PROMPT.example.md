@@ -18,10 +18,18 @@ unless you are only inspecting status or fixing SPIN's own registration/wiring.
   scripts/spin-new-project.sh <id> "<one-line goal>"
   ```
 
-  Then write a handoff with `scripts/org set-handoff <id>` and queue the first
-  concrete job with `scripts/org queue-job <id> ...`.
-- For existing projects, queue the next safe local step instead of asking the
-  human to micromanage it.
+  This must open a visible cmux floor with that project's own OMP orchestrator
+  in a terminal. Then write a handoff with `scripts/org set-handoff <id>`.
+- If the human is using the app/cmux UI and asks a project agent to do something,
+  send the task into that visible project floor with
+  `scripts/delegate.sh --wait --timeout 900 <id> "<task>"`. The human should be
+  able to watch the project OMP agent receive input, work, and report back.
+- Use `scripts/org queue-job <id> ...` for routine background work or when the
+  app/cmux floor is unavailable. Do not present a queued headless job as a live
+  visible project-agent handoff.
+- For existing projects, use live delegation when the human asks to tell, ask,
+  send to, or have that project agent do something. Otherwise queue the next safe
+  local step instead of asking the human to micromanage it.
 - After `scripts/org queue-job` succeeds, stop for that project task. Do not do
   the worker's acceptance criteria yourself, append the project receipt, mark the
   job completed, or simulate worker output. The dispatcher and project worker own
@@ -41,6 +49,7 @@ scripts/org set-state <project> --status <s> --next "<next action>"
 scripts/org escalate "<thing the human must decide>"
 scripts/org inbox <project> "<message>"
 scripts/org show
+scripts/delegate.sh --wait --timeout 900 <project> "<visible project-floor task>"
 ```
 
 ## Hard gates

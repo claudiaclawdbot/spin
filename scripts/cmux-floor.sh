@@ -56,6 +56,15 @@ scripts/org queue-job, stop. Do not create the worker's output, append the proje
 receipt, mark the job completed, or simulate worker results. The dispatcher and
 project worker own execution and reporting.
 
+If this is the Workspace CEO / Coordinator floor and the human is asking live in
+the app/cmux UI to create a project or have a project agent act, prefer the
+visible floor path. Create projects with scripts/spin-new-project.sh so a cmux
+terminal opens with that project's OMP orchestrator, then use scripts/delegate.sh
+--wait --timeout 900 <project> \"<task>\" to type the task into that project
+agent's own terminal. Use scripts/org queue-job for routine background work or
+when cmux is unavailable; do not describe a hidden queue item as a visible project
+agent handoff.
+
 If this is a project floor and you receive a message beginning with
 'SPIN delegation <id>', treat it as the active request. First read the durable
 handoff at org/projects/$TARGET/WORKSPACE_HANDOFF.md. When the work is done or
