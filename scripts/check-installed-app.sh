@@ -129,6 +129,19 @@ EOF
   chmod +x "$GLOBAL_BIN/$bin"
 done
 
+mkdir -p "$HOME_DIR/.config/cmux"
+cat > "$HOME_DIR/.config/cmux/cmux.json" <<'EOF'
+{
+  "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+  "schemaVersion": 1,
+  // cmux creates this template on launch when ~/.config/cmux/cmux.json is missing.
+  //   "sidebarAppearance" : {
+  //     "darkModeTintColor" : null,
+  //     "tintColor" : "#000000"
+  //   }
+}
+EOF
+
 first_out="$TMP/first-launch.out"
 env -i \
   HOME="$HOME_DIR" \
@@ -140,7 +153,12 @@ env -i \
 grep -q 'SPIN onboarding opened in cmux (workspace:512)' "$first_out" \
   || fail "installed first launch did not open onboarding workspace"
 [ -x "$APP_HOME/runtime/scripts/spin" ] || fail "installed first launch did not seed writable runtime"
+[ -x "$APP_HOME/runtime/scripts/org" ] || fail "installed first launch did not seed writable org CLI"
 [ -d "$APP_HOME/runtime/org" ] || fail "installed first launch did not seed org state"
+[ -f "$HOME_DIR/.config/cmux/cmux.json" ] || fail "installed first launch did not seed SPIN cmux config"
+grep -q '"darkModeTintColor": "#FF2BD6"' "$HOME_DIR/.config/cmux/cmux.json" || fail "installed first launch seeded stale cmux config"
+ls "$HOME_DIR/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "installed first launch did not back up generated cmux template"
+[ -f "$HOME_DIR/.config/cmux/sidebars/spin-navigator.swift" ] || fail "installed first launch did not seed SPIN Navigator sidebar"
 grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|ping" "$CMUX_CALLS" \
   || fail "installed first launch did not call bundled cmux ping"
 grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|new-workspace --name SPIN Onboarding" "$CMUX_CALLS" \
@@ -158,6 +176,16 @@ env -i \
   SPIN_APP_LAUNCH_DRY_RUN=1 \
   "$CONTROL_APP/Contents/MacOS/SPIN" > "$route_before"
 grep -q 'app-launch: onboarding' "$route_before" || fail "pre-onboarding relaunch route was not onboarding"
+
+route_omp_ready="$TMP/route-omp-ready.out"
+env -i \
+  HOME="$HOME_DIR" \
+  PATH="$GLOBAL_BIN:$SYSTEM_PATH" \
+  SPIN_APP_HOME="$APP_HOME" \
+  SPIN_APP_ASSUME_OMP_CONFIGURED=1 \
+  SPIN_APP_LAUNCH_DRY_RUN=1 \
+  "$CONTROL_APP/Contents/MacOS/SPIN" > "$route_omp_ready"
+grep -q 'app-launch: spin up' "$route_omp_ready" || fail "existing OMP setup route was not spin up"
 
 touch "$APP_HOME/runtime/org/.spin-onboarded"
 route_after="$TMP/route-after.out"

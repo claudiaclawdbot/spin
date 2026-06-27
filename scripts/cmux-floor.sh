@@ -16,6 +16,7 @@ ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 export SPIN_ROOT="$ROOT"
 export WORKSPACE_ROOT="$ROOT"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 TARGET="${1:?usage: cmux-floor.sh ceo|<project-id>}"
 OMP_CONFIG="$(ensure_spin_omp_config)"
 MODEL=(--config "$OMP_CONFIG")
@@ -55,6 +56,18 @@ scripts/org queue-job, stop. Do not create the worker's output, append the proje
 receipt, mark the job completed, or simulate worker results. The dispatcher and
 project worker own execution and reporting.
 
+If this is a project floor and you receive a message beginning with
+'SPIN delegation <id>', treat it as the active request. First read the durable
+handoff at org/projects/$TARGET/WORKSPACE_HANDOFF.md. When the work is done or
+blocked, close the handshake by running exactly one inbox command from the SPIN
+root, for example:
+
+cd \"\$SPIN_ROOT\" && scripts/org inbox $TARGET \"delegate <id> complete: <summary>\"
+cd \"\$SPIN_ROOT\" && scripts/org inbox $TARGET \"delegate <id> blocked: <summary>\"
+
+Do not report completion only in FLOOR.md or RECEIPTS.md. Before claiming a file,
+artifact, or command output exists, verify it with a local command.
+
 ## Live floor status board (keep it current)
 You have a status board at: $FLOOR_DOC
 It is displayed live on this cmux floor and auto-reloads. Whenever you start, finish,
@@ -80,4 +93,5 @@ echo "════════════════════════�
 echo
 cd "$DIR"
 OMP_BIN="$(spin_resolve_binary omp)" || { echo "omp not found; SPIN app bundles it under Resources/bin/omp or repo vendor/bin/omp"; exit 127; }
+spin_cmux_write_floor_marker "$TARGET" "$TITLE" "$DIR"
 exec "$OMP_BIN" "${MODEL[@]}" "${SYSARG[@]}"

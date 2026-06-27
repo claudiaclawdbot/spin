@@ -35,7 +35,14 @@ receipt after meaningful work.
 
 ## Reporting
 
-- Append a one-paragraph receipt (include your job ID) to `RECEIPTS.md`.
+- Append a one-paragraph receipt (include your job ID or delegate ID) to `RECEIPTS.md`.
 - Update `STATE.json` (`next_action`, timestamps).
-- Report up to the Navigator with one command:
-  `scripts/org inbox example-app "<what was done / what's blocked>"`.
+- Before reporting completion, verify any file/artifact you claim with `ls`,
+  `test -f`, or the relevant run/test command.
+- For live delegations, preserve the delegate ID and report up from the SPIN root
+  with exactly:
+  `cd "$SPIN_ROOT" && scripts/org inbox example-app "delegate <id> complete: <summary>"`
+  or
+  `cd "$SPIN_ROOT" && scripts/org inbox example-app "delegate <id> blocked: <summary>"`.
+- For non-delegate status, report up to the Navigator with one command:
+  `cd "$SPIN_ROOT" && scripts/org inbox example-app "<what was done / what's blocked>"`.

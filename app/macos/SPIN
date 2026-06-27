@@ -34,10 +34,10 @@ copy_runtime() {
   mkdir -p "$APP_SUPPORT_ROOT"
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --delete \
-      --exclude 'org' \
-      --exclude 'logs' \
-      --exclude 'dist' \
-      --exclude 'vendor/sources' \
+      --exclude '/org' \
+      --exclude '/logs' \
+      --exclude '/dist' \
+      --exclude '/vendor/sources' \
       "$SPIN_BUNDLED_RUNTIME"/ "$RUNTIME_DIR"/
   else
     mkdir -p "$RUNTIME_DIR"
@@ -55,7 +55,44 @@ seed_org_if_missing() {
   fi
 }
 
+seed_file_if_spin_managed() {
+  local source="$1" target="$2" match="$3" fallback_match="${4:-}" target_dir backup
+  [ -f "$source" ] || return 0
+  target_dir="$(dirname "$target")"
+  mkdir -p "$target_dir"
+  if [ ! -s "$target" ]; then
+    cp "$source" "$target"
+    chmod 600 "$target" 2>/dev/null || true
+    return 0
+  fi
+  cmp -s "$source" "$target" && return 0
+  if grep -Fq "$match" "$target" 2>/dev/null || { [ -n "$fallback_match" ] && grep -Fq "$fallback_match" "$target" 2>/dev/null; }; then
+    backup="$target.spin-backup-$(date -u +%Y%m%dT%H%M%SZ)"
+    cp "$target" "$backup" 2>/dev/null || true
+    cp "$source" "$target"
+    chmod 600 "$target" 2>/dev/null || true
+  fi
+}
+
+seed_cmux_defaults() {
+  [ "${SPIN_APP_SKIP_CMUX_CONFIG_SEED:-0}" = "1" ] && return 0
+  local config_src dock_src sidebar_src config_dir sidebar_dir
+  config_src="$RESOURCES_DIR/app/cmux/config/cmux.json"
+  dock_src="$RESOURCES_DIR/app/cmux/config/dock.json"
+  sidebar_src="$RESOURCES_DIR/app/cmux/sidebars/spin-navigator.swift"
+  [ -f "$config_src" ] || config_src="$RUNTIME_DIR/app/cmux/config/cmux.json"
+  [ -f "$dock_src" ] || dock_src="$RUNTIME_DIR/app/cmux/config/dock.json"
+  [ -f "$sidebar_src" ] || sidebar_src="$RUNTIME_DIR/app/cmux/sidebars/spin-navigator.swift"
+
+  config_dir="$HOME/.config/cmux"
+  sidebar_dir="$config_dir/sidebars"
+  seed_file_if_spin_managed "$config_src" "$config_dir/cmux.json" '"SPIN - {activeWorkspace}"' 'cmux creates this template on launch'
+  seed_file_if_spin_managed "$dock_src" "$config_dir/dock.json" '"SPIN Status"'
+  seed_file_if_spin_managed "$sidebar_src" "$sidebar_dir/spin-navigator.swift" 'Text("SPIN")'
+}
+
 copy_runtime
 seed_org_if_missing
+seed_cmux_defaults
 
 exec "$SPIN_ROOT/scripts/spin" app-launch

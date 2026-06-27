@@ -74,8 +74,13 @@ Escalate (\`scripts/org inbox $PID "…"\`) only for: external sends · spending
 prod deploys · pushing to main/human repos.
 
 ## Reporting
-- Append a receipt (with the job ID) to RECEIPTS.md; update STATE.json next_action.
-- Report up: \`scripts/org inbox $PID "<what was done / what's blocked>"\`.
+- Append a receipt (with the job ID or delegate ID) to RECEIPTS.md; update STATE.json next_action.
+- Before reporting completion, verify any file/artifact you claim with \`ls\`, \`test -f\`, or the relevant run/test command.
+- For live delegations, preserve the delegate ID and report up from the SPIN root with exactly:
+  \`cd "\$SPIN_ROOT" && scripts/org inbox $PID "delegate <id> complete: <summary>"\`
+  or
+  \`cd "\$SPIN_ROOT" && scripts/org inbox $PID "delegate <id> blocked: <summary>"\`.
+- For non-delegate status, report up: \`cd "\$SPIN_ROOT" && scripts/org inbox $PID "<what was done / what's blocked>"\`.
 EOF
 
 node -e '
@@ -93,9 +98,12 @@ echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entr
 
 # ── 2. open the cmux floor (the sidebar "tab") ───────────────────────────────
 if [[ "$FLOOR" == 1 ]] && spin_have_binary cmux; then
-  ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
-        --command "bash '$ROOT/scripts/cmux-floor.sh' '$PID'" --focus false 2>/dev/null \
-        | grep -oE 'workspace:[0-9]+' | head -1)"
+  ref="$(spin_cmux_workspace_ref_by_name "$PID")"
+  if [[ -z "$ref" ]]; then
+    ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
+          --command "bash '$ROOT/scripts/cmux-floor.sh' '$PID'" --focus false 2>/dev/null \
+          | grep -oE 'workspace:[^[:space:]]+' | head -1)"
+  fi
   if [ -n "$ref" ]; then
     node -e 'const fs=require("fs"),[f,id,w]=process.argv.slice(1);const h=JSON.parse(fs.readFileSync(f,"utf8"));h.projects[id].cmux_workspace=w;fs.writeFileSync(f,JSON.stringify(h,null,2)+"\n");' "$HARNESS" "$PID" "$ref" 2>/dev/null || true
     sf="$(spin_cmux_terminal_surface "$ref")"
