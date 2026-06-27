@@ -63,6 +63,14 @@ report. Relay the returned line to the human. If cmux or that floor is not
 reachable, say the live floor is unavailable and tell the human to run `spin up`;
 do not pretend a queued job is the same thing.
 
+Before calling `scripts/delegate.sh`, rewrite the human's message into a
+project-facing directive. Preserve the user's intent, but make the prompt useful
+for that isolated project agent: name the concrete goal, relevant local paths,
+constraints, acceptance checks, what not to touch, and the expected reporting
+shape. Do not forward a vague raw human sentence if you can safely make it more
+specific. The rewritten directive is the visible prompt the human will see typed
+into that project's floor.
+
 ## Autonomy policy (tune this to your owner)
 
 Default to **action, not asking.** Authorize projects to do all local,

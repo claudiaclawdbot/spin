@@ -106,22 +106,21 @@ echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entr
 
 # ── 2. open the cmux floor (the sidebar "tab") ───────────────────────────────
 if [[ "$FLOOR" == 1 ]] && spin_have_binary cmux; then
-  ref="$(spin_cmux_workspace_ref_by_name "$PID")"
-  if [[ -z "$ref" ]]; then
-    ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$PID" --cwd "$CODE_DIR" \
-          --command "bash '$ROOT/scripts/cmux-floor.sh' '$PID'" --focus false 2>/dev/null \
-          | grep -oE 'workspace:[^[:space:]]+' | head -1)"
-  fi
-  if [ -n "$ref" ]; then
-    node -e 'const fs=require("fs"),[f,id,w]=process.argv.slice(1);const h=JSON.parse(fs.readFileSync(f,"utf8"));h.projects[id].cmux_workspace=w;fs.writeFileSync(f,JSON.stringify(h,null,2)+"\n");' "$HARNESS" "$PID" "$ref" 2>/dev/null || true
-    sf="$(spin_cmux_terminal_surface "$ref")"
-    if spin_cmux_open_project_board "$ref" "$PID" "$sf"; then
-      echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(agent + live FLOOR.md board)${c_o}"
-    else
-      echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(terminal only; board pane unavailable)${c_o}"
-    fi
+  spin_prepare_cmux_environment
+  if ! CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; then
+    echo "${c_d}  (cmux is not reachable — run 'spin up' later to open the floor)${c_o}"
   else
-    echo "${c_d}  (couldn't open a cmux floor — run 'spin up' later, or cmux isn't running)${c_o}"
+    ref="$(spin_cmux_ensure_project_floor "$PID" false 2>/dev/null || true)"
+    if [ -n "$ref" ]; then
+      sf="$(spin_cmux_terminal_surface "$ref")"
+      if spin_cmux_open_project_board "$ref" "$PID" "$sf"; then
+        echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(agent + live FLOOR.md board)${c_o}"
+      else
+        echo "${c_v}✓ opened cmux floor for '$PID' → $ref${c_o} ${c_d}(terminal only; board pane unavailable)${c_o}"
+      fi
+    else
+      echo "${c_d}  (couldn't open a cmux floor — run 'spin up' later, or cmux isn't running)${c_o}"
+    fi
   fi
 else
   echo "${c_d}  (no cmux floor opened — headless. 'spin up' opens floors when you want them.)${c_o}"

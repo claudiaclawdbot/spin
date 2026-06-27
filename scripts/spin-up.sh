@@ -18,69 +18,6 @@ spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or insta
 
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
-workspace_ref_by_name() {
-  spin_cmux_workspace_ref_by_name "$1"
-}
-
-saved_ceo_ref() {
-  node -e 'const fs=require("fs");try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(h.workspace_ceo?.cmux_workspace) console.log(h.workspace_ceo.cmux_workspace);}catch{}' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null
-}
-
-saved_project_ref() {
-  node -e 'const fs=require("fs"),id=process.argv[2];try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(h.projects?.[id]?.cmux_workspace) console.log(h.projects[id].cmux_workspace);}catch{}' "$ROOT/org/OMP_HARNESS.json" "$1" 2>/dev/null
-}
-
-term_surface() {
-  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$1" 2>/dev/null | awk '
-    /surface:[0-9]+/ && /\[terminal\]/ {
-      match($0, /surface:[0-9]+/)
-      ref=substr($0, RSTART, RLENGTH)
-      if ($0 ~ /\[selected\]/) { print ref; found=1; exit }
-      if (!first) first=ref
-    }
-    END { if (!found && first) print first }
-  '
-}
-
-surface_tty() {
-  local ref="$1" sf="$2"
-  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$ref" 2>/dev/null | awk -v sf="$sf" '
-    index($0, sf) && /tty=/ {
-      match($0, /tty=[^[:space:]]+/)
-      if (RSTART) { print substr($0, RSTART + 4, RLENGTH - 4); exit }
-    }
-  '
-}
-
-floor_running() {
-  local ref="$1" sf="$2" target="${3:-}" tty
-  [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target" && return 0
-  tty="$(surface_tty "$ref" "$sf")"
-  [[ -n "$tty" ]] || return 1
-  spin_cmux_floor_running "$target" "$tty"
-}
-
-start_floor_if_needed() {
-  local ref="$1" target="$2" label="$3"
-  local sf; sf="$(term_surface "$ref")"
-  [[ -z "$sf" ]] && { echo "  ${c_d}· no terminal surface found for $label ($ref)${c_o}"; return 0; }
-  if floor_running "$ref" "$sf" "$target"; then
-    echo "  ${c_g}✓${c_o} $label floor running"
-    return 0
-  fi
-  CMUX_QUIET=1 spin_cmd cmux send --workspace "$ref" --surface "$sf" "bash '$ROOT/scripts/cmux-floor.sh' '$target'" >/dev/null 2>&1
-  CMUX_QUIET=1 spin_cmd cmux send-key --workspace "$ref" --surface "$sf" enter >/dev/null 2>&1
-  echo "  ${c_g}✓${c_o} $label floor started"
-}
-
-remember_ceo_ref() {
-  node -e 'const fs=require("fs"),[f,ref]=process.argv.slice(1);const h=JSON.parse(fs.readFileSync(f,"utf8"));h.workspace_ceo=h.workspace_ceo||{};h.workspace_ceo.cmux_workspace=ref;fs.writeFileSync(f,JSON.stringify(h,null,2)+"\n");' "$ROOT/org/OMP_HARNESS.json" "$1" 2>/dev/null || true
-}
-
-remember_project_ref() {
-  node -e 'const fs=require("fs"),[f,id,ref]=process.argv.slice(1);const h=JSON.parse(fs.readFileSync(f,"utf8"));h.projects=h.projects||{};h.projects[id]=h.projects[id]||{};h.projects[id].cmux_workspace=ref;fs.writeFileSync(f,JSON.stringify(h,null,2)+"\n");' "$ROOT/org/OMP_HARNESS.json" "$1" "$2" 2>/dev/null || true
-}
-
 start_daemon() {
   local label="$1" log="$2" script="$3"; shift 3
   mkdir -p "$(dirname "$log")"
@@ -114,26 +51,12 @@ else
   bash "$ROOT/scripts/spin" start >/dev/null 2>&1 && echo "  ${c_g}✓${c_o} driver started ${c_d}(tip: 'spin service install' keeps it up across reboots)${c_o}"
 fi
 
-# ── 3. Coordinator floor (the omp agent you talk to) ─────────────────────────
-coord_ref="$(saved_ceo_ref)"
-if [[ -n "$coord_ref" ]] && ! spin_cmux_workspace_ref_exists "$coord_ref"; then
-  coord_ref=""
-fi
-[[ -n "$coord_ref" ]] || coord_ref="$(workspace_ref_by_name "SPIN Coordinator")"
+# ── 3. SPIN orchestrator floor (the omp agent you talk to) ───────────────────
+coord_ref="$(spin_cmux_ensure_coordinator_floor true 2>/dev/null || true)"
 if [[ -n "$coord_ref" ]]; then
-  echo "  ${c_g}✓${c_o} Coordinator floor already open"
-  remember_ceo_ref "$coord_ref"
-  start_floor_if_needed "$coord_ref" ceo Coordinator
+  echo "  ${c_g}✓${c_o} SPIN orchestrator floor open → $coord_ref ${c_d}(talk to it there)${c_o}"
 else
-  ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "SPIN Coordinator" --cwd "$HOME" \
-        --command "bash '$ROOT/scripts/cmux-floor.sh' ceo" --focus true 2>/dev/null \
-        | grep -oE 'workspace:[^[:space:]]+' | head -1)"
-  if [[ -n "$ref" ]]; then
-    remember_ceo_ref "$ref"
-    echo "  ${c_g}✓${c_o} Coordinator floor open → $ref ${c_d}(talk to it there)${c_o}"
-  else
-    echo "  ${c_d}· couldn't open the Coordinator floor (is cmux running?)${c_o}"
-  fi
+  echo "  ${c_d}· couldn't open the SPIN orchestrator floor (is cmux running?)${c_o}"
 fi
 
 # ── 4. live boards ───────────────────────────────────────────────────────────
@@ -150,49 +73,17 @@ else
 fi
 
 # ── 5. re-open floors for active projects (after a cmux restart) ─────────────
-node -e '
-  const fs=require("fs"), [hf,sf]=process.argv.slice(1);
-  const ids=new Set();
-  const statusById=new Map();
-  try {
-    const s=JSON.parse(fs.readFileSync(sf,"utf8"));
-    for (const p of s.project_orchestrators || []) {
-      const id=p.project || p.id;
-      if (!id) continue;
-      const status=String(p.status || "");
-      statusById.set(id, status);
-      if (status.startsWith("active")) ids.add(id);
-    }
-  } catch {}
-  try {
-    const h=JSON.parse(fs.readFileSync(hf,"utf8"));
-    for (const [id,p] of Object.entries(h.projects || {})) {
-      const status=statusById.get(id);
-      if (p.cmux_workspace && !String(status || "").startsWith("candidate")) ids.add(id);
-    }
-  } catch {}
-  for (const id of ids) if (id) console.log(id);
-' "$ROOT/org/OMP_HARNESS.json" "$ROOT/org/state.json" 2>/dev/null | while read -r id; do
+spin_cmux_project_floor_ids | while read -r id; do
   [ -z "$id" ] && continue
-  ref="$(saved_project_ref "$id")"
-  if [[ -n "$ref" ]] && ! spin_cmux_workspace_ref_exists "$ref"; then
-    ref=""
-  fi
-  [[ -n "$ref" ]] || ref="$(workspace_ref_by_name "$id")"
-  if [[ -z "$ref" ]]; then
-    cwd="$ROOT/projects/$id"; [[ -d "$cwd" ]] || cwd="$ROOT/org/projects/$id"
-    ref="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$id" --cwd "$cwd" \
-      --command "bash '$ROOT/scripts/cmux-floor.sh' '$id'" --focus false 2>/dev/null \
-      | grep -oE 'workspace:[^[:space:]]+' | head -1)"
-    [[ -n "$ref" ]] && echo "  ${c_g}✓${c_o} re-opened floor: $id"
-  fi
+  ref="$(spin_cmux_ensure_project_floor "$id" false 2>/dev/null || true)"
   if [[ -n "$ref" ]]; then
-    remember_project_ref "$id" "$ref"
-    start_floor_if_needed "$ref" "$id" "$id"
-    sf="$(term_surface "$ref")"
+    echo "  ${c_g}✓${c_o} project floor ready: $id → $ref"
+    sf="$(spin_cmux_terminal_surface "$ref")"
     if spin_cmux_open_project_board "$ref" "$id" "$sf"; then
       echo "  ${c_g}✓${c_o} $id board visible"
     fi
+  else
+    echo "  ${c_d}· couldn't open project floor: $id${c_o}"
   fi
 done
 

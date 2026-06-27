@@ -139,6 +139,151 @@ spin_cmux_terminal_surface() {
   '
 }
 
+spin_cmux_surface_tty() {
+  local workspace="$1" surface="$2"
+  [[ -n "$workspace" && -n "$surface" ]] || return 1
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$workspace" 2>/dev/null | awk -v sf="$surface" '
+    index($0, sf) && /tty=/ {
+      match($0, /tty=[^[:space:]]+/)
+      if (RSTART) { print substr($0, RSTART + 4, RLENGTH - 4); exit }
+    }
+  '
+}
+
+spin_cmux_floor_screen_active() {
+  local workspace="$1" surface="$2"
+  [[ -n "$workspace" && -n "$surface" ]] || return 1
+  CMUX_QUIET=1 spin_cmd cmux read-screen --workspace "$workspace" --surface "$surface" 2>/dev/null \
+    | tail -24 \
+    | grep -Eiq '(^|[[:space:]])(omp|model:|WORKSPACE CEO|orchestrator|SPIN delegation|IDLE until you type)'
+}
+
+spin_cmux_floor_active_in_workspace() {
+  local workspace="$1" target="$2" surface tty_name
+  [[ -n "$workspace" && -n "$target" ]] || return 1
+  spin_cmux_floor_marker_running "$target" && return 0
+  surface="$(spin_cmux_terminal_surface "$workspace")"
+  [[ -n "$surface" ]] || return 1
+  tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
+  [[ -n "$tty_name" ]] && spin_cmux_floor_running "$target" "$tty_name" && return 0
+  spin_cmux_floor_screen_active "$workspace" "$surface"
+}
+
+spin_cmux_start_floor_in_workspace() {
+  local workspace="$1" target="$2" surface
+  [[ -n "$workspace" && -n "$target" ]] || return 1
+  surface="$(spin_cmux_terminal_surface "$workspace")"
+  [[ -n "$surface" ]] || return 1
+  spin_cmux_floor_active_in_workspace "$workspace" "$target" && return 0
+  CMUX_QUIET=1 spin_cmd cmux send --workspace "$workspace" --surface "$surface" \
+    "bash '$ROOT/scripts/cmux-floor.sh' '$target'" >/dev/null 2>&1 || return 1
+  CMUX_QUIET=1 spin_cmd cmux send-key --workspace "$workspace" --surface "$surface" enter >/dev/null 2>&1
+}
+
+spin_cmux_saved_workspace_ref() {
+  local target="$1"
+  [[ -f "$ROOT/org/OMP_HARNESS.json" ]] || return 1
+  node -e '
+const fs = require("fs");
+const [file, target] = process.argv.slice(1);
+try {
+  const h = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (target === "ceo") {
+    if (h.workspace_ceo && h.workspace_ceo.cmux_workspace) console.log(h.workspace_ceo.cmux_workspace);
+  } else if (h.projects && h.projects[target] && h.projects[target].cmux_workspace) {
+    console.log(h.projects[target].cmux_workspace);
+  }
+} catch {}
+' "$ROOT/org/OMP_HARNESS.json" "$target" 2>/dev/null
+}
+
+spin_cmux_remember_workspace_ref() {
+  local target="$1" workspace="$2"
+  [[ -n "$target" && -n "$workspace" && -f "$ROOT/org/OMP_HARNESS.json" ]] || return 1
+  node -e '
+const fs = require("fs");
+const [file, target, workspace] = process.argv.slice(1);
+const h = JSON.parse(fs.readFileSync(file, "utf8"));
+if (target === "ceo") {
+  h.workspace_ceo = h.workspace_ceo || {};
+  h.workspace_ceo.cmux_workspace = workspace;
+} else {
+  h.projects = h.projects || {};
+  h.projects[target] = h.projects[target] || {};
+  h.projects[target].cmux_workspace = workspace;
+}
+const tmp = `${file}.tmp.${process.pid}`;
+fs.writeFileSync(tmp, JSON.stringify(h, null, 2) + "\n");
+fs.renameSync(tmp, file);
+' "$ROOT/org/OMP_HARNESS.json" "$target" "$workspace" 2>/dev/null
+}
+
+spin_cmux_project_floor_ids() {
+  node -e '
+const fs = require("fs");
+const [harnessFile, stateFile] = process.argv.slice(1);
+const ids = new Set();
+const statusById = new Map();
+try {
+  const s = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  for (const p of s.project_orchestrators || []) {
+    const id = p.project || p.id;
+    if (!id) continue;
+    const status = String(p.status || "");
+    statusById.set(id, status);
+    if (status.startsWith("active")) ids.add(id);
+  }
+} catch {}
+try {
+  const h = JSON.parse(fs.readFileSync(harnessFile, "utf8"));
+  for (const [id, p] of Object.entries(h.projects || {})) {
+    const status = statusById.get(id);
+    if (p.cmux_workspace && !String(status || "").startsWith("candidate")) ids.add(id);
+  }
+} catch {}
+for (const id of ids) if (id) console.log(id);
+' "$ROOT/org/OMP_HARNESS.json" "$ROOT/org/state.json" 2>/dev/null
+}
+
+spin_cmux_project_cwd() {
+  local project_id="$1" cwd
+  cwd="$ROOT/projects/$project_id"
+  [[ -d "$cwd" ]] || cwd="$ROOT/org/projects/$project_id"
+  printf '%s\n' "$cwd"
+}
+
+spin_cmux_ensure_floor() {
+  local target="$1" title="$2" cwd="$3" focus="${4:-false}" workspace="" created=0
+  [[ -n "$target" && -n "$title" && -n "$cwd" ]] || return 1
+
+  workspace="$(spin_cmux_saved_workspace_ref "$target")"
+  if [[ -n "$workspace" ]] && ! spin_cmux_workspace_ref_exists "$workspace"; then
+    workspace=""
+  fi
+  [[ -n "$workspace" ]] || workspace="$(spin_cmux_workspace_ref_by_name "$title")"
+  if [[ -z "$workspace" ]]; then
+    workspace="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$title" --cwd "$cwd" \
+      --command "bash '$ROOT/scripts/cmux-floor.sh' '$target'" --focus "$focus" 2>/dev/null \
+      | grep -oE 'workspace:[^[:space:]]+' | head -1)"
+    [[ -n "$workspace" ]] && created=1
+  fi
+  [[ -n "$workspace" ]] || return 1
+  spin_cmux_remember_workspace_ref "$target" "$workspace" >/dev/null 2>&1 || true
+  [[ "$created" == 1 ]] || spin_cmux_start_floor_in_workspace "$workspace" "$target" >/dev/null 2>&1 || true
+  printf '%s\n' "$workspace"
+}
+
+spin_cmux_ensure_coordinator_floor() {
+  spin_cmux_ensure_floor ceo "SPIN Coordinator" "$HOME" "${1:-true}"
+}
+
+spin_cmux_ensure_project_floor() {
+  local project_id="$1" focus="${2:-false}" cwd
+  [[ -n "$project_id" ]] || return 1
+  cwd="$(spin_cmux_project_cwd "$project_id")"
+  spin_cmux_ensure_floor "$project_id" "$project_id" "$cwd" "$focus"
+}
+
 spin_cmux_project_board_path() {
   local project_id="$1"
   printf '%s\n' "$ROOT/org/projects/$project_id/FLOOR.md"
