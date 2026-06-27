@@ -1,7 +1,7 @@
 VStack(alignment: .leading, spacing: 10) {
     HStack {
         Image(systemName: "circle.hexagongrid.fill")
-            .foregroundColor("#22D3EE")
+            .foregroundColor("#FF2BD6")
             .imageScale(.large)
         VStack(alignment: .leading, spacing: 2) {
             Text("SPIN")
@@ -15,10 +15,10 @@ VStack(alignment: .leading, spacing: 10) {
         Text("\(workspaceCount)")
             .font(.caption)
             .monospacedDigit()
-            .foregroundColor("#22D3EE")
+            .foregroundColor("#00E5FF")
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background("#082A35")
+            .background("#4A003A")
             .cornerRadius(10)
         Text(clock.time)
             .font(.caption)
@@ -34,11 +34,11 @@ VStack(alignment: .leading, spacing: 10) {
         Text("PROJECT FLOORS")
             .font(.caption2)
             .fontWeight(.semibold)
-            .foregroundColor("#A855F7")
+            .foregroundColor("#FF2BD6")
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 5)
-    .background("#071C25")
+    .background("#3D0030")
     .cornerRadius(6)
 
     Divider()
@@ -47,7 +47,7 @@ VStack(alignment: .leading, spacing: 10) {
         Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(w.selected ? "#22D3EE" : (w.unread > 0 ? "#EAB308" : "#5B6B73"))
+                    .fill(w.selected ? "#FF2BD6" : (w.unread > 0 ? "#00E5FF" : "#6F5868"))
                     .frame(width: 7, height: 7)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(w.title)
@@ -66,11 +66,11 @@ VStack(alignment: .leading, spacing: 10) {
                     Text("\(w.unread)")
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundColor("#EAB308")
+                        .foregroundColor("#00E5FF")
                 }
             }
             .padding(6)
-            .background(w.selected ? "#0E3A46" : "#071922")
+            .background(w.selected ? "#6A0053" : "#210019")
             .cornerRadius(6)
         }
     }

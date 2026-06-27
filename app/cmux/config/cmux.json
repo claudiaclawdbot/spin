@@ -16,21 +16,22 @@
   },
   "sidebarAppearance": {
     "matchTerminalBackground": false,
-    "tintColor": "#061922",
-    "lightModeTintColor": "#D7F3FA",
-    "darkModeTintColor": "#061922",
-    "tintOpacity": 0.34
+    "tintColor": "#FF2BD6",
+    "lightModeTintColor": "#FFD1F5",
+    "darkModeTintColor": "#FF2BD6",
+    "tintOpacity": 0.62
   },
   "workspaceColors": {
     "indicatorStyle": "washRail",
-    "selectionColor": "#0E3A46",
-    "notificationBadgeColor": "#22D3EE",
+    "selectionColor": "#7A005F",
+    "notificationBadgeColor": "#00E5FF",
     "colors": {
-      "SPIN Cyan": "#0E6B8C",
-      "SPIN Green": "#22C55E",
+      "SPIN Neon Pink": "#FF2BD6",
+      "SPIN Electric Cyan": "#00E5FF",
+      "SPIN Laser Green": "#39FF14",
       "SPIN Gold": "#EAB308",
-      "SPIN Red": "#EF4444",
-      "SPIN Violet": "#8A2BE2"
+      "SPIN Violet": "#A855F7",
+      "SPIN Red": "#EF4444"
     }
   },
   "workspaceGroups": {

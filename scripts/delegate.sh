@@ -64,7 +64,36 @@ if [[ "$FORCE" != 1 ]]; then
 fi
 
 TASK_ONE_LINE="$(printf '%s' "$TASK" | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
-WRAPPED_TASK="SPIN delegation $REQ_ID from the Navigator. Task: $TASK_ONE_LINE. When done or blocked, update your project files/floor board as appropriate, then report back with exactly one of: scripts/org inbox $PID \"delegate $REQ_ID complete: <summary>\" OR scripts/org inbox $PID \"delegate $REQ_ID blocked: <summary>\"."
+PROJECT_CODE_DIR="$ROOT/projects/$PID"
+mkdir -p "$PROJECT_CODE_DIR"
+[ -f "$PROJECT_CODE_DIR/README.md" ] || printf '# %s\n\nProject workspace for SPIN project `%s`.\n' "$PID" "$PID" > "$PROJECT_CODE_DIR/README.md"
+
+REPORT_COMPLETE="cd \"\$SPIN_ROOT\" && scripts/org inbox $PID \"delegate $REQ_ID complete: <summary>\""
+REPORT_BLOCKED="cd \"\$SPIN_ROOT\" && scripts/org inbox $PID \"delegate $REQ_ID blocked: <summary>\""
+HANDOFF_TMP="$(mktemp "${TMPDIR:-/tmp}/spin-delegate.XXXXXX")"
+trap 'rm -f "$HANDOFF_TMP"' EXIT
+cat > "$HANDOFF_TMP" <<EOF
+SPIN live delegation: $REQ_ID
+
+Task:
+$TASK_ONE_LINE
+
+Work in:
+projects/$PID/
+
+Before reporting completion:
+- Verify any file/artifact you claim with a local command such as ls, test -f, or the relevant test/run command.
+- Update org/projects/$PID/FLOOR.md and append a receipt to org/projects/$PID/RECEIPTS.md for meaningful work.
+- Report the handshake with exactly one of these commands:
+  $REPORT_COMPLETE
+  $REPORT_BLOCKED
+EOF
+"$ROOT/scripts/org" set-handoff "$PID" --file "$HANDOFF_TMP" >/dev/null || {
+  echo "failed to write handoff for $PID" >&2
+  exit 1
+}
+
+WRAPPED_TASK="SPIN delegation $REQ_ID from the Navigator. Task: $TASK_ONE_LINE. A durable copy is in org/projects/$PID/WORKSPACE_HANDOFF.md. Work in projects/$PID/. Before reporting completion, verify any file/artifact you claim exists or any output you claim with a local command. When done or blocked, update your project files/floor board as appropriate, then report back with exactly one of: $REPORT_COMPLETE OR $REPORT_BLOCKED."
 
 # type the task into the project agent and submit it
 if ! spin_cmd cmux send --workspace "$WS" --surface "$SF" "$WRAPPED_TASK" >/dev/null 2>&1; then

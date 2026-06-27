@@ -53,10 +53,11 @@ surface_tty() {
 }
 
 agent_floor_active() {
-  local ws="$1" sf="$2" tty
+  local ws="$1" sf="$2" target="${3:-}" tty
+  [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target" && return 0
   tty="$(surface_tty "$ws" "$sf")"
   [[ -n "$tty" ]] || return 1
-  ps -t "$tty" -o command= 2>/dev/null | grep -Eq '[o]mp (.*--config|.*cmux-floor|$)'
+  spin_cmux_floor_running "$target" "$tty"
 }
 
 agent_cmd() {  # $1=ws $2=target $3=cmd
@@ -126,7 +127,7 @@ case "${1:-status}" in
     echo "Workstation status:"
     for f in "${FLOORS[@]}"; do
       set -- $f; sf="$(term_surface "$1")"
-      if [[ -n "$sf" ]] && agent_floor_active "$1" "$sf"; then echo "  ✓ $2 agent floor active ($1/$sf)"
+      if [[ -n "$sf" ]] && agent_floor_active "$1" "$sf" "$2"; then echo "  ✓ $2 agent floor active ($1/$sf)"
       else echo "  ? $2 not at omp prompt ($1/$sf)"; fi
     done
     if pgrep -f workspace-status-watch >/dev/null 2>&1; then

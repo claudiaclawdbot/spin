@@ -15,6 +15,14 @@ dirty user work and never push, deploy, delete, or publish without human approva
 
 ## Reporting
 
-- Append receipts with the job ID to `org/projects/workspace/RECEIPTS.md`.
+- Append receipts with the job ID or delegate ID to `org/projects/workspace/RECEIPTS.md`.
 - Update `org/projects/workspace/STATE.json` with the next action.
-- Report up with `scripts/org inbox workspace "<what was done / what's blocked>"`.
+- Before reporting completion, verify any file/artifact you claim with `ls`,
+  `test -f`, or the relevant run/test command.
+- For live delegations, preserve the delegate ID and report up from the SPIN root
+  with exactly:
+  `cd "$SPIN_ROOT" && scripts/org inbox workspace "delegate <id> complete: <summary>"`
+  or
+  `cd "$SPIN_ROOT" && scripts/org inbox workspace "delegate <id> blocked: <summary>"`.
+- For non-delegate status, report up with
+  `cd "$SPIN_ROOT" && scripts/org inbox workspace "<what was done / what's blocked>"`.
