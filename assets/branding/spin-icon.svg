@@ -10,11 +10,11 @@
     </linearGradient>
   </defs>
   <rect x="112" y="112" width="800" height="800" rx="226" fill="url(#spin-surface)" stroke="url(#spin-gradient)" stroke-width="22"/>
-  <g fill="#18102b" stroke="url(#spin-gradient)" stroke-width="46">
-    <circle cx="512" cy="352" r="116"/>
-    <circle cx="680" cy="672" r="116"/>
-    <circle cx="344" cy="672" r="116"/>
-    <circle cx="512" cy="536" r="82"/>
+  <g fill="#18102b" stroke="url(#spin-gradient)" stroke-width="44">
+    <circle cx="512" cy="348" r="112"/>
+    <circle cx="689" cy="654" r="112"/>
+    <circle cx="335" cy="654" r="112"/>
   </g>
-  <circle cx="512" cy="536" r="34" fill="url(#spin-gradient)"/>
+  <circle cx="512" cy="552" r="48" fill="#18102b" stroke="url(#spin-gradient)" stroke-width="34"/>
+  <circle cx="512" cy="552" r="22" fill="url(#spin-gradient)"/>
 </svg>
