@@ -29,6 +29,20 @@ cleanup(){
 }
 trap cleanup EXIT
 
+assert_spin_sidebar_defaults_seeded() {
+  local home="$1" domain plist provider enabled
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ -x /usr/libexec/PlistBuddy ] || return 0
+  for domain in dev.spin.app com.cmuxterm.app; do
+    plist="$home/Library/Preferences/$domain.plist"
+    [ -f "$plist" ] || fail "installed first launch did not seed $domain preferences for SPIN Navigator rail"
+    provider="$(/usr/libexec/PlistBuddy -c "Print :cmuxExtensionSidebar.providerId" "$plist" 2>/dev/null || true)"
+    [ "$provider" = "cmux.sidebar.custom.spin-navigator" ] || fail "$domain did not select SPIN Navigator rail: ${provider:-missing}"
+    enabled="$(/usr/libexec/PlistBuddy -c "Print :customSidebars.beta.enabled" "$plist" 2>/dev/null || true)"
+    [ "$enabled" = "1" ] || [ "$enabled" = "true" ] || fail "$domain did not enable custom sidebars: ${enabled:-missing}"
+  done
+}
+
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   usage
   exit 0
@@ -159,6 +173,7 @@ grep -q 'SPIN onboarding opened in cmux (workspace:512)' "$first_out" \
 grep -q '"darkModeTintColor": "#FF2BD6"' "$HOME_DIR/.config/cmux/cmux.json" || fail "installed first launch seeded stale cmux config"
 ls "$HOME_DIR/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "installed first launch did not back up generated cmux template"
 [ -f "$HOME_DIR/.config/cmux/sidebars/spin-navigator.swift" ] || fail "installed first launch did not seed SPIN Navigator sidebar"
+assert_spin_sidebar_defaults_seeded "$HOME_DIR"
 grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|ping" "$CMUX_CALLS" \
   || fail "installed first launch did not call bundled cmux ping"
 grep -Fq "$CONTROL_APP/Contents/Resources/bin/cmux|new-workspace --name SPIN Onboarding" "$CMUX_CALLS" \

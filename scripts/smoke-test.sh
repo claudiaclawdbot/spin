@@ -130,6 +130,30 @@ private let docsURL = URL(string: "https://cmux.com/docs")
 let commitURL = commit.flatMap { hash in
   URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")
 }
+imageForMode: { mode in
+                    guard let imageName = mode.imageName else { return nil }
+                    return NSImage(named: imageName)
+                },
+imageForName: { imageName in
+                    NSImage(named: imageName)
+                },
+EOF
+cat > "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift" <<'EOF'
+    private var appBundle: Bundle? {
+        guard let appBundleURL else { return nil }
+        return Bundle(url: appBundleURL)
+    }
+
+    private var shouldPersistBundleIcon: Bool {
+        false
+    }
+
+    private func updateDockTile(_ dockTile: NSDockTile) {
+        Self.assertMainQueue()
+
+        let mode = DockTileAppIconMode(defaultsValue: appDefaults?.string(forKey: cmuxAppIconModeKey))
+        let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        guard let appBundleURL else {
 EOF
 cat > "$FAKE_CMUX/Sources/ContentView.swift" <<'EOF'
 title: constant(String(localized: "settings.settingsJSON.openFile", defaultValue: "Open cmux.json"))
@@ -173,6 +197,8 @@ grep -q 'CMUX_SIDEBAR_EXTENSION_POINT_ID = dev.spin.app.cmux.sidebar;' "$FAKE_CM
 grep -q 'SPIN Sidebar Tab Reorder' "$FAKE_CMUX/Resources/Info.plist"
 grep -q 'About SPIN' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'Terminal Engine Settings' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'Bundle.main.bundleURL.lastPathComponent == "SPIN.app"' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'bundledSpinAppIcon' "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift"
 grep -q 'Open SPIN Workspace Config' "$FAKE_CMUX/Sources/ContentView.swift"
 grep -q '"value": "About SPIN"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q '"value": "Terminal Engine Settings…"' "$FAKE_CMUX/Resources/Localizable.xcstrings"

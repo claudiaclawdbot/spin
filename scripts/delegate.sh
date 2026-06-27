@@ -9,6 +9,7 @@
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/spin-runtime.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -45,28 +46,47 @@ TASK="$*"
 
 # project-id → cmux workspace (the floor map lives in the harness registry)
 [[ "$PID" == "ceo" ]] && { echo "refusing to delegate to self" >&2; exit 1; }
-WS="$(node -e 'const h=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const p=(h.projects||{})[process.argv[2]];if(p&&p.cmux_workspace)console.log(p.cmux_workspace);' "$ROOT/org/OMP_HARNESS.json" "$PID" 2>/dev/null)"
-[[ -z "$WS" ]] && { echo "no cmux_workspace for '$PID' in org/OMP_HARNESS.json projects" >&2; exit 1; }
+node -e 'const h=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.exit((h.projects||{})[process.argv[2]] ? 0 : 1);' \
+  "$ROOT/org/OMP_HARNESS.json" "$PID" 2>/dev/null || {
+  echo "unknown project_id '$PID' in org/OMP_HARNESS.json; create it with: scripts/spin-new-project.sh $PID \"<goal>\"" >&2
+  exit 1
+}
 
-spin_require_binary cmux "run headless jobs with scripts/org queue-job instead" || exit 1
-CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1 || { echo "cmux is not reachable; open SPIN or run: scripts/spin up" >&2; exit 1; }
-
-# find the omp agent's terminal surface in that workspace (robust to ID drift)
-SF="$(spin_cmd cmux tree --workspace "$WS" 2>/dev/null | grep -oE "surface:[0-9]+ \[terminal\]" | head -1 | grep -oE "surface:[0-9]+")"
-[[ -z "$SF" ]] && { echo "no agent pane found in $WS for $PID" >&2; exit 1; }
-
-if [[ "$FORCE" != 1 ]]; then
-  SCREEN="$(spin_cmd cmux read-screen --workspace "$WS" --surface "$SF" 2>/dev/null | tail -12)"
-  if ! grep -Eiq 'omp|sonnet|haiku|claude|model:' <<<"$SCREEN"; then
-    echo "terminal $WS/$SF does not look like an omp agent prompt; use --force to send anyway" >&2
-    exit 1
-  fi
-fi
-
-TASK_ONE_LINE="$(printf '%s' "$TASK" | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
 PROJECT_CODE_DIR="$ROOT/projects/$PID"
 mkdir -p "$PROJECT_CODE_DIR"
 [ -f "$PROJECT_CODE_DIR/README.md" ] || printf '# %s\n\nProject workspace for SPIN project `%s`.\n' "$PID" "$PID" > "$PROJECT_CODE_DIR/README.md"
+
+spin_prepare_cmux_environment
+spin_require_binary cmux "run headless jobs with scripts/org queue-job instead" || exit 1
+CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1 || { echo "cmux is not reachable; open SPIN or run: scripts/spin up" >&2; exit 1; }
+
+WS="$(spin_cmux_ensure_project_floor "$PID" false 2>/dev/null || true)"
+[[ -n "$WS" ]] || { echo "could not open or recover a cmux floor for '$PID'" >&2; exit 1; }
+
+# Find the OMP agent's terminal surface in that workspace and give a newly
+# opened floor a short window to boot before typing the delegation prompt.
+READY_TIMEOUT="${SPIN_DELEGATE_FLOOR_READY_TIMEOUT:-30}"
+[[ "$READY_TIMEOUT" =~ ^[0-9]+$ ]] || READY_TIMEOUT=30
+deadline=$((SECONDS + READY_TIMEOUT))
+SCREEN=""
+SF=""
+while true; do
+  SF="$(spin_cmux_terminal_surface "$WS")"
+  if [[ -n "$SF" ]]; then
+    SCREEN="$(CMUX_QUIET=1 spin_cmd cmux read-screen --workspace "$WS" --surface "$SF" 2>/dev/null | tail -16)"
+    if [[ "$FORCE" == 1 ]] || grep -Eiq 'omp|sonnet|haiku|claude|model:|IDLE until you type|orchestrator' <<<"$SCREEN"; then
+      break
+    fi
+  fi
+  if (( SECONDS >= deadline )); then
+    echo "project floor $WS did not show a ready OMP agent within ${READY_TIMEOUT}s; run scripts/spin up and retry, or use --force" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+TASK_ONE_LINE="$(printf '%s' "$TASK" | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
+spin_cmux_open_project_board "$WS" "$PID" "$SF" >/dev/null 2>&1 || true
 
 REPORT_COMPLETE="cd \"\$SPIN_ROOT\" && scripts/org inbox $PID \"delegate $REQ_ID complete: <summary>\""
 REPORT_BLOCKED="cd \"\$SPIN_ROOT\" && scripts/org inbox $PID \"delegate $REQ_ID blocked: <summary>\""
@@ -75,11 +95,15 @@ trap 'rm -f "$HANDOFF_TMP"' EXIT
 cat > "$HANDOFF_TMP" <<EOF
 SPIN live delegation: $REQ_ID
 
-Task:
+Project-facing directive from the SPIN Navigator:
 $TASK_ONE_LINE
 
 Work in:
 projects/$PID/
+
+Visible routing contract:
+- This directive is typed into the $PID cmux floor so the human can watch the handoff and the project-scoped context.
+- Treat this directive as the final rewritten prompt from SPIN, not as a background queue item.
 
 Before reporting completion:
 - Verify any file/artifact you claim with a local command such as ls, test -f, or the relevant test/run command.
@@ -93,7 +117,7 @@ EOF
   exit 1
 }
 
-WRAPPED_TASK="SPIN delegation $REQ_ID from the Navigator. Task: $TASK_ONE_LINE. A durable copy is in org/projects/$PID/WORKSPACE_HANDOFF.md. Work in projects/$PID/. Before reporting completion, verify any file/artifact you claim exists or any output you claim with a local command. When done or blocked, update your project files/floor board as appropriate, then report back with exactly one of: $REPORT_COMPLETE OR $REPORT_BLOCKED."
+WRAPPED_TASK="SPIN delegation $REQ_ID from the Navigator. Project-facing directive: $TASK_ONE_LINE. This is a visible floor handoff, not a background queue item. A durable copy is in org/projects/$PID/WORKSPACE_HANDOFF.md. Work in projects/$PID/. Before reporting completion, verify any file/artifact you claim exists or any output you claim with a local command. When done or blocked, update your project files/floor board as appropriate, then report back with exactly one of: $REPORT_COMPLETE OR $REPORT_BLOCKED."
 
 # type the task into the project agent and submit it
 if ! spin_cmd cmux send --workspace "$WS" --surface "$SF" "$WRAPPED_TASK" >/dev/null 2>&1; then

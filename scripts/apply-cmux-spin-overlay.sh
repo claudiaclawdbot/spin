@@ -215,6 +215,68 @@ install_spin_app_icon_assets() {
   rm -rf "$tmp"
 }
 
+patch_spin_runtime_icon_selection() {
+  if [ -f "$CMUX_DIR/Sources/cmuxApp.swift" ]; then
+    replace_text Sources/cmuxApp.swift 'imageForMode: { mode in
+                    guard let imageName = mode.imageName else { return nil }
+                    return NSImage(named: imageName)
+                },' 'imageForMode: { mode in
+                    if Bundle.main.bundleIdentifier == "dev.spin.app" || Bundle.main.bundleURL.lastPathComponent == "SPIN.app",
+                       let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+                       let icon = NSImage(contentsOf: iconURL) {
+                        return icon
+                    }
+                    guard let imageName = mode.imageName else { return nil }
+                    return NSImage(named: imageName)
+                },'
+    replace_text Sources/cmuxApp.swift 'imageForName: { imageName in
+                    NSImage(named: imageName)
+                },' 'imageForName: { imageName in
+                    if Bundle.main.bundleIdentifier == "dev.spin.app" || Bundle.main.bundleURL.lastPathComponent == "SPIN.app",
+                       let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+                       let icon = NSImage(contentsOf: iconURL) {
+                        return icon
+                    }
+                    return NSImage(named: imageName)
+                },'
+  fi
+
+  if [ -f "$CMUX_DIR/Sources/AppIconDockTilePlugin.swift" ]; then
+    replace_text Sources/AppIconDockTilePlugin.swift '    private var appBundle: Bundle? {
+        guard let appBundleURL else { return nil }
+        return Bundle(url: appBundleURL)
+    }
+
+    private var shouldPersistBundleIcon: Bool {' '    private var appBundle: Bundle? {
+        guard let appBundleURL else { return nil }
+        return Bundle(url: appBundleURL)
+    }
+
+    private var bundledSpinAppIcon: NSImage? {
+        guard appBundle?.bundleIdentifier == "dev.spin.app" || appBundleURL?.lastPathComponent == "SPIN.app",
+              let iconURL = appBundle?.url(forResource: "AppIcon", withExtension: "icns") else { return nil }
+        return NSImage(contentsOf: iconURL)
+    }
+
+    private var shouldPersistBundleIcon: Bool {'
+    replace_text Sources/AppIconDockTilePlugin.swift '        let mode = DockTileAppIconMode(defaultsValue: appDefaults?.string(forKey: cmuxAppIconModeKey))
+        let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        guard let appBundleURL else {' '        if let spinIcon = bundledSpinAppIcon {
+            if shouldPersistBundleIcon, let appBundleURL {
+                NSWorkspace.shared.setIcon(spinIcon, forFile: appBundleURL.path, options: [])
+                NSWorkspace.shared.noteFileSystemChanged(appBundleURL.path)
+                _ = LSRegisterURL(appBundleURL as CFURL, true)
+            }
+            dockTile.showIcon(spinIcon)
+            return
+        }
+
+        let mode = DockTileAppIconMode(defaultsValue: appDefaults?.string(forKey: cmuxAppIconModeKey))
+        let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        guard let appBundleURL else {'
+  fi
+}
+
 clone_cmux
 hydrate_cmux_build_inputs
 
@@ -313,6 +375,7 @@ replace_text Packages/iOS/CmuxMobileTerminal/Package.swift '"GhosttyKit"' '"Cmux
 
 echo "installing SPIN nested app icon assets"
 install_spin_app_icon_assets
+patch_spin_runtime_icon_selection
 
 echo "installing SPIN default cmux config assets"
 mkdir -p "$CMUX_DIR/Resources/spin"
