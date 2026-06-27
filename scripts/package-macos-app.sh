@@ -129,19 +129,48 @@ copy_app_icon_if_present() {
   echo "  bundled app icon from $icon"
 }
 
+normalize_bundled_cmux_app_icon_plist() {
+  local plist="$1"
+  [ -f "$plist" ] || return 0
+  if [ -x /usr/libexec/PlistBuddy ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" >/dev/null 2>&1 ||
+      /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist" >/dev/null
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$plist" >/dev/null 2>&1 || true
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    node - "$plist" <<'NODE'
+const fs = require('fs');
+const plist = process.argv[2];
+let xml = fs.readFileSync(plist, 'utf8');
+if (!xml.includes('<plist')) {
+  console.error(`  warning: ${plist} is not an XML plist; cannot normalize icon keys without PlistBuddy`);
+  process.exit(0);
+}
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const stringKeyPattern = (key) =>
+  new RegExp(`\\n?\\s*<key>${escapeRegExp(key)}</key>\\s*\\n?\\s*<string>[\\s\\S]*?</string>`, 'g');
+xml = xml.replace(stringKeyPattern('CFBundleIconName'), '');
+const iconFileEntry = '  <key>CFBundleIconFile</key>\n  <string>AppIcon</string>';
+if (stringKeyPattern('CFBundleIconFile').test(xml)) {
+  xml = xml.replace(stringKeyPattern('CFBundleIconFile'), `\n${iconFileEntry}`);
+} else {
+  xml = xml.replace(/(\s*<\/dict>\s*<\/plist>\s*)$/, `\n${iconFileEntry}$1`);
+}
+fs.writeFileSync(plist, xml);
+NODE
+    return 0
+  fi
+  echo "  warning: node not found; bundled cmux app may retain asset-catalog icon name" >&2
+}
+
 apply_icon_to_bundled_cmux_app() {
   [ -f "$RES/SPIN.icns" ] || return 0
   [ -d "$RES/SPIN.app/Contents" ] || return 0
   local plist="$RES/SPIN.app/Contents/Info.plist"
   mkdir -p "$RES/SPIN.app/Contents/Resources"
   cp "$RES/SPIN.icns" "$RES/SPIN.app/Contents/Resources/AppIcon.icns"
-  if [ -f "$plist" ] && [ -x /usr/libexec/PlistBuddy ]; then
-    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$plist" >/dev/null 2>&1 ||
-      /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$plist" >/dev/null
-    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$plist" >/dev/null 2>&1 || true
-  elif [ -f "$plist" ]; then
-    echo "  warning: PlistBuddy not found; bundled cmux app may retain asset-catalog icon name" >&2
-  fi
+  normalize_bundled_cmux_app_icon_plist "$plist"
   echo "  applied SPIN icon to bundled cmux app"
 }
 
