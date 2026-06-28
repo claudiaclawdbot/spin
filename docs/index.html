@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPIN: Super Pi Interoperable Navigator</title>
-<meta name="description" content="A lightweight OMP/cmux harness that coordinates isolated project agents and lets work fall through across configured models and providers.">
+<meta name="description" content="A local Mac app for running a small AI software org: one Navigator above many isolated OMP project agents, with prompt refinement, file-backed receipts, and model/provider fallback.">
 <meta property="og:title" content="SPIN: Super Pi Interoperable Navigator">
 <meta property="og:description" content="Coordinate scoped project agents, keep contexts isolated, and use OMP model/provider fallback without turning the human into the router.">
 <style>
@@ -131,23 +131,24 @@
   <p class="sub">
     <span class="def">Super<span class="tip"><span class="h">Super</span>: the lightweight harness around agent CLIs that you can track, audit, and interrupt.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span>: the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span>: project agents cooperate through SPIN files, and OMP can fall through across configured models/providers.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span>: the routing system for projects, approvals, receipts, and human attention.</span></span>
   </p>
-  <p class="tag">One coordinator for many scoped OMP project agents. <b>Contexts stay isolated</b>, and model fallback stays inside the harness.</p>
+  <p class="tag">Run a small AI software org from one local app. <b>One Navigator</b> coordinates many isolated OMP project agents, refines handoffs, and keeps receipts on disk.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download SPIN.app beta</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md">Beta readiness</a>
     <a class="btn ghost" href="#install">Source / CLI</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin">GitHub</a>
   </div>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
-    <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span><span class="badge">model fallback</span>
+    <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span><span class="badge">prompt refinement</span><span class="badge">model fallback</span>
     <span class="badge">SPIN.app beta DMG</span>
   </div>
 </header>
 
 <section id="what" class="wrap" style="border-top:none">
   <h2><span class="n">01</span>The human router problem</h2>
-  <p class="lede">One coding agent in one repository is manageable. The hard part starts when several agents are running across several projects, each with its own terminal, context, queue, receipts, and blockers. Without a layer above them, the human becomes the scheduler.</p>
+  <p class="lede">One coding agent in one repository is manageable. The hard part starts when several agents are running across several projects, each with its own terminal, context, queue, receipts, and blockers. Without a layer above them, the solo builder becomes the scheduler.</p>
   <div class="grid">
     <div class="card"><span class="ic">🧭</span><h3>Too many terminals</h3><p>Multiple project agents quickly turn into tabs, status checks, handoffs, and half-remembered context.</p></div>
     <div class="card"><span class="ic">🧠</span><h3>Context overload</h3><p>One huge shared prompt is not the answer. Project agents should stay focused on their own repositories.</p></div>
@@ -197,11 +198,13 @@
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
     <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles, provider order, and fallback chains for coordinator and project work.</p></div>
-    <div class="card"><span class="ic">🧪</span><h3>Public beta DMG</h3><p>The current GitHub beta is ad-hoc signed and not notarized. Use right-click Open if macOS shows a warning; optional checksum steps are in the install guide.</p></div>
+    <div class="card"><span class="ic">✍️</span><h3>Prompt refinement</h3><p>The Navigator turns a raw ask into a project-ready directive with concrete goal, paths, constraints, checks, and reporting shape.</p></div>
+    <div class="card"><span class="ic">🧪</span><h3>Public beta DMG</h3><p>The current GitHub beta is Apple Silicon, ad-hoc signed, and not notarized. Use right-click Open if macOS shows a warning; optional checksum steps are in the install guide.</p></div>
   </div>
   <div class="cta" style="justify-content:flex-start;margin-top:12px">
     <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1">Download beta DMG</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md">Public beta checklist</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
   </div>
@@ -262,6 +265,8 @@
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><span class="ic">🗺️</span><h3>Roadmap →</h3><p>Known weaknesses, honestly ranked. What's solid, what still leans on luck.</p></a>
     <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md"><span class="ic">📦</span><h3>SPIN.app install →</h3><p>Download, install, first launch, health checks, updates, and uninstall.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md"><span class="ic">🚦</span><h3>Public beta →</h3><p>Positioning, demo script, launch checklist, beta boundaries, and feedback loop.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/SECURITY.md"><span class="ic">🔒</span><h3>Security →</h3><p>Local automation boundaries, reporting path, provider-key posture, and beta trust notes.</p></a>
   </div>
 </section>
 

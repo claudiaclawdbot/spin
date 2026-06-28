@@ -6,7 +6,7 @@
 
 ### Super Pi Interoperable Navigator
 
-**A lightweight OS for AI software work: SPIN coordinates scoped OMP project agents, keeps their contexts isolated, and lets work fall through across the models and providers you have configured.**
+**A local app for running a small AI software org: SPIN keeps one Navigator above many isolated OMP project agents, refines your requests before delegation, and lets work fall through across configured model/provider lanes.**
 
 [![ci](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/ci.yml)
 [![macOS app artifact](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml/badge.svg)](https://github.com/claudiaclawdbot/spin/actions/workflows/macos-app.yml)
@@ -17,11 +17,27 @@
 
 **[Download SPIN.app beta for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1)** ·
 **[Mac install guide](docs/MACOS_TESTER_INSTALL.md)** ·
+**[Public beta readiness](docs/PUBLIC_BETA_READINESS.md)** ·
 **[Website](https://claudiaclawdbot.github.io/spin/)**
 
 </div>
 
 ---
+
+## The Short Version
+
+SPIN is for builders who are past the point where one terminal agent and one
+repo context are enough. It gives you one local control surface for a small AI
+software org:
+
+- **One Navigator:** the top-level agent you talk to, like a project lead.
+- **Many project floors:** one isolated OMP-backed workspace per project.
+- **Better delegation:** SPIN rewrites raw human asks into project-ready prompts
+  with goals, paths, constraints, checks, and reporting instructions.
+- **Model fallback:** OMP handles provider roles, order, retries, and fallback
+  across the accounts you have configured.
+- **Plain-file receipts:** queues, approvals, handoffs, inboxes, and project
+  state stay inspectable on disk.
 
 SPIN.app is the main product. It is a self-contained Mac app that bundles a SPIN-branded [cmux](https://github.com/manaflow-ai/cmux) workspace UI and [oh-my-pi](https://omp.sh) (`omp`) as the agent/provider engine. SPIN adds the lightweight harness around those tools: a Coordinator floor, one project floor per workspace, approval queues, background jobs, receipts, model fallback policy, and plain-file state you can inspect.
 
@@ -39,6 +55,38 @@ In this repo, **interoperable** means two related things:
 When you ask the Coordinator to send work into a project floor, SPIN also rewrites the raw human request into a project-facing directive before it is typed into that project's OMP agent. The refined directive keeps your intent, then adds the concrete goal, local paths, constraints, acceptance checks, things not to touch, and the expected reporting shape.
 
 The source/CLI install still exists, but it is the power-user lane for Linux, automation, debugging, app development, and recovery. It is documented separately below.
+
+## Who It Is For
+
+SPIN is useful if you are trying to ship across more than one active codebase
+and you want AI agents to help without making you manually route every task.
+It is especially suited to solo devs and tiny teams who want a local-first
+workflow, visible project floors, file-backed state, and a clear approval gate.
+
+SPIN is not a cloud agent platform, a generic adapter for every harness, or a
+replacement for understanding what your agents are doing. It is a lightweight,
+inspectable layer above OMP-backed project agents.
+
+## Public Beta Status
+
+The Mac app is coherent enough to show: it packages the branded cmux workspace,
+bundled OMP/Pi runtime, Navigator sidebar, onboarding route, app health checks,
+manual update path, and repeatable release checks.
+
+The honest beta boundaries are:
+
+- the current public build is Apple Silicon only;
+- the DMG is ad-hoc signed and not notarized yet;
+- you still bring your own provider accounts, GitHub auth, repositories, and
+  normal developer tools;
+- live provider execution depends on your OMP setup, so public demos should
+  show both the app flow and the health check;
+- broad distribution would benefit from a notarized Developer ID build, a short
+  product demo video, and a small public feedback loop.
+
+See [`docs/PUBLIC_BETA_READINESS.md`](docs/PUBLIC_BETA_READINESS.md) for the
+presentation checklist, demo script, and what to say clearly before a wider
+public launch.
 
 ## Download SPIN.app for Mac
 
@@ -122,8 +170,10 @@ The current updater does not yet fetch a remote update feed or auto-install from
 ## App Docs
 
 - [`docs/MACOS_TESTER_INSTALL.md`](docs/MACOS_TESTER_INSTALL.md): download, install, first launch, health checks, updates, uninstall.
+- [`docs/PUBLIC_BETA_READINESS.md`](docs/PUBLIC_BETA_READINESS.md): positioning, demo script, beta boundaries, public checklist, feedback loop.
 - [`docs/APP_BUNDLE.md`](docs/APP_BUNDLE.md): bundle layout, release checks, update manifests, signing, packaging.
 - [`docs/OPEN_SOURCE_TESTER_RELEASE.md`](docs/OPEN_SOURCE_TESTER_RELEASE.md): maintainer checklist for publishing the GitHub DMG.
+- [`SECURITY.md`](SECURITY.md): local automation boundary, vulnerability reporting, provider-key posture.
 
 ---
 

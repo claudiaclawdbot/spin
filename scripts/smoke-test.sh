@@ -14,13 +14,15 @@ mkdir -p "$KIT"
     git ls-files -z --others --exclude-standard -- \
       .github/workflows/macos-app.yml \
       app agent runtime assets licenses \
+      SECURITY.md \
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
       scripts/lib/cmux-floor-layout.sh \
       scripts/lib/human-queue-summary.js \
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
-      docs/MACOS_TESTER_INSTALL.md \
+      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md \
+      .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/app-beta-bug.yml .github/ISSUE_TEMPLATE/public-feedback.yml \
       'org/ceo/*.example.md'
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
@@ -69,10 +71,12 @@ grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
+grep -q 'A local app for running a small AI software org' README.md
 grep -q 'SPIN.app is the main product' README.md
 grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.1' README.md
+grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
@@ -80,8 +84,18 @@ grep -q 'main Mac experience' docs/index.html
 grep -q 'Source / CLI install' docs/index.html
 grep -q 'v4.1.0-beta.1' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
+grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
+grep -q 'Run a small AI software org from one local app' docs/index.html
 grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
 grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
+test -f docs/PUBLIC_BETA_READINESS.md
+grep -q 'Five-Minute Demo Script' docs/PUBLIC_BETA_READINESS.md
+grep -q 'What Is Still Beta' docs/PUBLIC_BETA_READINESS.md
+test -f SECURITY.md
+grep -q 'Security Policy' SECURITY.md
+test -f .github/ISSUE_TEMPLATE/config.yml
+test -f .github/ISSUE_TEMPLATE/app-beta-bug.yml
+test -f .github/ISSUE_TEMPLATE/public-feedback.yml
 test -f app/cmux/sidebars/spin-navigator.swift
 grep -q 'workspace.close' app/cmux/sidebars/spin-navigator.swift
 grep -q 'Close project tab' app/cmux/sidebars/spin-navigator.swift

@@ -1,0 +1,57 @@
+name: Public beta feedback
+description: Share product, copy, onboarding, usability, or demo feedback.
+title: "[feedback] "
+labels: ["feedback", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for feedback on understandability, usability, positioning, docs, demos, and public beta readiness.
+  - type: dropdown
+    id: perspective
+    attributes:
+      label: Your perspective
+      options:
+        - I tried the app
+        - I read the README or website
+        - I watched a demo
+        - I reviewed the code/docs
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feedback area
+      options:
+        - First impression
+        - Product positioning
+        - README
+        - GitHub Pages site
+        - Install guide
+        - Onboarding
+        - Navigator versus project floors
+        - OMP/provider setup
+        - Safety and approvals
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: clear
+    attributes:
+      label: What was clear?
+  - type: textarea
+    id: confusing
+    attributes:
+      label: What was confusing?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What would make it more useful or easier to trust?
+  - type: textarea
+    id: audience
+    attributes:
+      label: Who do you think this is for?
+      description: This helps test whether the positioning is landing.
