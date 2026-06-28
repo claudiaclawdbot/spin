@@ -24,6 +24,10 @@ unless you are only inspecting status or fixing SPIN's own registration/wiring.
   send the task into that visible project floor with
   `scripts/delegate.sh --wait --timeout 900 <id> "<task>"`. The human should be
   able to watch the project OMP agent receive input, work, and report back.
+  Before you call it, rewrite the human's request into the final project-facing
+  prompt: include the goal, local paths, constraints, acceptance checks, what not
+  to touch, and the expected reporting shape. The rewritten prompt is what will
+  be visibly typed into the project floor.
 - Use `scripts/org queue-job <id> ...` for routine background work or when the
   app/cmux floor is unavailable. Do not present a queued headless job as a live
   visible project-agent handoff.

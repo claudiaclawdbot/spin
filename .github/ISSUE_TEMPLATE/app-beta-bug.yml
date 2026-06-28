@@ -1,0 +1,81 @@
+name: SPIN.app beta bug
+description: Report an install, launch, Navigator, project floor, or update issue.
+title: "[app beta] "
+labels: ["app", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing SPIN.app. Please avoid sharing provider keys, private repository contents, or proprietary prompts.
+  - type: input
+    id: version
+    attributes:
+      label: SPIN version or release
+      description: Example: v4.1.0-beta.1 or a commit hash.
+      placeholder: v4.1.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install_path
+    attributes:
+      label: Install path
+      options:
+        - SPIN.app beta DMG
+        - Source / CLI checkout
+        - Local development build
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: macOS or Linux version plus architecture.
+      placeholder: macOS 15.x, Apple Silicon
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Install / Gatekeeper
+        - First launch / onboarding
+        - Navigator sidebar
+        - Project floor
+        - OMP setup or provider fallback
+        - App health
+        - App update
+        - Release artifact
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Downloaded the DMG from ...
+        2. Dragged SPIN.app to Applications
+        3. Opened SPIN
+        4. Saw ...
+    validations:
+      required: true
+  - type: textarea
+    id: health
+    attributes:
+      label: Health output
+      description: Paste `spin app-health` output if available. Remove secrets or private paths if needed.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Add logs or screenshots if they help. Do not include secrets.

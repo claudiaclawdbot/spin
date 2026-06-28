@@ -91,8 +91,42 @@ seed_cmux_defaults() {
   seed_file_if_spin_managed "$sidebar_src" "$sidebar_dir/spin-navigator.swift" 'Text("SPIN")'
 }
 
+seed_cmux_user_defaults() {
+  [ "${SPIN_APP_SKIP_CMUX_DEFAULTS_SEED:-0}" = "1" ] && return 0
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ -x /usr/libexec/PlistBuddy ] || return 0
+
+  # SPIN owns the left rail. Seed both bundle ids so old developer builds and
+  # SPIN-branded release builds select the Navigator sidebar before cmux opens.
+  local domain plist prefs_dir
+  for domain in dev.spin.app com.cmuxterm.app; do
+    prefs_dir="$HOME/Library/Preferences"
+    plist="$prefs_dir/$domain.plist"
+    mkdir -p "$prefs_dir"
+    if [ ! -f "$plist" ]; then
+      cat > "$plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict/>
+</plist>
+EOF
+    fi
+    /usr/libexec/PlistBuddy -c "Delete :customSidebars.beta.enabled" "$plist" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Add :customSidebars.beta.enabled bool true" "$plist" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Delete :cmuxExtensionSidebar.providerId" "$plist" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Add :cmuxExtensionSidebar.providerId string cmux.sidebar.custom.spin-navigator" "$plist" >/dev/null 2>&1 || true
+    chmod 600 "$plist" 2>/dev/null || true
+    if [ -z "${SPIN_APP_HOME:-}" ] && command -v defaults >/dev/null 2>&1; then
+      defaults write "$domain" customSidebars.beta.enabled -bool true >/dev/null 2>&1 || true
+      defaults write "$domain" cmuxExtensionSidebar.providerId "cmux.sidebar.custom.spin-navigator" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 copy_runtime
 seed_org_if_missing
 seed_cmux_defaults
+seed_cmux_user_defaults
 
 exec "$SPIN_ROOT/scripts/spin" app-launch
