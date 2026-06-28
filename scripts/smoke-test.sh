@@ -91,6 +91,10 @@ grep -q 'Text("Project floors")' app/cmux/sidebars/spin-navigator.swift
 grep -q 'frame(height: 24)' app/cmux/sidebars/spin-navigator.swift
 grep -q 'cmux("workspace.create", title: "New SPIN Project")' app/cmux/sidebars/spin-navigator.swift
 grep -q 'frame(height: 22)' app/cmux/sidebars/spin-navigator.swift
+! grep -q 'clock.time' app/cmux/sidebars/spin-navigator.swift
+grep -q 'offset(y: 2)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'maxHeight: .infinity, alignment: .topLeading' app/cmux/sidebars/spin-navigator.swift
+grep -q 'offset(y: -58)' app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
 node - <<'NODE'

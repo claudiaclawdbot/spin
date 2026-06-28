@@ -19,14 +19,13 @@ func workspaceSubtitle(_ w) -> String {
 }
 
 func spinWord() -> some View {
-    HStack(spacing: 1) {
+    HStack(spacing: 0) {
         Text("S").foregroundColor("#FF7ADF")
         Text("P").foregroundColor("#00E5FF")
         Text("I").foregroundColor("#39FF14")
         Text("N").foregroundColor("#EAB308")
-        Text("!").foregroundColor("#A855F7")
     }
-    .font(.system(size: 22, design: .rounded))
+    .font(.system(size: 21, design: .rounded))
     .fontWeight(.heavy)
     .lineLimit(1)
 }
@@ -36,8 +35,13 @@ func coordinatorButton(_ w) -> some View {
         HStack(alignment: .center, spacing: 8) {
             RoundedRectangle(cornerRadius: 3)
                 .foregroundColor(w.selected ? "#7EEBFF" : "#FF7ADF")
-                .frame(width: 4, height: 42)
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: 4, height: 40)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke("#FFFFFF", lineWidth: 0.45)
+                        .opacity(w.selected ? 0.24 : 0.12)
+                }
+            VStack(alignment: .leading, spacing: 1) {
                 spinWord()
                 HStack(spacing: 5) {
                     Label("Navigator", systemImage: "circle.hexagongrid.fill")
@@ -54,16 +58,53 @@ func coordinatorButton(_ w) -> some View {
                 }
             }
             Spacer()
-            Image(systemName: "arrow.up.forward.circle.fill")
-                .foregroundColor(w.selected ? "#7EEBFF" : "#00E5FF")
-                .font(.system(size: 14))
+            Image(systemName: "arrow.up.forward")
+                .foregroundColor("#101014")
+                .font(.system(size: 10))
+                .fontWeight(.bold)
+                .frame(width: 20, height: 20)
+                .background { Circle().foregroundColor(w.selected ? "#7EEBFF" : "#00E5FF").opacity(0.92) }
+                .overlay {
+                    Circle()
+                        .stroke("#FFFFFF", lineWidth: 0.7)
+                        .opacity(0.34)
+                }
         }
-        .padding(6)
-        .background { RoundedRectangle(cornerRadius: 8).foregroundColor(w.selected ? "#2A1830" : "#1A1018").opacity(w.selected ? 0.74 : 0.50) }
+        .padding(7)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .foregroundColor("#05030A")
+                    .opacity(w.selected ? 0.42 : 0.28)
+                    .offset(y: 2)
+                RoundedRectangle(cornerRadius: 8)
+                    .foregroundColor(w.selected ? "#2C1734" : "#1A1018")
+                    .opacity(w.selected ? 0.88 : 0.58)
+                RoundedRectangle(cornerRadius: 8)
+                    .foregroundColor(w.selected ? "#4A2556" : "#2B162C")
+                    .opacity(w.selected ? 0.24 : 0.14)
+                    .padding(.bottom, 28)
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 1)
-                .opacity(w.selected ? 0.82 : 0.34)
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke("#FFFFFF", lineWidth: 0.5)
+                    .opacity(w.selected ? 0.14 : 0.06)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 1.1)
+                    .opacity(w.selected ? 0.86 : 0.38)
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke("#FF7ADF", lineWidth: 0.55)
+                    .opacity(w.selected ? 0.28 : 0.16)
+                    .padding(1)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 2)
+                .foregroundColor(w.selected ? "#00E5FF" : "#FF7ADF")
+                .frame(height: 1)
+                .opacity(w.selected ? 0.42 : 0.20)
         }
     }
     .help("Open the SPIN Navigator floor")
@@ -165,20 +206,6 @@ VStack(alignment: .leading, spacing: 4) {
     let onboarding = workspaces.filter { isSpinOnboarding($0) }
     let projectFloors = workspaces.filter { isProjectFloor($0) }
 
-    HStack {
-        Text("SPIN")
-            .font(.system(size: 12))
-            .fontWeight(.semibold)
-            .foregroundColor("#FF7ADF")
-        Spacer()
-        Text(clock.time)
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(.secondary)
-    }
-    .padding(.leading, 6)
-    .padding(.trailing, 2)
-    .frame(height: 18)
-
     if coordinators.count > 0 {
         ForEach(coordinators.prefix(1)) { w in
             coordinatorButton(w)
@@ -279,8 +306,9 @@ VStack(alignment: .leading, spacing: 4) {
 
     Spacer()
 }
-.frame(maxWidth: .infinity, alignment: .leading)
-.padding(.top, 10)
+.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+.padding(.top, 3)
 .padding(.bottom, 10)
 .padding(.leading, 16)
 .padding(.trailing, 8)
+.offset(y: -58)
