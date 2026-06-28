@@ -175,6 +175,9 @@ VStack(alignment: .leading, spacing: 4) {
             .font(.system(size: 10, design: .monospaced))
             .foregroundColor(.secondary)
     }
+    .padding(.leading, 6)
+    .padding(.trailing, 2)
+    .frame(height: 18)
 
     if coordinators.count > 0 {
         ForEach(coordinators.prefix(1)) { w in
@@ -211,19 +214,22 @@ VStack(alignment: .leading, spacing: 4) {
     }
 
     HStack(spacing: 6) {
-        Label("Project floors", systemImage: "rectangle.3.group.fill")
+        Image(systemName: "rectangle.3.group.fill")
+            .font(.system(size: 10))
+            .foregroundColor("#00E5FF")
+            .frame(width: 12)
+        Text("Project floors")
             .font(.system(size: 10))
             .fontWeight(.semibold)
             .foregroundColor("#00E5FF")
         Text("\(projectFloors.count)")
             .font(.system(size: 9, design: .monospaced))
             .foregroundColor("#EAB308")
-        Spacer()
     }
-    .padding(.horizontal, 5)
-    .padding(.top, 0)
-
-    Divider()
+    .padding(.leading, 14)
+    .padding(.trailing, 6)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(height: 24)
 
     if projectFloors.count == 0 {
         VStack(spacing: 8) {
@@ -244,17 +250,37 @@ VStack(alignment: .leading, spacing: 4) {
 
     Divider()
 
-    VStack(alignment: .leading, spacing: 6) {
-        Button(action: { cmux("workspace.create", title: "New SPIN Project") }) {
-            Label("New Project Floor", systemImage: "plus.circle")
+    VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 6) {
+            Image(systemName: "plus.circle")
+                .frame(width: 12)
+            Text("New Project Floor")
+            Spacer(minLength: 0)
         }
-        Button(action: { cmux("sidebar.custom.open", name: "spin-navigator") }) {
-            Label("Navigator Panel", systemImage: "sidebar.left")
+        .padding(.leading, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 22)
+        .onTapGesture { cmux("workspace.create", title: "New SPIN Project") }
+        .help("Create a new project floor")
+
+        HStack(spacing: 6) {
+            Image(systemName: "sidebar.left")
+                .frame(width: 12)
+            Text("Navigator Panel")
+            Spacer(minLength: 0)
         }
+        .padding(.leading, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 22)
+        .onTapGesture { cmux("sidebar.custom.open", name: "spin-navigator") }
+        .help("Open the Navigator panel")
     }
-    .font(.caption)
+    .font(.system(size: 11))
 
     Spacer()
 }
 .frame(maxWidth: .infinity, alignment: .leading)
-.padding(10)
+.padding(.top, 10)
+.padding(.bottom, 10)
+.padding(.leading, 16)
+.padding(.trailing, 8)

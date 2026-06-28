@@ -87,6 +87,10 @@ grep -q 'workspace.close' app/cmux/sidebars/spin-navigator.swift
 grep -q 'Close project tab' app/cmux/sidebars/spin-navigator.swift
 grep -q 'onTapGesture { cmux("workspace.select"' app/cmux/sidebars/spin-navigator.swift
 grep -q 'frame(width: 82, alignment: .leading)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'Text("Project floors")' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(height: 24)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'cmux("workspace.create", title: "New SPIN Project")' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(height: 22)' app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
 node - <<'NODE'
