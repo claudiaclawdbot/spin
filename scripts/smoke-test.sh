@@ -21,7 +21,7 @@ mkdir -p "$KIT"
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
-      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md \
+      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/assets \
       .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/app-beta-bug.yml .github/ISSUE_TEMPLATE/public-feedback.yml \
       'org/ceo/*.example.md'
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
@@ -78,6 +78,9 @@ grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.1' README.md
 grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
+grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
+test -s docs/assets/spin-public-beta-demo.gif
+test -s docs/assets/spin-public-beta-demo.mp4
 grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
 grep -q 'main Mac experience' docs/index.html
@@ -86,6 +89,7 @@ grep -q 'v4.1.0-beta.1' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
 grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
 grep -q 'Run a small AI software org from one local app' docs/index.html
+grep -q 'assets/spin-public-beta-demo.gif' docs/index.html
 grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
 grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
 test -f docs/PUBLIC_BETA_READINESS.md
@@ -444,6 +448,50 @@ PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
+
+DRIFTBIN="$TMP/driftbin"
+mkdir -p "$DRIFTBIN"
+node - "$KIT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+harness.projects['example-app'].cmux_workspace = 'workspace:3';
+fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+NODE
+cat > "$DRIFTBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/drift-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  cat <<JSON
+{"workspaces":[{"ref":"workspace:3","title":"example-app","custom_title":"example-app","current_directory":"$KIT/projects/example-app"}]}
+JSON
+  exit 0
+fi
+case "\${1:-}" in
+  tree)
+    echo 'surface:3 [terminal] "π: public-demo" [selected] tty=ttys003'
+    exit 0
+    ;;
+  read-screen) echo "omp v16.1.16 public-demo"; exit 0 ;;
+  new-workspace) echo "workspace:9"; exit 0 ;;
+  send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$DRIFTBIN/cmux"
+PATH="$DRIFTBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_ensure_project_floor example-app false
+' > "$TMP/drift-floor.out"
+grep -q 'workspace:9' "$TMP/drift-floor.out"
+grep -q 'new-workspace --name example-app' "$TMP/drift-cmux.calls"
+if grep -q 'send --workspace workspace:3' "$TMP/drift-cmux.calls"; then
+  echo "stale example-app floor accepted a different project's OMP tab"
+  exit 1
+fi
+grep -q '"cmux_workspace": "workspace:9"' org/OMP_HARNESS.json
 
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id smoke-delegate example-app "make ascii art" > "$TMP/delegate.out"
@@ -821,6 +869,30 @@ env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin ap
 grep -q 'app-launch: onboarding' "$TMP/app-launch-before.out"
 env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-omp-ready.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-omp-ready.out"
+
+cat > "$TMP/spin-up-launch-cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/spin-up-launch-cmux.calls"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "cmux fake spin-up launch"; exit 0 ;;
+  --json)
+    if [[ "\${2:-}" == "list-workspaces" ]]; then echo '{"workspaces":[]}'; exit 0; fi
+    exit 0
+    ;;
+  new-workspace) echo "workspace:88"; exit 0 ;;
+  list-workspaces|tree|sidebar|markdown|send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/spin-up-launch-cmux"
+env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
+  scripts/spin app-launch > "$TMP/spin-up-launch.out"
+grep -q 'SPIN orchestrator floor open' "$TMP/spin-up-launch.out"
+grep -q 'new-workspace --name SPIN Coordinator' "$TMP/spin-up-launch-cmux.calls"
+grep -q 'cmux-floor.sh' "$TMP/spin-up-launch-cmux.calls"
+grep -q "'ceo'" "$TMP/spin-up-launch-cmux.calls"
+
 touch org/.spin-onboarded
 env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-after.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-after.out"

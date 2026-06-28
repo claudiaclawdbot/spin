@@ -22,6 +22,14 @@
 
 </div>
 
+<p align="center">
+  <img src="docs/assets/spin-public-beta-demo.gif" alt="SPIN public beta demo showing the Navigator, a visible OMP project floor, and a live project board" width="900">
+</p>
+
+<p align="center">
+  <a href="docs/assets/spin-public-beta-demo.mp4">Watch the short MP4 demo</a>
+</p>
+
 ---
 
 ## The Short Version

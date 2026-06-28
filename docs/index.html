@@ -62,6 +62,9 @@
   .btn.ghost:hover{border-color:var(--violet);color:var(--ink)}
   .badges{margin-top:26px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--faint)}
   .badge{border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#11111f}
+  .demo-shot{margin:24px 0 4px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
+  .demo-shot img{display:block;width:100%;height:auto}
+  .demo-shot figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.86rem}
 
   /* terminal install box */
   .term{background:#0c0c16;border:1px solid var(--line);border-radius:13px;overflow:hidden;margin:14px 0;box-shadow:0 20px 60px -30px #000}
@@ -195,6 +198,10 @@
 <section id="app" class="wrap">
   <h2><span class="n">04</span>SPIN.app for Mac</h2>
   <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with a SPIN-branded workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then open SPIN to enter the onboarding workspace instead of a generic terminal.</p>
+  <figure class="demo-shot">
+    <img src="assets/spin-public-beta-demo.gif" alt="SPIN public beta demo showing a visible OMP project floor beside a live project board">
+    <figcaption>Visible OMP project floor, project tabs, and live <code>FLOOR.md</code> board in the SPIN Navigator.</figcaption>
+  </figure>
   <div class="grid">
     <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
     <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles, provider order, and fallback chains for coordinator and project work.</p></div>

@@ -444,6 +444,31 @@ omp_ready_out="$(env -i HOME="$TMP/omp-ready-home" PATH="$SYSTEM_PATH" SPIN_APP_
 grep -q 'app-launch: spin up' <<<"$omp_ready_out" || fail "launcher did not route existing OMP config to spin up"
 ok "existing OMP setup routes to spin up"
 
+cat > "$TMP/fake-cmux-spin-up" <<EOF
+#!/usr/bin/env bash
+printf 'args=%s\n' "\$*" >> "$TMP/fake-cmux-spin-up.calls"
+printf 'socket=%s\n' "\${CMUX_SOCKET_PATH:-}" >> "$TMP/fake-cmux-spin-up.calls"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "cmux fake release-check"; exit 0 ;;
+  --json)
+    if [[ "\${2:-}" == "list-workspaces" ]]; then echo '{"workspaces":[]}'; exit 0; fi
+    exit 0
+    ;;
+  new-workspace) echo "workspace:99"; exit 0 ;;
+  list-workspaces|tree|sidebar|markdown|send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/fake-cmux-spin-up"
+spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
+grep -q 'SPIN orchestrator floor open' <<<"$spin_up_launch_out" || fail "real app launcher did not report opening the SPIN orchestrator floor"
+grep -q 'args=new-workspace --name SPIN Coordinator' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not create the SPIN Coordinator workspace on OMP-ready launch"
+grep -q 'cmux-floor.sh' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not route Coordinator workspace through cmux-floor.sh"
+grep -q "'ceo'" "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not launch the Coordinator OMP target"
+grep -q "socket=$TMP/omp-live-home/.local/state/cmux/spin.sock" "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not pass the SPIN-owned socket during spin up"
+ok "real app launcher opens the Coordinator OMP floor on OMP-ready launch"
+
 socket_env_out="$(env -i HOME="$TMP/socket-home" PATH="$SYSTEM_PATH" SPIN_ROOT="$SEEDED_RUNTIME" /bin/bash -c '
   set -euo pipefail
   source "$SPIN_ROOT/scripts/lib/spin-runtime.sh"

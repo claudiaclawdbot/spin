@@ -5,6 +5,43 @@ spin_cmux_list_workspaces_json() {
   CMUX_QUIET=1 spin_cmd cmux --json list-workspaces 2>/dev/null || true
 }
 
+spin_cmux_workspace_ref_context() {
+  local want="$1" json
+  [[ -n "$want" ]] || return 1
+  json="$(spin_cmux_list_workspaces_json)"
+  [[ -n "$json" ]] || return 1
+  printf '%s\n' "$json" | node -e '
+const fs = require("fs");
+const wanted = process.argv[1];
+let payload;
+try { payload = JSON.parse(fs.readFileSync(0, "utf8")); } catch { process.exit(1); }
+for (const ws of payload.workspaces || []) {
+  const refs = [ws.ref, ws.workspace_ref, ws.workspace, ws.id, ws.workspace_id].filter(Boolean).map(String);
+  if (!refs.includes(wanted)) continue;
+  const title = ws.title || ws.name || ws.custom_title || "";
+  const cwd = ws.current_directory || ws.cwd || ws.path || "";
+  console.log(JSON.stringify({ title, cwd }));
+  process.exit(0);
+}
+process.exit(1);
+' "$want" 2>/dev/null
+}
+
+spin_cmux_workspace_context_matches() {
+  local workspace="$1" title="$2" cwd="${3:-}" ctx
+  [[ -n "$workspace" && -n "$title" ]] || return 1
+  ctx="$(spin_cmux_workspace_ref_context "$workspace")" || return 1
+  printf '%s\n' "$ctx" | node -e '
+const fs = require("fs");
+const wantedTitle = process.argv[1];
+const wantedCwd = process.argv[2] || "";
+let ctx;
+try { ctx = JSON.parse(fs.readFileSync(0, "utf8")); } catch { process.exit(1); }
+if ((ctx.title || "") !== wantedTitle) process.exit(1);
+if (wantedCwd && (ctx.cwd || "") !== wantedCwd) process.exit(1);
+' "$title" "$cwd" 2>/dev/null
+}
+
 spin_cmux_workspace_ref_by_name() {
   local name="$1" json ref
   json="$(spin_cmux_list_workspaces_json)"
@@ -40,6 +77,32 @@ process.exit(1);
       if (label == want) { print ref; exit }
     }
   '
+}
+
+spin_cmux_workspace_ref_by_context() {
+  local title="$1" cwd="${2:-}" json ref
+  json="$(spin_cmux_list_workspaces_json)"
+  if [[ -n "$json" ]]; then
+    ref="$(printf '%s\n' "$json" | node -e '
+const fs = require("fs");
+const [wantedTitle, wantedCwd] = process.argv.slice(1);
+let payload;
+try { payload = JSON.parse(fs.readFileSync(0, "utf8")); } catch { process.exit(1); }
+for (const ws of payload.workspaces || []) {
+  const title = ws.title || ws.name || ws.custom_title || "";
+  const cwd = ws.current_directory || ws.cwd || ws.path || "";
+  const ref = ws.ref || ws.workspace_ref || ws.workspace || ws.id || ws.workspace_id || "";
+  if (title === wantedTitle && ref && (!wantedCwd || cwd === wantedCwd)) {
+    console.log(ref);
+    process.exit(0);
+  }
+}
+process.exit(1);
+' "$title" "$cwd" 2>/dev/null || true)"
+    [[ -n "$ref" ]] && { printf '%s\n' "$ref"; return 0; }
+  fi
+
+  [[ -z "$cwd" ]] && spin_cmux_workspace_ref_by_name "$title"
 }
 
 spin_cmux_workspace_ref_exists() {
@@ -84,6 +147,19 @@ spin_cmux_floor_marker_path() {
   printf '%s\n' "$ROOT/org/ceo/runs/floors/$key.pid"
 }
 
+spin_cmux_floor_marker_value() {
+  local target="$1" key="$2" marker
+  marker="$(spin_cmux_floor_marker_path "$target")"
+  [[ -f "$marker" ]] || return 1
+  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$marker" 2>/dev/null
+}
+
+spin_cmux_normalize_tty() {
+  local tty_name="$1"
+  tty_name="${tty_name#/dev/}"
+  printf '%s\n' "$tty_name"
+}
+
 spin_cmux_write_floor_marker() {
   local target="$1" title="${2:-}" dir="${3:-}" marker tmp tty_name
   marker="$(spin_cmux_floor_marker_path "$target")"
@@ -121,9 +197,15 @@ spin_cmux_floor_process_running_on_tty() {
 }
 
 spin_cmux_floor_running() {
-  local target="$1" tty_name="${2:-}"
-  spin_cmux_floor_marker_running "$target" && return 0
-  spin_cmux_floor_process_running_on_tty "$tty_name"
+  local target="$1" tty_name="${2:-}" marker_tty
+  if [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target"; then
+    [[ -z "$tty_name" ]] && return 0
+    marker_tty="$(spin_cmux_floor_marker_value "$target" tty 2>/dev/null || true)"
+    [[ -n "$marker_tty" ]] || return 1
+    [[ "$(spin_cmux_normalize_tty "$marker_tty")" == "$(spin_cmux_normalize_tty "$tty_name")" ]]
+    return
+  fi
+  [[ -z "$target" ]] && spin_cmux_floor_process_running_on_tty "$tty_name"
 }
 
 spin_cmux_terminal_surface() {
@@ -158,15 +240,39 @@ spin_cmux_floor_screen_active() {
     | grep -Eiq '(^|[[:space:]])(omp|model:|WORKSPACE CEO|orchestrator|SPIN delegation|IDLE until you type)'
 }
 
+spin_cmux_terminal_has_agent_title() {
+  local workspace="$1"
+  [[ -n "$workspace" ]] || return 1
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$workspace" 2>/dev/null \
+    | grep -Eq '\[terminal\].*"π: '
+}
+
+spin_cmux_terminal_title_matches_target() {
+  local workspace="$1" target="$2"
+  [[ -n "$workspace" && -n "$target" ]] || return 1
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$workspace" 2>/dev/null | awk -v target="$target" '
+    /\[terminal\]/ {
+      if (target == "ceo") {
+        if (index($0, "\"π: .omp-ceo\"") || index($0, "WORKSPACE CEO")) found=1
+      } else {
+        if (index($0, "\"π: " target "\"") || index($0, target "  ·  omp")) found=1
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
 spin_cmux_floor_active_in_workspace() {
   local workspace="$1" target="$2" surface tty_name
   [[ -n "$workspace" && -n "$target" ]] || return 1
-  spin_cmux_floor_marker_running "$target" && return 0
   surface="$(spin_cmux_terminal_surface "$workspace")"
   [[ -n "$surface" ]] || return 1
   tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
-  [[ -n "$tty_name" ]] && spin_cmux_floor_running "$target" "$tty_name" && return 0
-  spin_cmux_floor_screen_active "$workspace" "$surface"
+  if [[ -n "$tty_name" ]] && spin_cmux_floor_running "$target" "$tty_name"; then
+    return 0
+  fi
+  spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
+    spin_cmux_floor_screen_active "$workspace" "$surface"
 }
 
 spin_cmux_start_floor_in_workspace() {
@@ -175,6 +281,9 @@ spin_cmux_start_floor_in_workspace() {
   surface="$(spin_cmux_terminal_surface "$workspace")"
   [[ -n "$surface" ]] || return 1
   spin_cmux_floor_active_in_workspace "$workspace" "$target" && return 0
+  if spin_cmux_terminal_has_agent_title "$workspace" && ! spin_cmux_terminal_title_matches_target "$workspace" "$target"; then
+    return 1
+  fi
   CMUX_QUIET=1 spin_cmd cmux send --workspace "$workspace" --surface "$surface" \
     "bash '$ROOT/scripts/cmux-floor.sh' '$target'" >/dev/null 2>&1 || return 1
   CMUX_QUIET=1 spin_cmd cmux send-key --workspace "$workspace" --surface "$surface" enter >/dev/null 2>&1
@@ -253,14 +362,15 @@ spin_cmux_project_cwd() {
 }
 
 spin_cmux_ensure_floor() {
-  local target="$1" title="$2" cwd="$3" focus="${4:-false}" workspace="" created=0
+  local target="$1" title="$2" cwd="$3" focus="${4:-false}" workspace="" match_cwd="" created=0
   [[ -n "$target" && -n "$title" && -n "$cwd" ]] || return 1
+  [[ "$target" != "ceo" ]] && match_cwd="$cwd"
 
   workspace="$(spin_cmux_saved_workspace_ref "$target")"
-  if [[ -n "$workspace" ]] && ! spin_cmux_workspace_ref_exists "$workspace"; then
+  if [[ -n "$workspace" ]] && ! spin_cmux_workspace_context_matches "$workspace" "$title" "$match_cwd"; then
     workspace=""
   fi
-  [[ -n "$workspace" ]] || workspace="$(spin_cmux_workspace_ref_by_name "$title")"
+  [[ -n "$workspace" ]] || workspace="$(spin_cmux_workspace_ref_by_context "$title" "$match_cwd")"
   if [[ -z "$workspace" ]]; then
     workspace="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$title" --cwd "$cwd" \
       --command "bash '$ROOT/scripts/cmux-floor.sh' '$target'" --focus "$focus" 2>/dev/null \
@@ -269,7 +379,13 @@ spin_cmux_ensure_floor() {
   fi
   [[ -n "$workspace" ]] || return 1
   spin_cmux_remember_workspace_ref "$target" "$workspace" >/dev/null 2>&1 || true
-  [[ "$created" == 1 ]] || spin_cmux_start_floor_in_workspace "$workspace" "$target" >/dev/null 2>&1 || true
+  if [[ "$created" != 1 ]] && ! spin_cmux_start_floor_in_workspace "$workspace" "$target" >/dev/null 2>&1; then
+    workspace="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$title" --cwd "$cwd" \
+      --command "bash '$ROOT/scripts/cmux-floor.sh' '$target'" --focus "$focus" 2>/dev/null \
+      | grep -oE 'workspace:[^[:space:]]+' | head -1)"
+    [[ -n "$workspace" ]] || return 1
+    spin_cmux_remember_workspace_ref "$target" "$workspace" >/dev/null 2>&1 || true
+  fi
   printf '%s\n' "$workspace"
 }
 

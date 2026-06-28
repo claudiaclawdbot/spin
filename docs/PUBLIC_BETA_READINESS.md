@@ -57,6 +57,8 @@ health check plus offline release proof instead of pretending the agent ran.
 - File-backed queues, handoffs, approvals, inboxes, receipts, and project state.
 - OMP-first provider/model fallback policy with direct CLI fallback only when
   OMP is unavailable or hard-fails.
+- Short demo assets at `docs/assets/spin-public-beta-demo.gif` and
+  `docs/assets/spin-public-beta-demo.mp4`.
 - Manual checked app update path for downloaded artifacts.
 - Repeatable local and CI release checks.
 
@@ -68,8 +70,8 @@ health check plus offline release proof instead of pretending the agent ran.
 - Live GUI plus provider integration is manual validation, not fully automated
   CI.
 - Remote auto-update feed is not implemented yet.
-- A public demo video or GIF would make the first visit much easier to
-  understand.
+- A narrated walkthrough would still make the first visit easier for nontechnical
+  testers.
 - Developer ID notarization would reduce first-launch friction for nontechnical
   testers.
 
@@ -82,6 +84,8 @@ scripts/smoke-test.sh
 scripts/check-app-release.sh dist/SPIN.app
 scripts/check-app-release.sh /Applications/SPIN.app
 spin app-health
+test -s docs/assets/spin-public-beta-demo.gif
+test -s docs/assets/spin-public-beta-demo.mp4
 ```
 
 For a fresh release artifact, also run:
