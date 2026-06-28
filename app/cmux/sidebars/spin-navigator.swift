@@ -101,42 +101,52 @@ func onboardingButton(_ w) -> some View {
 }
 
 func projectRow(_ w) -> some View {
-    HStack(spacing: 3) {
-        Button(action: { cmux("workspace.select", workspace_id: w.id) }) {
-            HStack(spacing: 6) {
-                Circle()
-                    .foregroundColor(w.selected ? "#00E5FF" : (w.unread > 0 ? "#EAB308" : "#8A7280"))
-                    .frame(width: 5, height: 5)
-                Text(w.title)
-                    .font(.system(size: 12))
-                    .fontWeight(w.selected ? .semibold : .regular)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
-                Spacer()
-                if w.unread > 0 {
-                    Text("\(w.unread)")
-                        .font(.system(size: 8, design: .monospaced))
-                        .fontWeight(.semibold)
-                        .foregroundColor("#101014")
-                        .padding(3)
-                        .background { Circle().foregroundColor("#EAB308") }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    HStack(spacing: 5) {
+        Circle()
+            .foregroundColor(w.selected ? "#00E5FF" : (w.unread > 0 ? "#EAB308" : "#8A7280"))
+            .frame(width: 4, height: 4)
+        Text(w.title)
+            .font(.system(size: 11))
+            .fontWeight(w.selected ? .semibold : .regular)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .truncationMode(.tail)
+            .frame(width: 82, alignment: .leading)
+            .layoutPriority(2)
+        Spacer(minLength: 0)
+        if w.unread > 0 {
+            Text("\(w.unread)")
+                .font(.system(size: 7, design: .monospaced))
+                .fontWeight(.semibold)
+                .foregroundColor("#101014")
+                .padding(2)
+                .background { Circle().foregroundColor("#EAB308") }
+                .padding(.trailing, 14)
+        } else {
+            Spacer()
+                .frame(width: 14)
         }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .help("Open this project floor")
-
+    }
+    .padding(.leading, 6)
+    .padding(.trailing, 2)
+    .padding(.vertical, 0)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(height: 24)
+    .background { RoundedRectangle(cornerRadius: 6).foregroundColor(w.selected ? "#2A1830" : "#1B1118").opacity(w.selected ? 0.66 : 0.40) }
+    .overlay {
+        RoundedRectangle(cornerRadius: 6)
+            .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 0.6)
+            .opacity(w.selected ? 0.72 : 0.24)
+    }
+    .onTapGesture { cmux("workspace.select", workspace_id: w.id) }
+    .help("Open this project floor")
+    .overlay(alignment: .trailing) {
         Button(action: { cmux("workspace.close", workspace_id: w.id) }) {
             Image(systemName: "xmark")
-                .font(.system(size: 8))
+                .font(.system(size: 7))
                 .fontWeight(.semibold)
                 .foregroundColor(w.selected ? "#FFFFFF" : "#FFD1F5")
-                .frame(width: 14, height: 14)
+                .frame(width: 12, height: 12)
                 .background { Circle().foregroundColor(w.selected ? "#FF7ADF" : "#2B1325").opacity(w.selected ? 0.58 : 0.44) }
                 .overlay {
                     Circle()
@@ -146,15 +156,7 @@ func projectRow(_ w) -> some View {
         }
         .buttonStyle(.plain)
         .help("Close project tab. This only removes the visible cmux floor; it does not delete project files or the repository.")
-    }
-    .padding(.leading, 5)
-    .padding(.trailing, 2)
-    .padding(.vertical, 1)
-    .background { RoundedRectangle(cornerRadius: 6).foregroundColor(w.selected ? "#2A1830" : "#1B1118").opacity(w.selected ? 0.66 : 0.40) }
-    .overlay {
-        RoundedRectangle(cornerRadius: 6)
-            .stroke(w.selected ? "#7EEBFF" : "#FF7ADF", lineWidth: 0.6)
-            .opacity(w.selected ? 0.72 : 0.24)
+        .padding(.trailing, 6)
     }
 }
 
@@ -254,4 +256,5 @@ VStack(alignment: .leading, spacing: 4) {
 
     Spacer()
 }
+.frame(maxWidth: .infinity, alignment: .leading)
 .padding(10)

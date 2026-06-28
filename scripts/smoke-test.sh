@@ -49,6 +49,16 @@ node --check scripts/lib/human-queue-summary.js >/dev/null
 node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
 node - <<'NODE'
 const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
+if (cfg.sidebar.hideAllDetails !== true) process.exit(1);
+if (cfg.sidebar.showWorkspaceDescription !== false) process.exit(1);
+if (cfg.sidebar.showNotificationMessage !== false) process.exit(1);
+if (cfg.sidebar.showBranchDirectory !== false) process.exit(1);
+if (cfg.sidebar.showPorts !== false) process.exit(1);
+if (cfg.sidebar.showPullRequests !== false) process.exit(1);
+if (cfg.sidebar.showLog !== false) process.exit(1);
+if (cfg.sidebar.showProgress !== false) process.exit(1);
+if (cfg.sidebar.showCustomMetadata !== false) process.exit(1);
+if (cfg.sidebar.showSSH !== false) process.exit(1);
 if (cfg.sidebarAppearance.tintColor !== '#FF7ADF') process.exit(1);
 if (cfg.sidebarAppearance.darkModeTintColor !== '#FF7ADF') process.exit(1);
 if (cfg.sidebarAppearance.tintOpacity !== 0.24) process.exit(1);
@@ -75,6 +85,8 @@ grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/
 test -f app/cmux/sidebars/spin-navigator.swift
 grep -q 'workspace.close' app/cmux/sidebars/spin-navigator.swift
 grep -q 'Close project tab' app/cmux/sidebars/spin-navigator.swift
+grep -q 'onTapGesture { cmux("workspace.select"' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(width: 82, alignment: .leading)' app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
 node - <<'NODE'
@@ -171,6 +183,7 @@ defaultValue: "Open Ghostty Settings in TextEdit"
 defaultValue: "Ghostty Config Files"
 keywords: ["open", "ghostty", "settings", "config", "configuration", "file", "textedit", "terminal"]
 defaultValue: "Make cmux the Default Terminal"
+.padding(.vertical, 8)
 EOF
 cat > "$FAKE_CMUX/Resources/Localizable.xcstrings" <<'EOF'
 {
@@ -208,6 +221,7 @@ grep -q 'Terminal Engine Settings' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'Bundle.main.bundleURL.lastPathComponent == "SPIN.app"' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'bundledSpinAppIcon' "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift"
 grep -q 'Open SPIN Workspace Config' "$FAKE_CMUX/Sources/ContentView.swift"
+grep -q 'settings.hidesAllDetails ? 3 : 8' "$FAKE_CMUX/Sources/ContentView.swift"
 grep -q '"value": "About SPIN"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q '"value": "Terminal Engine Settings…"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q 'CmuxTerminalGhosttyRuntimeTestStubs' "$FAKE_CMUX/Packages/macOS/CmuxTerminal/Package.swift"

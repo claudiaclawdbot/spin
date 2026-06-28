@@ -8,11 +8,18 @@
     "keepWorkspaceOpenWhenClosingLastSurface": true
   },
   "sidebar": {
-    "showWorkspaceDescription": true,
+    "hideAllDetails": true,
+    "showWorkspaceDescription": false,
     "wrapWorkspaceTitles": false,
     "showNotifications": true,
-    "showPorts": true,
-    "showPullRequests": true
+    "showNotificationMessage": false,
+    "showBranchDirectory": false,
+    "showPorts": false,
+    "showPullRequests": false,
+    "showLog": false,
+    "showProgress": false,
+    "showCustomMetadata": false,
+    "showSSH": false
   },
   "sidebarAppearance": {
     "matchTerminalBackground": false,

@@ -341,6 +341,7 @@ if [ -f "$CMUX_DIR/Sources/ContentView.swift" ]; then
   replace_text Sources/ContentView.swift 'Ghostty Config Files' 'Terminal Engine Config Files'
   replace_text Sources/ContentView.swift '"open", "ghostty", "settings", "config", "configuration", "file", "textedit", "terminal"' '"open", "terminal", "engine", "settings", "config", "configuration", "file", "textedit"'
   replace_text Sources/ContentView.swift 'Make cmux the Default Terminal' 'Make SPIN the Default Terminal'
+  replace_text Sources/ContentView.swift '.padding(.vertical, 8)' '.padding(.vertical, settings.hidesAllDetails ? 3 : 8)'
 fi
 
 if [ -f "$CMUX_DIR/Sources/App/MenuBarExtraController.swift" ]; then
