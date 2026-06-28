@@ -53,11 +53,9 @@ surface_tty() {
 }
 
 agent_floor_active() {
-  local ws="$1" sf="$2" target="${3:-}" tty
-  [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target" && return 0
-  tty="$(surface_tty "$ws" "$sf")"
-  [[ -n "$tty" ]] || return 1
-  spin_cmux_floor_running "$target" "$tty"
+  local ws="$1" sf="$2" target="${3:-}"
+  [[ -n "$target" ]] || return 1
+  spin_cmux_floor_active_in_workspace "$ws" "$target"
 }
 
 agent_cmd() {  # $1=ws $2=target $3=cmd

@@ -76,16 +76,16 @@ context.scaleBy(x: 1, y: -1)
 let neon = gradient("#ff2bd6", "#00e5ff")
 let surface = gradient("#2a0035", "#07000d")
 let rounded = CGPath(
-    roundedRect: CGRect(x: 112, y: 112, width: 800, height: 800),
-    cornerWidth: 226,
-    cornerHeight: 226,
+    roundedRect: CGRect(x: 96, y: 96, width: 832, height: 832),
+    cornerWidth: 236,
+    cornerHeight: 236,
     transform: nil
 )
 
 context.saveGState()
 context.addPath(rounded)
 context.clip()
-context.drawLinearGradient(surface, start: CGPoint(x: 150, y: 112), end: CGPoint(x: 874, y: 912), options: [])
+context.drawLinearGradient(surface, start: CGPoint(x: 128, y: 96), end: CGPoint(x: 896, y: 928), options: [])
 context.restoreGState()
 
 context.saveGState()
@@ -93,7 +93,7 @@ context.addPath(rounded)
 context.setLineWidth(22)
 context.replacePathWithStrokedPath()
 context.clip()
-context.drawLinearGradient(neon, start: CGPoint(x: 176, y: 148), end: CGPoint(x: 848, y: 884), options: [])
+context.drawLinearGradient(neon, start: CGPoint(x: 152, y: 132), end: CGPoint(x: 872, y: 896), options: [])
 context.restoreGState()
 
 func fillEllipse(centerX: CGFloat, centerY: CGFloat, radius: CGFloat, fill: CGColor) {
@@ -112,17 +112,17 @@ func strokeEllipse(centerX: CGFloat, centerY: CGFloat, radius: CGFloat, width: C
     context.restoreGState()
 }
 
-for circle in [(512.0, 364.0, 112.0), (668.0, 668.0, 112.0), (356.0, 668.0, 112.0)] {
+for circle in [(512.0, 320.0, 112.0), (672.0, 656.0, 112.0), (352.0, 656.0, 112.0)] {
     fillEllipse(centerX: CGFloat(circle.0), centerY: CGFloat(circle.1), radius: CGFloat(circle.2), fill: color("#18102b"))
     strokeEllipse(centerX: CGFloat(circle.0), centerY: CGFloat(circle.1), radius: CGFloat(circle.2), width: 44)
 }
-fillEllipse(centerX: 512, centerY: 544, radius: 66, fill: color("#18102b"))
-strokeEllipse(centerX: 512, centerY: 544, radius: 66, width: 48)
+fillEllipse(centerX: 512, centerY: 512, radius: 70, fill: color("#18102b"))
+strokeEllipse(centerX: 512, centerY: 512, radius: 70, width: 48)
 
 context.saveGState()
-context.addEllipse(in: CGRect(x: 482, y: 514, width: 60, height: 60))
+context.addEllipse(in: CGRect(x: 482, y: 482, width: 60, height: 60))
 context.clip()
-context.drawLinearGradient(neon, start: CGPoint(x: 176, y: 148), end: CGPoint(x: 848, y: 884), options: [])
+context.drawLinearGradient(neon, start: CGPoint(x: 152, y: 132), end: CGPoint(x: 872, y: 896), options: [])
 context.restoreGState()
 
 guard let png = rep.representation(using: .png, properties: [:]) else {

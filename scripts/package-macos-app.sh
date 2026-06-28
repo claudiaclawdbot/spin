@@ -87,7 +87,7 @@ EOF
 }
 
 copy_omp_companions_if_present() {
-  local source="${SPIN_OMP_NATIVE_SOURCE:-}" omp_source="${SPIN_OMP_BIN_SOURCE:-}" native copied=0 use_root_vendor=0
+  local source="${SPIN_OMP_NATIVE_SOURCE:-}" omp_source="${SPIN_OMP_BIN_SOURCE:-}" native copied=0 metadata_copied=0 use_root_vendor=0
   if { [ -z "$omp_source" ] || [ "$omp_source" = "$ROOT/vendor/bin/omp" ]; } && [ -x "$ROOT/vendor/bin/omp" ]; then
     use_root_vendor=1
   fi
@@ -104,14 +104,35 @@ copy_omp_companions_if_present() {
       echo "  bundled OMP native addon from $native"
     done
   fi
+  if [ "$use_root_vendor" != "1" ] && [ -n "$omp_source" ]; then
+    local source_bin_dir source_res_dir
+    source_bin_dir="$(cd "$(dirname "$omp_source")" >/dev/null 2>&1 && pwd)"
+    source_res_dir="$(cd "$source_bin_dir/.." >/dev/null 2>&1 && pwd)"
+    for native in "$source_bin_dir"/pi_natives.*.node; do
+      [ -f "$native" ] || continue
+      cp "$native" "$RES/bin/$(basename "$native")"
+      copied=1
+      echo "  bundled OMP native addon from $native"
+    done
+    if [ -f "$source_res_dir/app/omp-vendor.json" ]; then
+      cp "$source_res_dir/app/omp-vendor.json" "$RES/app/omp-vendor.json"
+      metadata_copied=1
+      echo "  bundled OMP vendor metadata from source app"
+      if [ -f "$source_res_dir/app/omp-bun.lock" ]; then
+        cp "$source_res_dir/app/omp-bun.lock" "$RES/app/omp-bun.lock"
+        echo "  bundled OMP vendor lockfile from source app"
+      fi
+    fi
+  fi
   if [ "$use_root_vendor" = "1" ] && [ -f "$ROOT/agent/vendor/omp/metadata.json" ]; then
     cp "$ROOT/agent/vendor/omp/metadata.json" "$RES/app/omp-vendor.json"
+    metadata_copied=1
     echo "  bundled OMP vendor metadata"
     if [ -f "$ROOT/agent/vendor/omp/bun.lock" ]; then
       cp "$ROOT/agent/vendor/omp/bun.lock" "$RES/app/omp-bun.lock"
       echo "  bundled OMP vendor lockfile"
     fi
-  elif [ "$copied" = "1" ]; then
+  elif [ "$copied" = "1" ] && [ "$metadata_copied" != "1" ]; then
     echo "  warning: OMP native addon bundled without agent/vendor/omp/metadata.json" >&2
   fi
 }

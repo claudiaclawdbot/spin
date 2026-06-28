@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Public beta readiness checklist
+    url: https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md
+    about: Start here before reporting broad launch or presentation feedback.
+  - name: macOS beta install guide
+    url: https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md
+    about: Download, install, first launch, health checks, updates, and uninstall.

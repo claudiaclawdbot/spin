@@ -14,13 +14,15 @@ mkdir -p "$KIT"
     git ls-files -z --others --exclude-standard -- \
       .github/workflows/macos-app.yml \
       app agent runtime assets licenses \
+      SECURITY.md \
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
       scripts/lib/cmux-floor-layout.sh \
       scripts/lib/human-queue-summary.js \
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
-      docs/MACOS_TESTER_INSTALL.md \
+      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/assets \
+      .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/app-beta-bug.yml .github/ISSUE_TEMPLATE/public-feedback.yml \
       'org/ceo/*.example.md'
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
@@ -47,26 +49,70 @@ node --check scripts/spin-app-updates.js >/dev/null
 node --check scripts/lib/spin-runtime.js >/dev/null
 node --check scripts/lib/human-queue-summary.js >/dev/null
 node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
+node - <<'NODE'
+const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
+if (cfg.sidebar.hideAllDetails !== true) process.exit(1);
+if (cfg.sidebar.showWorkspaceDescription !== false) process.exit(1);
+if (cfg.sidebar.showNotificationMessage !== false) process.exit(1);
+if (cfg.sidebar.showBranchDirectory !== false) process.exit(1);
+if (cfg.sidebar.showPorts !== false) process.exit(1);
+if (cfg.sidebar.showPullRequests !== false) process.exit(1);
+if (cfg.sidebar.showLog !== false) process.exit(1);
+if (cfg.sidebar.showProgress !== false) process.exit(1);
+if (cfg.sidebar.showCustomMetadata !== false) process.exit(1);
+if (cfg.sidebar.showSSH !== false) process.exit(1);
+if (cfg.sidebarAppearance.tintColor !== '#FF7ADF') process.exit(1);
+if (cfg.sidebarAppearance.darkModeTintColor !== '#FF7ADF') process.exit(1);
+if (cfg.sidebarAppearance.tintOpacity !== 0.24) process.exit(1);
+NODE
 node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1);'
 grep -q 'prepare-open-source-release.sh --artifact' .github/workflows/macos-app.yml
 grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
+grep -q 'A local app for running a small AI software org' README.md
 grep -q 'SPIN.app is the main product' README.md
 grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.1' README.md
+grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
+grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
+test -s docs/assets/spin-public-beta-demo.gif
+test -s docs/assets/spin-public-beta-demo.mp4
 grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
 grep -q 'main Mac experience' docs/index.html
 grep -q 'Source / CLI install' docs/index.html
 grep -q 'v4.1.0-beta.1' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
+grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
+grep -q 'Run a small AI software org from one local app' docs/index.html
+grep -q 'assets/spin-public-beta-demo.gif' docs/index.html
 grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
 grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
+test -f docs/PUBLIC_BETA_READINESS.md
+grep -q 'Five-Minute Demo Script' docs/PUBLIC_BETA_READINESS.md
+grep -q 'What Is Still Beta' docs/PUBLIC_BETA_READINESS.md
+test -f SECURITY.md
+grep -q 'Security Policy' SECURITY.md
+test -f .github/ISSUE_TEMPLATE/config.yml
+test -f .github/ISSUE_TEMPLATE/app-beta-bug.yml
+test -f .github/ISSUE_TEMPLATE/public-feedback.yml
 test -f app/cmux/sidebars/spin-navigator.swift
+grep -q 'workspace.close' app/cmux/sidebars/spin-navigator.swift
+grep -q 'Close project tab' app/cmux/sidebars/spin-navigator.swift
+grep -q 'onTapGesture { cmux("workspace.select"' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(width: 82, alignment: .leading)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'Text("Project floors")' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(height: 24)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'cmux("workspace.create", title: "New SPIN Project")' app/cmux/sidebars/spin-navigator.swift
+grep -q 'frame(height: 22)' app/cmux/sidebars/spin-navigator.swift
+! grep -q 'clock.time' app/cmux/sidebars/spin-navigator.swift
+grep -q 'offset(y: 2)' app/cmux/sidebars/spin-navigator.swift
+grep -q 'maxHeight: .infinity, alignment: .topLeading' app/cmux/sidebars/spin-navigator.swift
+grep -q 'offset(y: -58)' app/cmux/sidebars/spin-navigator.swift
 test -f assets/branding/spin-icon.svg
 test -f assets/branding/SPIN.icns
 node - <<'NODE'
@@ -130,6 +176,30 @@ private let docsURL = URL(string: "https://cmux.com/docs")
 let commitURL = commit.flatMap { hash in
   URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")
 }
+imageForMode: { mode in
+                    guard let imageName = mode.imageName else { return nil }
+                    return NSImage(named: imageName)
+                },
+imageForName: { imageName in
+                    NSImage(named: imageName)
+                },
+EOF
+cat > "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift" <<'EOF'
+    private var appBundle: Bundle? {
+        guard let appBundleURL else { return nil }
+        return Bundle(url: appBundleURL)
+    }
+
+    private var shouldPersistBundleIcon: Bool {
+        false
+    }
+
+    private func updateDockTile(_ dockTile: NSDockTile) {
+        Self.assertMainQueue()
+
+        let mode = DockTileAppIconMode(defaultsValue: appDefaults?.string(forKey: cmuxAppIconModeKey))
+        let isDarkAppearance = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        guard let appBundleURL else {
 EOF
 cat > "$FAKE_CMUX/Sources/ContentView.swift" <<'EOF'
 title: constant(String(localized: "settings.settingsJSON.openFile", defaultValue: "Open cmux.json"))
@@ -139,6 +209,7 @@ defaultValue: "Open Ghostty Settings in TextEdit"
 defaultValue: "Ghostty Config Files"
 keywords: ["open", "ghostty", "settings", "config", "configuration", "file", "textedit", "terminal"]
 defaultValue: "Make cmux the Default Terminal"
+.padding(.vertical, 8)
 EOF
 cat > "$FAKE_CMUX/Resources/Localizable.xcstrings" <<'EOF'
 {
@@ -173,7 +244,10 @@ grep -q 'CMUX_SIDEBAR_EXTENSION_POINT_ID = dev.spin.app.cmux.sidebar;' "$FAKE_CM
 grep -q 'SPIN Sidebar Tab Reorder' "$FAKE_CMUX/Resources/Info.plist"
 grep -q 'About SPIN' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'Terminal Engine Settings' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'Bundle.main.bundleURL.lastPathComponent == "SPIN.app"' "$FAKE_CMUX/Sources/cmuxApp.swift"
+grep -q 'bundledSpinAppIcon' "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift"
 grep -q 'Open SPIN Workspace Config' "$FAKE_CMUX/Sources/ContentView.swift"
+grep -q 'settings.hidesAllDetails ? 3 : 8' "$FAKE_CMUX/Sources/ContentView.swift"
 grep -q '"value": "About SPIN"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q '"value": "Terminal Engine Settings…"' "$FAKE_CMUX/Resources/Localizable.xcstrings"
 grep -q 'CmuxTerminalGhosttyRuntimeTestStubs' "$FAKE_CMUX/Packages/macOS/CmuxTerminal/Package.swift"
@@ -184,6 +258,7 @@ if command -v qlmanage >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
   test -s "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset/AppIconDark.png"
 fi
 test -f "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
+grep -q 'workspace.close' "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
 scripts/org escalate "smoke approval needed" >/dev/null
@@ -373,6 +448,50 @@ PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
+
+DRIFTBIN="$TMP/driftbin"
+mkdir -p "$DRIFTBIN"
+node - "$KIT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+harness.projects['example-app'].cmux_workspace = 'workspace:3';
+fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+NODE
+cat > "$DRIFTBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/drift-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  cat <<JSON
+{"workspaces":[{"ref":"workspace:3","title":"example-app","custom_title":"example-app","current_directory":"$KIT/projects/example-app"}]}
+JSON
+  exit 0
+fi
+case "\${1:-}" in
+  tree)
+    echo 'surface:3 [terminal] "π: public-demo" [selected] tty=ttys003'
+    exit 0
+    ;;
+  read-screen) echo "omp v16.1.16 public-demo"; exit 0 ;;
+  new-workspace) echo "workspace:9"; exit 0 ;;
+  send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$DRIFTBIN/cmux"
+PATH="$DRIFTBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_ensure_project_floor example-app false
+' > "$TMP/drift-floor.out"
+grep -q 'workspace:9' "$TMP/drift-floor.out"
+grep -q 'new-workspace --name example-app' "$TMP/drift-cmux.calls"
+if grep -q 'send --workspace workspace:3' "$TMP/drift-cmux.calls"; then
+  echo "stale example-app floor accepted a different project's OMP tab"
+  exit 1
+fi
+grep -q '"cmux_workspace": "workspace:9"' org/OMP_HARNESS.json
 
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id smoke-delegate example-app "make ascii art" > "$TMP/delegate.out"
@@ -750,6 +869,30 @@ env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin ap
 grep -q 'app-launch: onboarding' "$TMP/app-launch-before.out"
 env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-omp-ready.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-omp-ready.out"
+
+cat > "$TMP/spin-up-launch-cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/spin-up-launch-cmux.calls"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "cmux fake spin-up launch"; exit 0 ;;
+  --json)
+    if [[ "\${2:-}" == "list-workspaces" ]]; then echo '{"workspaces":[]}'; exit 0; fi
+    exit 0
+    ;;
+  new-workspace) echo "workspace:88"; exit 0 ;;
+  list-workspaces|tree|sidebar|markdown|send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/spin-up-launch-cmux"
+env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
+  scripts/spin app-launch > "$TMP/spin-up-launch.out"
+grep -q 'SPIN orchestrator floor open' "$TMP/spin-up-launch.out"
+grep -q 'new-workspace --name SPIN Coordinator' "$TMP/spin-up-launch-cmux.calls"
+grep -q 'cmux-floor.sh' "$TMP/spin-up-launch-cmux.calls"
+grep -q "'ceo'" "$TMP/spin-up-launch-cmux.calls"
+
 touch org/.spin-onboarded
 env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-after.out"
 grep -q 'app-launch: spin up' "$TMP/app-launch-after.out"

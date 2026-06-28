@@ -168,11 +168,65 @@ NODE
   rm -rf "$work"
 }
 
+assert_spin_sidebar_defaults_seeded() {
+  local home="$1" domain plist provider enabled
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ -x /usr/libexec/PlistBuddy ] || return 0
+  for domain in dev.spin.app com.cmuxterm.app; do
+    plist="$home/Library/Preferences/$domain.plist"
+    [ -f "$plist" ] || fail "launcher did not seed $domain preferences for SPIN Navigator rail"
+    provider="$(/usr/libexec/PlistBuddy -c "Print :cmuxExtensionSidebar.providerId" "$plist" 2>/dev/null || true)"
+    [ "$provider" = "cmux.sidebar.custom.spin-navigator" ] || fail "$domain did not select SPIN Navigator rail: ${provider:-missing}"
+    enabled="$(/usr/libexec/PlistBuddy -c "Print :customSidebars.beta.enabled" "$plist" 2>/dev/null || true)"
+    [ "$enabled" = "1" ] || [ "$enabled" = "true" ] || fail "$domain did not enable custom sidebars: ${enabled:-missing}"
+  done
+}
+
+assert_asset_car_spin_icon_assets() {
+  local car="$1"
+  [ -f "$car" ] || return 0
+  command -v xcrun >/dev/null 2>&1 || {
+    echo "  warning: xcrun not found; skipping bundled cmux Assets.car icon check" >&2
+    return 0
+  }
+  "$NODE_BIN" - "$car" <<'NODE'
+const { spawnSync } = require('child_process');
+const car = process.argv[2];
+const result = spawnSync('xcrun', ['assetutil', '--info', car], { encoding: 'utf8' });
+if (result.status !== 0) {
+  console.error(result.stderr || `assetutil failed for ${car}`);
+  process.exit(1);
+}
+let entries;
+try {
+  entries = JSON.parse(result.stdout);
+} catch (error) {
+  console.error(`could not parse assetutil output for ${car}: ${error.message}`);
+  process.exit(1);
+}
+for (const name of ['AppIconLight', 'AppIconDark']) {
+  const image = entries.find((entry) => entry.Name === name && entry.AssetType === 'Image');
+  if (!image) {
+    console.error(`bundled cmux Assets.car is missing ${name}`);
+    process.exit(1);
+  }
+  if (image.Opaque !== false) {
+    console.error(`bundled cmux ${name} is opaque in Assets.car; Dock icon will show square corners`);
+    process.exit(1);
+  }
+}
+NODE
+}
+
 [ -d "$APP" ] || fail "missing app bundle: $APP"
 [ -f "$APP/Contents/Info.plist" ] || fail "missing Info.plist"
 [ -x "$APP/Contents/MacOS/SPIN" ] || fail "missing executable launcher"
 [ -f "$RES/app/spin-app.json" ] || fail "missing app manifest"
 [ -f "$RES/app/cmux/config/cmux.json" ] || fail "missing bundled cmux config"
+grep -q '"hideAllDetails": true' "$RES/app/cmux/config/cmux.json" || fail "bundled cmux config does not hide sidebar details"
+grep -q '"showWorkspaceDescription": false' "$RES/app/cmux/config/cmux.json" || fail "bundled cmux config still shows workspace descriptions"
+grep -q '"showPorts": false' "$RES/app/cmux/config/cmux.json" || fail "bundled cmux config still shows port rows"
+grep -q '"showPullRequests": false' "$RES/app/cmux/config/cmux.json" || fail "bundled cmux config still shows pull request rows"
 [ -f "$RES/app/cmux/sidebars/spin-navigator.swift" ] || fail "missing SPIN sidebar"
 [ -f "$RUNTIME/scripts/spin" ] || fail "missing runtime spin CLI"
 [ -f "$RUNTIME/scripts/org" ] || fail "missing runtime org CLI"
@@ -213,6 +267,7 @@ cmux_icon_name="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconName 
 [ -z "$cmux_icon_name" ] || fail "bundled cmux app still uses asset-catalog icon name: $cmux_icon_name"
 [ -s "$CMUX_APP/Contents/Resources/AppIcon.icns" ] || fail "missing bundled cmux app icon at Resources/SPIN.app/Contents/Resources/AppIcon.icns"
 cmp -s "$RES/SPIN.icns" "$CMUX_APP/Contents/Resources/AppIcon.icns" || fail "bundled cmux app icon does not match SPIN icon"
+assert_asset_car_spin_icon_assets "$CMUX_APP/Contents/Resources/Assets.car"
 ok "bundled cmux app icon"
 
 if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
@@ -353,8 +408,14 @@ grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not rout
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
 [ -x "$TMP/home/runtime/scripts/org" ] || fail "launcher did not seed writable org CLI"
 [ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
-grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not neon SPIN-branded"
+grep -q '"hideAllDetails": true' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config does not hide sidebar details"
+grep -q '"showWorkspaceDescription": false' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config still shows workspace descriptions"
+grep -q '"showPorts": false' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config still shows port rows"
+grep -q '"showPullRequests": false' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config still shows pull request rows"
+grep -q '"darkModeTintColor": "#FF7ADF"' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not soft SPIN-branded"
+grep -q '"tintOpacity": 0.24' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config is not using the soft SPIN tint opacity"
 [ -f "$TMP/home/.config/cmux/sidebars/spin-navigator.swift" ] || fail "launcher did not seed SPIN Navigator sidebar"
+assert_spin_sidebar_defaults_seeded "$TMP/home"
 ok "first-launch runtime seed"
 SEEDED_RUNTIME="$TMP/home/runtime"
 
@@ -372,13 +433,41 @@ cat > "$TMP/template-home/.config/cmux/cmux.json" <<'EOF'
 EOF
 template_out="$(env -i HOME="$TMP/template-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/template-home" SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
 grep -q 'app-launch: onboarding' <<<"$template_out" || fail "launcher did not route template-home launch to onboarding"
-grep -q '"darkModeTintColor": "#FF2BD6"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with SPIN neon config"
+grep -q '"darkModeTintColor": "#FF7ADF"' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with soft SPIN config"
+grep -q '"hideAllDetails": true' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with compact sidebar config"
+grep -q '"tintOpacity": 0.24' "$TMP/template-home/.config/cmux/cmux.json" || fail "launcher did not replace generated cmux template with soft SPIN tint opacity"
 ls "$TMP/template-home/.config/cmux"/cmux.json.spin-backup-* >/dev/null 2>&1 || fail "launcher did not back up generated cmux template"
-ok "generated cmux template refreshes to SPIN neon config"
+assert_spin_sidebar_defaults_seeded "$TMP/template-home"
+ok "generated cmux template refreshes to soft SPIN config"
 
 omp_ready_out="$(env -i HOME="$TMP/omp-ready-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-ready-home" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_APP_LAUNCH_DRY_RUN=1 "$APP/Contents/MacOS/SPIN")"
 grep -q 'app-launch: spin up' <<<"$omp_ready_out" || fail "launcher did not route existing OMP config to spin up"
 ok "existing OMP setup routes to spin up"
+
+cat > "$TMP/fake-cmux-spin-up" <<EOF
+#!/usr/bin/env bash
+printf 'args=%s\n' "\$*" >> "$TMP/fake-cmux-spin-up.calls"
+printf 'socket=%s\n' "\${CMUX_SOCKET_PATH:-}" >> "$TMP/fake-cmux-spin-up.calls"
+case "\${1:-}" in
+  ping) exit 0 ;;
+  version) echo "cmux fake release-check"; exit 0 ;;
+  --json)
+    if [[ "\${2:-}" == "list-workspaces" ]]; then echo '{"workspaces":[]}'; exit 0; fi
+    exit 0
+    ;;
+  new-workspace) echo "workspace:99"; exit 0 ;;
+  list-workspaces|tree|sidebar|markdown|send|send-key) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/fake-cmux-spin-up"
+spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
+grep -q 'SPIN orchestrator floor open' <<<"$spin_up_launch_out" || fail "real app launcher did not report opening the SPIN orchestrator floor"
+grep -q 'args=new-workspace --name SPIN Coordinator' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not create the SPIN Coordinator workspace on OMP-ready launch"
+grep -q 'cmux-floor.sh' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not route Coordinator workspace through cmux-floor.sh"
+grep -q "'ceo'" "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not launch the Coordinator OMP target"
+grep -q "socket=$TMP/omp-live-home/.local/state/cmux/spin.sock" "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not pass the SPIN-owned socket during spin up"
+ok "real app launcher opens the Coordinator OMP floor on OMP-ready launch"
 
 socket_env_out="$(env -i HOME="$TMP/socket-home" PATH="$SYSTEM_PATH" SPIN_ROOT="$SEEDED_RUNTIME" /bin/bash -c '
   set -euo pipefail
