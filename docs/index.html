@@ -22,25 +22,25 @@
   a:hover{color:var(--cyan)}
   .wrap{max-width:980px;margin:0 auto;padding:0 24px}
   section{padding:60px 0;border-top:1px solid var(--line)}
-  h2{font-size:1.7rem;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:1.7rem;margin:0 0 6px;letter-spacing:0}
   h2 .n{color:var(--faint);font-family:var(--mono);font-size:1rem;margin-right:10px}
   .lede{color:var(--dim);max-width:64ch;margin:.2rem 0 1.6rem}
 
   /* hero */
-  .hero{text-align:center;padding:74px 0 56px;border:none}
-  .spinner{width:128px;height:128px;margin:0 auto 26px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite}
+  .hero{text-align:center;padding:48px 0 44px;border:none}
+  .spinner{width:96px;height:96px;margin:0 auto 20px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .wordmark{font-size:4.4rem;font-weight:800;letter-spacing:-.04em;margin:0;line-height:1;color:#ececfb}
+  .wordmark{font-size:4.2rem;font-weight:800;letter-spacing:0;margin:0;line-height:1;color:#ececfb}
   /* PI is the backbone: cyan to violet gradient with a glow */
   .wordmark .pi{
     background:linear-gradient(120deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;
     -webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 16px rgba(34,211,238,.55))}
-  .sub{font-family:var(--mono);color:var(--dim);letter-spacing:.18em;text-transform:uppercase;font-size:.78rem;margin:14px 0 0}
+  .sub{font-family:var(--mono);color:var(--dim);letter-spacing:0;text-transform:uppercase;font-size:.78rem;margin:14px 0 0}
   /* hover-to-explain each word of the name */
   .def{position:relative;cursor:help;border-bottom:1px dashed var(--faint);padding-bottom:1px;transition:color .15s}
   .def:hover{color:var(--cyan)}
   .def .tip{visibility:hidden;opacity:0;position:absolute;bottom:150%;left:50%;transform:translateX(-50%) translateY(5px);
-    width:248px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+    width:248px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;
     font-family:var(--sans);font-size:.82rem;line-height:1.55;color:var(--dim);text-transform:none;letter-spacing:normal;
     box-shadow:0 18px 46px -18px #000;z-index:20;transition:.18s;pointer-events:none}
   .def .tip b{color:var(--ink)} .def .tip .h{color:var(--cyan);font-weight:700}
@@ -52,22 +52,25 @@
     .def:hover .tip{transform:none}
     .def .tip::after{display:none}
   }
-  .tag{font-size:1.32rem;color:var(--ink);max-width:38ch;margin:22px auto 30px}
+  .tag{font-size:1.28rem;color:var(--ink);max-width:38ch;margin:20px auto 24px}
   .tag b{color:var(--violet)}
   .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:11px;font-weight:600;font-size:.96rem;border:1px solid var(--line);transition:.18s}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:8px;font-weight:600;font-size:.96rem;border:1px solid var(--line);transition:.18s}
   .btn.primary{background:linear-gradient(120deg,var(--violet2),var(--violet));color:#fff;border-color:transparent;box-shadow:0 8px 30px -8px var(--violet2)}
   .btn.primary:hover{transform:translateY(-2px);color:#fff}
   .btn.ghost{background:var(--panel);color:var(--ink)}
   .btn.ghost:hover{border-color:var(--violet);color:var(--ink)}
   .badges{margin-top:26px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--faint)}
   .badge{border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#11111f}
-  .demo-shot{margin:24px 0 4px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
+  .hero-demo{max-width:860px;margin:24px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
+  .hero-demo img{display:block;width:100%;height:auto}
+  .hero-demo figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.84rem}
+  .demo-shot{margin:24px 0 4px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
   .demo-shot img{display:block;width:100%;height:auto}
   .demo-shot figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.86rem}
 
   /* terminal install box */
-  .term{background:#0c0c16;border:1px solid var(--line);border-radius:13px;overflow:hidden;margin:14px 0;box-shadow:0 20px 60px -30px #000}
+  .term{background:#0c0c16;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0;box-shadow:0 20px 60px -30px #000}
   .term .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;background:#13132400;border-bottom:1px solid var(--line)}
   .dot{width:11px;height:11px;border-radius:50%}
   .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
@@ -80,13 +83,13 @@
 
   /* generic grid + cards */
   .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
   .card h3{margin:0 0 6px;font-size:1.02rem}
   .card .ic{font-size:1.3rem;margin-bottom:6px;display:block}
   .card p{margin:0;color:var(--dim);font-size:.92rem}
 
   /* flow diagram */
-  .flow{font-family:var(--mono);font-size:.82rem;background:#0c0c16;border:1px solid var(--line);border-radius:13px;padding:22px;overflow-x:auto}
+  .flow{font-family:var(--mono);font-size:.82rem;background:#0c0c16;border:1px solid var(--line);border-radius:8px;padding:22px;overflow-x:auto}
   .flow .lane{display:flex;align-items:center;gap:10px;white-space:nowrap;padding:5px 0}
   .flow .box{border:1px solid var(--violet);color:var(--violet);border-radius:8px;padding:6px 12px;background:#160f28}
   .flow .arrow{color:var(--faint)}
@@ -95,13 +98,13 @@
   /* table */
   table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--faint);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  th{color:var(--faint);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:0}
   td code{font-family:var(--mono);color:var(--violet);font-size:.86em}
   .dimcell{color:var(--dim)}
 
   /* gates */
   .gates{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
-  .gate{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;padding:14px 16px}
+  .gate{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:8px;padding:14px 16px}
   .gate .g{font-size:1.4rem}
   .gate b{display:block;margin-bottom:2px}
   .gate span{color:var(--dim);font-size:.86rem}
@@ -109,7 +112,13 @@
   footer{border-top:1px solid var(--line);padding:34px 0 60px;text-align:center;color:var(--faint);font-size:.85rem}
   footer a{color:var(--dim)}
   .pill{display:inline-block;font-family:var(--mono);font-size:.7rem;color:var(--cyan);border:1px solid var(--line);border-radius:20px;padding:3px 12px;margin-bottom:18px;background:#0d1620}
-  @media(max-width:600px){.wordmark{font-size:3rem}.tag{font-size:1.1rem}}
+  @media(max-width:600px){
+    .hero{padding-top:42px}
+    .spinner{width:82px;height:82px;margin-bottom:18px}
+    .wordmark{font-size:3rem}
+    .tag{font-size:1.1rem}
+    .hero-demo{margin-top:18px}
+  }
 </style>
 </head>
 <body>
@@ -142,6 +151,10 @@
     <a class="btn ghost" href="#install">Source / CLI</a>
     <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin">GitHub</a>
   </div>
+  <figure class="hero-demo">
+    <img src="assets/spin-public-beta-demo.gif" alt="SPIN app showing the Navigator rail, project floor, and live project board">
+    <figcaption>SPIN.app keeps the Navigator above visible project floors while each project keeps its own OMP context.</figcaption>
+  </figure>
   <div class="badges">
     <span class="badge">MIT</span><span class="badge">bash + node</span>
     <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span><span class="badge">prompt refinement</span><span class="badge">model fallback</span>
