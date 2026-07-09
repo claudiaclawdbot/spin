@@ -44,6 +44,22 @@ test -f org/projects/workspace/STATE.json
 for f in scripts/*.sh scripts/lib/*.sh scripts/spin install.sh spin-bootstrap.sh; do
   bash -n "$f"
 done
+mkdir -p \
+  "$TMP/service-home/.codex/tmp/session/bin" \
+  "$TMP/service-home/.cache/codex-runtimes/runtime/bin" \
+  "$TMP/service-home/.local/bin" \
+  "$TMP/stable-service-bin" \
+  "$TMP/cmux-cli-shims/session/bin"
+SERVICE_PATH="$(
+  HOME="$TMP/service-home" \
+  PATH="$TMP/cmux-cli-shims/session/bin:$TMP/service-home/.codex/tmp/session/bin:$TMP/service-home/.cache/codex-runtimes/runtime/bin:$TMP/stable-service-bin:/usr/bin:/bin" \
+    scripts/spin-service.sh path
+)"
+[[ "$SERVICE_PATH" == *"$TMP/stable-service-bin"* ]]
+[[ "$SERVICE_PATH" == *"$TMP/service-home/.local/bin"* ]]
+[[ "$SERVICE_PATH" != *"cmux-cli-shims"* ]]
+[[ "$SERVICE_PATH" != *"/.codex/tmp/"* ]]
+[[ "$SERVICE_PATH" != *"/.cache/codex-runtimes/"* ]]
 node --check scripts/org >/dev/null
 node --check scripts/ceo-dashboard.js >/dev/null
 node --check scripts/spin-web.js >/dev/null
