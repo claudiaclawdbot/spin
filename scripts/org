@@ -8,8 +8,8 @@
  * the risk of corrupting AGENT_QUEUE.json or clobbering a receipts file.
  *
  * Verbs:
- *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID]
- *   org update-job <id> [--description "..."] [--max-runtime SEC]
+ *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID] [--after ID[,ID...]]
+ *   org update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]
  *   org set-handoff <project> [--file F]            (else reads stdin)
  *   org set-state <project> [--status S] [--next "…"]
  *   org escalate "<human-queue item>"
@@ -122,6 +122,35 @@ function readStdin() {
 }
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
 function validId(s) { return /^[A-Za-z0-9._:-]+$/.test(String(s)); }
+function hasFlag(flags, name) { return Object.prototype.hasOwnProperty.call(flags, name); }
+function parseDependencyIds(raw) {
+  if (raw === undefined) return [];
+  if (raw === true) die(1, '--after requires a comma-separated job ID value');
+  const ids = [...new Set(String(raw).split(',').map(value => value.trim()).filter(Boolean))];
+  if (!ids.length) die(2, '--after must contain at least one job ID');
+  for (const id of ids) if (!validId(id)) die(2, `invalid dependency job id "${id}"`);
+  return ids;
+}
+function validateDependencies(queue, jobId, dependencyIds) {
+  const jobs = queue.jobs || [];
+  const byId = new Map(jobs.map(job => [job.id, job]));
+  for (const id of dependencyIds) {
+    if (id === jobId) die(2, `job "${jobId}" cannot depend on itself`);
+    if (!byId.has(id)) die(2, `dependency job id "${id}" not found`);
+  }
+
+  const dependenciesFor = id => id === jobId
+    ? dependencyIds
+    : (Array.isArray(byId.get(id)?.depends_on) ? byId.get(id).depends_on : []);
+  const reaches = (current, target, seen = new Set()) => {
+    if (current === target) return true;
+    if (seen.has(current)) return false;
+    seen.add(current);
+    return dependenciesFor(current).some(next => reaches(next, target, seen));
+  };
+  if (dependencyIds.some(id => reaches(id, jobId)))
+    die(2, `dependencies for job "${jobId}" would create a cycle`);
+}
 
 // ── verbs ───────────────────────────────────────────────────────────────────
 const verbs = {
@@ -129,7 +158,7 @@ const verbs = {
     const [project, type, ...rest] = p.pos;
     const description = p.flags.description || rest.join(' ');
     if (!project || !type || !description)
-      die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC]');
+      die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC] [--after ID[,ID...]]');
     const harness = readJSON(F.harness);
     const proj = harness.projects && harness.projects[project];
     if (!proj) die(2, `unknown project_id "${project}" — register it in OMP_HARNESS.json (or run bootstrap-project.sh)`);
@@ -141,8 +170,15 @@ const verbs = {
       const id = p.flags.id || `${project}-${slug(type)}-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`;
       if (!validId(id)) die(2, 'job id may only contain letters, numbers, dot, underscore, colon, or hyphen');
       if (q.jobs.some(j => j.id === id)) die(2, `job id "${id}" already exists`);
+      const dependencies = parseDependencyIds(p.flags.after);
+      validateDependencies(q, id, dependencies);
       const job = { id, project_id: project, type, status: 'queued', description, created_at: nowISO() };
-      if (p.flags['max-runtime']) job.max_runtime_seconds = parseInt(p.flags['max-runtime'], 10);
+      if (dependencies.length) job.depends_on = dependencies;
+      if (hasFlag(p.flags, 'max-runtime')) {
+        const seconds = parseInt(p.flags['max-runtime'], 10);
+        if (!Number.isInteger(seconds) || seconds < 1) die(2, 'max runtime must be a positive integer');
+        job.max_runtime_seconds = seconds;
+      }
       q.jobs.push(job);
       q.updated_at = nowISO();
       writeJSONatomic(F.queue, q);
@@ -152,23 +188,40 @@ const verbs = {
 
   'update-job'(p) {
     const id = p.pos[0];
-    if (!id || (!p.flags.description && !p.flags['max-runtime']))
-      die(1, 'usage: org update-job <id> [--description "..."] [--max-runtime SEC]');
+    const changesRequested = ['description', 'max-runtime', 'after', 'clear-after', 'requeue']
+      .some(name => hasFlag(p.flags, name));
+    if (!id || !changesRequested)
+      die(1, 'usage: org update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]');
+    if (hasFlag(p.flags, 'after') && hasFlag(p.flags, 'clear-after'))
+      die(2, '--after and --clear-after cannot be used together');
     return withLock('queue', () => {
       const q = readJSON(F.queue, { jobs: [] });
       const job = (q.jobs || []).find(entry => entry.id === id);
       if (!job) die(2, `job id "${id}" not found`);
       if (!['queued', 'blocked'].includes(job.status))
         die(2, `job "${id}" cannot be updated while status is ${job.status}`);
-      if (p.flags.description) {
+      if (hasFlag(p.flags, 'description')) {
+        if (p.flags.description === true) die(1, '--description requires a value');
         const description = String(p.flags.description).trim();
         if (!description) die(2, 'job description cannot be empty');
         job.description = description;
       }
-      if (p.flags['max-runtime']) {
+      if (hasFlag(p.flags, 'max-runtime')) {
         const seconds = parseInt(p.flags['max-runtime'], 10);
         if (!Number.isInteger(seconds) || seconds < 1) die(2, 'max runtime must be a positive integer');
         job.max_runtime_seconds = seconds;
+      }
+      if (hasFlag(p.flags, 'after') || hasFlag(p.flags, 'clear-after')) {
+        const dependencies = hasFlag(p.flags, 'clear-after') ? [] : parseDependencyIds(p.flags.after);
+        validateDependencies(q, id, dependencies);
+        if (dependencies.length) job.depends_on = dependencies;
+        else delete job.depends_on;
+      }
+      if (hasFlag(p.flags, 'requeue')) {
+        if (job.status !== 'blocked') die(2, `job "${id}" can only be requeued from blocked status`);
+        job.status = 'queued';
+        delete job.blocked_at;
+        delete job.result;
       }
       job.updated_at = nowISO();
       q.updated_at = job.updated_at;
@@ -303,8 +356,8 @@ const verbs = {
 const [, , verb, ...rest] = process.argv;
 if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
   ok('org — SPIN state CLI. Verbs:');
-  ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC]');
-  ok('  update-job <id> [--description "..."] [--max-runtime SEC]');
+  ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC] [--after ID[,ID...]]');
+  ok('  update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]');
   ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
   ok('  escalate "<item>"                       resolve-escalation <sel> [--note "…"]');
   ok('  process-approval <sel> <approve|decline|ask> [--note "…"]');

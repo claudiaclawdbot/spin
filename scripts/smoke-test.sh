@@ -315,13 +315,23 @@ grep -q 'APPROVE: smoke approval needed' org/ceo/APPROVALS.md
 
 scripts/org queue-job example-app scout "inspect smoke path; quoted ' value" --id smoke-scout >/dev/null
 scripts/org update-job smoke-scout --description "inspect updated smoke path" --max-runtime 90 >/dev/null
+scripts/org queue-job example-app scout "inspect dependent smoke path" --id smoke-dependent --after smoke-scout >/dev/null
 if scripts/org queue-job example-app scout "bad id path" --id '../bad' >/dev/null 2>&1; then
   echo "bad job id accepted"
+  exit 1
+fi
+if scripts/org update-job smoke-scout --after smoke-dependent >/dev/null 2>&1; then
+  echo "dependency cycle accepted"
+  exit 1
+fi
+if scripts/org queue-job example-app scout "missing dependency" --id smoke-missing --after does-not-exist >/dev/null 2>&1; then
+  echo "missing dependency accepted"
   exit 1
 fi
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
   if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued" && j.description === "inspect updated smoke path" && j.max_runtime_seconds === 90)) process.exit(1);
+  if (!q.jobs.some(j => j.id === "smoke-dependent" && j.status === "queued" && JSON.stringify(j.depends_on) === JSON.stringify(["smoke-scout"]))) process.exit(1);
 '
 
 # Concurrent state mutations must serialize instead of racing lock release.
@@ -349,12 +359,77 @@ for _ in 1 2 3 4 5; do
   [[ -f "$TMP/project-agent.env" ]] && break
   sleep 0.2
 done
-scripts/omp-supervisor-once.sh >/dev/null
 grep -q "description=inspect updated smoke path" "$TMP/project-agent.env"
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
-  const j = q.jobs.find(j => j.id === "smoke-scout");
-  if (!j || j.status !== "completed") process.exit(1);
+  const j = q.jobs.find(j => j.id === "smoke-dependent");
+  if (!j || j.status !== "queued") process.exit(1);
+'
+scripts/omp-supervisor-once.sh >/dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-scout', 'smoke-dependent']) {
+  if (q.jobs.find(job => job.id === id)?.status !== 'completed') process.exit(1);
+}
+NODE
+  then
+    break
+  fi
+  sleep 0.2
+done
+grep -q "description=inspect dependent smoke path" "$TMP/project-agent.env"
+node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-scout', 'smoke-dependent']) {
+  if (q.jobs.find(job => job.id === id)?.status !== 'completed') process.exit(1);
+}
+NODE
+
+scripts/org queue-job example-app scout "failed dependency fixture" --id smoke-failed-prereq >/dev/null
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/AGENT_QUEUE.json';
+const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-failed-prereq');
+job.status = 'failed';
+job.failed_at = new Date().toISOString();
+job.result = 'intentional smoke fixture failure';
+fs.writeFileSync(file, JSON.stringify(q, null, 2) + '\n');
+NODE
+scripts/org queue-job example-app scout "recover blocked dependency" --id smoke-requeue --after smoke-failed-prereq >/dev/null
+scripts/omp-supervisor-once.sh >/dev/null
+node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-requeue');
+if (job?.status !== 'blocked' || !/smoke-failed-prereq is failed/.test(job.result || '')) process.exit(1);
+NODE
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/AGENT_QUEUE.json';
+const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-failed-prereq');
+job.status = 'completed';
+job.completed_at = new Date().toISOString();
+delete job.failed_at;
+delete job.result;
+fs.writeFileSync(file, JSON.stringify(q, null, 2) + '\n');
+NODE
+scripts/org update-job smoke-requeue --requeue >/dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node -e '
+    const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
+    if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
+  '; then
+    break
+  fi
+  sleep 0.2
+done
+node -e '
+  const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
+  if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
 '
 
 cat > scripts/project-ceo-agent.sh <<'EOF'

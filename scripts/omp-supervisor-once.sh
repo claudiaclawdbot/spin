@@ -143,6 +143,49 @@ function markRunningJobs() {
 function dispatchQueuedJobs() {
   const dispatched = [];
 
+  function dependenciesReady(job) {
+    if (job.depends_on === undefined) return true;
+    if (!Array.isArray(job.depends_on) || !job.depends_on.length) {
+      job.status = 'blocked';
+      job.blocked_at = now;
+      job.result = 'Invalid depends_on value; expected a non-empty array of job IDs.';
+      return false;
+    }
+
+    const dependencies = [...new Set(job.depends_on)];
+    if (dependencies.length !== job.depends_on.length || dependencies.some(id => !validJobId(id) || id === job.id)) {
+      job.status = 'blocked';
+      job.blocked_at = now;
+      job.result = 'Invalid depends_on value; dependencies must be unique valid job IDs and cannot reference the job itself.';
+      return false;
+    }
+
+    for (const id of dependencies) {
+      const dependency = (queue.jobs || []).find(candidate => candidate.id === id);
+      if (!dependency) {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency job not found: ${id}. Update dependencies and requeue.`;
+        return false;
+      }
+      if (dependency.status === 'completed') continue;
+      if (dependency.status === 'failed' || dependency.status === 'blocked') {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency ${id} is ${dependency.status}. Update dependencies and requeue after recovery.`;
+        return false;
+      }
+      if (dependency.status !== 'queued' && dependency.status !== 'running') {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency ${id} has unsupported status ${dependency.status || '(missing)'}.`;
+        return false;
+      }
+      return false;
+    }
+    return true;
+  }
+
   // Model selection by job type. OMP is the primary harness, so we set its role
   // overlay vars. Direct-CLI model vars remain as the outer fallback path if OMP
   // is absent or hard-fails.
@@ -178,6 +221,7 @@ function dispatchQueuedJobs() {
       job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
       continue;
     }
+    if (!dependenciesReady(job)) continue;
 
     const project = harness.projects?.[job.project_id];
     if (!project) {
@@ -294,4 +338,5 @@ console.log(`Dispatched: ${dispatched.length ? dispatched.join(', ') : 'none'}`)
 console.log(`Queued:     ${(queue.jobs || []).filter(j => j.status === 'queued').length}`);
 console.log(`Running:    ${(queue.jobs || []).filter(j => j.status === 'running').length}`);
 console.log(`Completed:  ${(queue.jobs || []).filter(j => j.status === 'completed').length}`);
+console.log(`Blocked:    ${(queue.jobs || []).filter(j => j.status === 'blocked').length}`);
 NODE
