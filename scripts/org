@@ -62,21 +62,32 @@ function parse(argv) {
 function withLock(name, fn) {
   const lock = path.join(F.runs, `.org-${name}.lock`);
   fs.mkdirSync(F.runs, { recursive: true });
-  let fd, tries = 0;
+  let tries = 0;
   for (;;) {
-    try { fd = fs.openSync(lock, 'wx'); break; }
-    catch (e) {
+    try {
+      fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
+      break;
+    } catch (e) {
       if (e.code !== 'EEXIST') die(3, `lock error: ${e.message}`);
-      // stale-lock break-in: if the holder PID is dead, clear and retry
-      const holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10);
-      let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
-      if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
-      if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
+      // The holder can release the lock between our failed create and read.
+      let holder;
+      try { holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10); }
+      catch (readError) {
+        if (readError.code === 'ENOENT') continue;
+        die(3, `lock read error: ${readError.message}`);
+      }
+      // A competing process may have created the file but not written its PID yet.
+      if (!Number.isInteger(holder)) {
+        if (++tries > 50) die(3, `could not acquire ${name} lock (holder not initialized)`);
+      } else {
+        // stale-lock break-in: if the holder PID is dead, clear and retry
+        let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
+        if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
+        if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
+      }
       const until = Date.now() + 100; while (Date.now() < until) {} // ~100ms spin
     }
   }
-  try { fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); }
-  catch (e) { die(3, `lock write: ${e.message}`); }
   try { return fn(); }
   finally { try { fs.unlinkSync(lock); } catch {} }
 }
