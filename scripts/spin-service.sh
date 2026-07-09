@@ -57,7 +57,7 @@ stable_service_path(){
 # ── macOS: launchd LaunchAgent ───────────────────────────────────────────────
 plist_path(){ echo "$HOME/Library/LaunchAgents/$LABEL.plist"; }
 launchd_install(){
-  local p service_path; p="$(plist_path)"; service_path="$(stable_service_path)"; mkdir -p "$(dirname "$p")"
+  local p service_path domain; p="$(plist_path)"; service_path="$(stable_service_path)"; domain="gui/$(id -u)"; mkdir -p "$(dirname "$p")"
   cat > "$p" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -79,11 +79,15 @@ launchd_install(){
 </dict></plist>
 PLIST
   plutil -lint "$p" >/dev/null || { echo "✗ generated plist invalid"; return 1; }
-  # stop any hand-started driver so the supervised one owns the lock
+  # Reload an existing service so launchd adopts the new program and environment.
+  launchctl bootout "$domain/$LABEL" 2>/dev/null || \
+    launchctl bootout "$domain" "$p" 2>/dev/null || \
+    launchctl unload "$p" 2>/dev/null || true
+  # Stop any hand-started driver so the supervised one owns the lock.
   local cur; cur="$(cat "$ROOT/org/ceo/runs/.workspace-ceo-tick.lock" 2>/dev/null)"
   [[ -n "${cur:-}" ]] && kill -TERM "$cur" 2>/dev/null && sleep 2
   rm -f "$ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
-  launchctl bootstrap "gui/$(id -u)" "$p" 2>/dev/null || launchctl load -w "$p" 2>/dev/null
+  launchctl bootstrap "$domain" "$p" 2>/dev/null || launchctl load -w "$p" 2>/dev/null
   echo "${c_g}✓ installed launchd agent $LABEL${c_o} — driver is now supervised."
 }
 launchd_uninstall(){
