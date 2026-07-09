@@ -134,6 +134,14 @@ function readExitCode(job) {
   return Number.isNaN(rc) ? null : rc;
 }
 
+function readHeartbeat(job) {
+  const relative = job.heartbeat || `org/jobs/${job.id}.heartbeat`;
+  const file = path.join(root, relative);
+  if (!fs.existsSync(file)) return null;
+  const value = fs.readFileSync(file, 'utf8').trim();
+  return Number.isNaN(Date.parse(value)) ? null : value;
+}
+
 // ── 1. Mark completed jobs ──────────────────────────────────────────────────
 // A "running" job is done when its PID file exists but the process is gone,
 // or when there is no PID file at all (legacy / lost). A job that exceeds its
@@ -149,6 +157,8 @@ function markRunningJobs() {
       job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
       continue;
     }
+    const heartbeat = readHeartbeat(job);
+    if (heartbeat) job.heartbeat_at = heartbeat;
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
 
     if (!fs.existsSync(pidFile)) {
@@ -298,10 +308,12 @@ function dispatchQueuedJobs() {
     const logFile = path.join(jobsDir, `${job.id}.log`);
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
     const rcFile = path.join(jobsDir, `${job.id}.exit`);
+    const heartbeatFile = path.join(jobsDir, `${job.id}.heartbeat`);
 
     let outFd, spawnedPid;
     try {
       try { fs.unlinkSync(rcFile); } catch {}
+      try { fs.unlinkSync(heartbeatFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
       const childEnv = Object.assign(
         {},
@@ -312,6 +324,8 @@ function dispatchQueuedJobs() {
           OMP_JOB_DESCRIPTION: String(job.description || ''),
           OMP_PROJECT_ID: String(job.project_id),
           OMP_RC_FILE: rcFile,
+          OMP_HEARTBEAT_FILE: heartbeatFile,
+          OMP_HEARTBEAT_INTERVAL: process.env.OMP_HEARTBEAT_INTERVAL || '30',
           SPIN_PROJECT_AGENT: path.join(root, 'scripts', 'project-ceo-agent.sh'),
         },
         modelEnvFor(job.type),
@@ -319,8 +333,27 @@ function dispatchQueuedJobs() {
       );
       const wrapper = [
         'set -u',
-        '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID"',
+        'heartbeat_once() {',
+        '  heartbeat_tmp="${OMP_HEARTBEAT_FILE}.tmp.$$"',
+        '  date -u "+%Y-%m-%dT%H:%M:%SZ" > "$heartbeat_tmp"',
+        '  mv "$heartbeat_tmp" "$OMP_HEARTBEAT_FILE"',
+        '}',
+        '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID" &',
+        'agent_pid=$!',
+        'heartbeat_once',
+        '(',
+        '  while kill -0 "$agent_pid" 2>/dev/null; do',
+        '    sleep "$OMP_HEARTBEAT_INTERVAL"',
+        '    kill -0 "$agent_pid" 2>/dev/null || break',
+        '    heartbeat_once',
+        '  done',
+        ') &',
+        'heartbeat_pid=$!',
+        'wait "$agent_pid"',
         'rc=$?',
+        'kill "$heartbeat_pid" 2>/dev/null || true',
+        'wait "$heartbeat_pid" 2>/dev/null || true',
+        'heartbeat_once',
         'printf "%s\\n" "$rc" > "$OMP_RC_FILE"',
         'exit "$rc"',
       ].join('\n');
@@ -344,6 +377,7 @@ function dispatchQueuedJobs() {
     job.status     = 'running';
     job.started_at = now;
     job.log        = `org/jobs/${job.id}.log`;
+    job.heartbeat  = `org/jobs/${job.id}.heartbeat`;
     // Persist before any display work so a crash cannot leave a live detached
     // process represented as queued and eligible for duplicate dispatch.
     persistQueue();

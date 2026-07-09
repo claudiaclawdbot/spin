@@ -394,11 +394,18 @@ for _ in 1 2 3 4 5; do
   [[ -f "$TMP/project-agent.env" ]] && break
   sleep 0.2
 done
+for _ in 1 2 3 4 5; do
+  [[ -s "org/jobs/smoke-scout.heartbeat" ]] && break
+  sleep 0.2
+done
+grep -Eq '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' org/jobs/smoke-scout.heartbeat
 grep -q "description=inspect updated smoke path" "$TMP/project-agent.env"
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
   const j = q.jobs.find(j => j.id === "smoke-dependent");
   if (!j || j.status !== "queued") process.exit(1);
+  const first = q.jobs.find(j => j.id === "smoke-scout");
+  if (!first || first.heartbeat !== "org/jobs/smoke-scout.heartbeat") process.exit(1);
 '
 scripts/omp-supervisor-once.sh >/dev/null
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -408,6 +415,7 @@ const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'))
 for (const id of ['smoke-scout', 'smoke-dependent']) {
   if (q.jobs.find(job => job.id === id)?.status !== 'completed') process.exit(1);
 }
+if (!q.jobs.find(job => job.id === 'smoke-scout')?.heartbeat_at) process.exit(1);
 NODE
   then
     break
