@@ -312,6 +312,18 @@ NODE
 kill "$WEB_PID" 2>/dev/null || true
 wait "$WEB_PID" 2>/dev/null || true
 grep -q 'APPROVE: smoke approval needed' org/ceo/APPROVALS.md
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/ceo/APPROVALS.md';
+const text = fs.readFileSync(file, 'utf8');
+fs.writeFileSync(file, text.replace('## Pending\n', '## Pending\n\n- owner-only smoke decision\n'));
+NODE
+if scripts/org process-approval owner-only approve --note "agent must not self-approve" >/dev/null 2>&1; then
+  echo "owner-only approval accepted without owner confirmation"
+  exit 1
+fi
+SPIN_OWNER_CONFIRMED=1 scripts/org process-approval owner-only approve --note "smoke owner confirmation" >/dev/null
+grep -q 'owner-only smoke decision.*APPROVE.*smoke owner confirmation' org/ceo/APPROVALS.md
 
 QUEUE_LOCK_READY="$TMP/queue-lock-ready"
 node - "$QUEUE_LOCK_READY" "$KIT/org/ceo/runs/.org-queue.lock" <<'NODE' &

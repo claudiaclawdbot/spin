@@ -291,6 +291,8 @@ const verbs = {
     const [selector, action] = p.pos;
     if (!selector || !['approve', 'decline', 'ask'].includes(action))
       die(1, 'usage: org process-approval <index|substr> <approve|decline|ask> [--note "…"]');
+    if (action !== 'ask' && process.env.SPIN_OWNER_CONFIRMED !== '1')
+      die(2, `${action} requires direct owner confirmation through the owner UI or SPIN_OWNER_CONFIRMED=1`);
     const note = p.flags.note ? ` — ${p.flags.note}` : '';
     return withLock('approvals', () => {
       const txt = fs.readFileSync(F.approvals, 'utf8');
@@ -360,7 +362,7 @@ if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
   ok('  update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]');
   ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
   ok('  escalate "<item>"                       resolve-escalation <sel> [--note "…"]');
-  ok('  process-approval <sel> <approve|decline|ask> [--note "…"]');
+  ok('  process-approval <sel> <approve|decline|ask> [--note "…"]  approve/decline require owner confirmation');
   ok('  receipt [--file F]                      inbox <project> "<msg>"                show [--json]');
   process.exit(verb ? 0 : 1);
 }
