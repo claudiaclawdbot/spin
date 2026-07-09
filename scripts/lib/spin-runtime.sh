@@ -15,6 +15,10 @@ _spin_upper() {
 _spin_candidate_bin_dirs() {
   [ -n "${SPIN_APP_RESOURCES:-}" ] && printf '%s\n' "$SPIN_APP_RESOURCES/bin"
   [ -n "${SPIN_INTERNAL_BIN_DIR:-}" ] && printf '%s\n' "$SPIN_INTERNAL_BIN_DIR"
+  if [ "$SPIN_RUNTIME_ROOT" = "$HOME/Library/Application Support/SPIN/runtime" ]; then
+    [ -d "/Applications/SPIN.app/Contents/Resources/bin" ] && printf '%s\n' "/Applications/SPIN.app/Contents/Resources/bin"
+    [ -d "$HOME/Applications/SPIN.app/Contents/Resources/bin" ] && printf '%s\n' "$HOME/Applications/SPIN.app/Contents/Resources/bin"
+  fi
   printf '%s\n' "$SPIN_RUNTIME_ROOT/vendor/bin"
   printf '%s\n' "$SPIN_RUNTIME_ROOT/agent/bin"
   printf '%s\n' "$SPIN_RUNTIME_ROOT/app/bin"
@@ -114,6 +118,11 @@ spin_prepare_cmux_environment() {
 
 spin_cmux_app_path() {
   local app
+  if [ "$SPIN_RUNTIME_ROOT" = "$HOME/Library/Application Support/SPIN/runtime" ]; then
+    for app in "/Applications/SPIN.app/Contents/Resources/SPIN.app" "$HOME/Applications/SPIN.app/Contents/Resources/SPIN.app"; do
+      [ -d "$app" ] && { printf '%s\n' "$app"; return 0; }
+    done
+  fi
   for app in \
     "${SPIN_CMUX_APP:-}" \
     "${SPIN_APP_RESOURCES:-}/SPIN.app" \

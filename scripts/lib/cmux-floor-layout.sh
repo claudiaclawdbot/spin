@@ -347,7 +347,7 @@ try {
   const h = JSON.parse(fs.readFileSync(harnessFile, "utf8"));
   for (const [id, p] of Object.entries(h.projects || {})) {
     const status = statusById.get(id);
-    if (p.cmux_workspace && !String(status || "").startsWith("candidate")) ids.add(id);
+    if (p.cmux_workspace && (!status || status.startsWith("active"))) ids.add(id);
   }
 } catch {}
 for (const id of ids) if (id) console.log(id);
