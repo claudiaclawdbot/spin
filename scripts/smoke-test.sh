@@ -592,6 +592,11 @@ printf '%s\n' "\$*" > "$TMP/internal-omp.args"
 exit 0
 EOF
 chmod +x "$TMP/internal-omp"
+env -u SPIN_ROOT -u OMP_ROOT CEO_ROOT="$KIT" HOME="$SMOKE_HOME" bash -c '
+  set -euo pipefail
+  source "$1/scripts/lib/ceo-waterfall.sh"
+  test "$SPIN_ROOT" = "$1"
+' _ "$KIT"
 SPIN_OMP_BIN="$TMP/internal-omp" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/internal-spin-omp.yml" bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
