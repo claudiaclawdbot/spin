@@ -313,6 +313,41 @@ kill "$WEB_PID" 2>/dev/null || true
 wait "$WEB_PID" 2>/dev/null || true
 grep -q 'APPROVE: smoke approval needed' org/ceo/APPROVALS.md
 
+QUEUE_LOCK_READY="$TMP/queue-lock-ready"
+node - "$QUEUE_LOCK_READY" "$KIT/org/ceo/runs/.org-queue.lock" <<'NODE' &
+const fs = require('fs');
+const [ready, lock] = process.argv.slice(2);
+fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
+fs.writeFileSync(ready, 'ready\n');
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 450);
+fs.unlinkSync(lock);
+NODE
+QUEUE_LOCK_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [[ -f "$QUEUE_LOCK_READY" ]] && break
+  sleep 0.05
+done
+node - "$KIT" <<'NODE'
+const path = require('path');
+const { spawnSync } = require('child_process');
+const root = process.argv[2];
+const started = Date.now();
+const result = spawnSync(path.join(root, 'scripts', 'omp-supervisor-once.sh'), [], {
+  cwd: root,
+  env: { ...process.env, SPIN_ROOT: root },
+  encoding: 'utf8',
+});
+if (result.status !== 0) {
+  process.stderr.write(result.stderr || result.stdout || 'supervisor lock smoke failed\n');
+  process.exit(1);
+}
+if (Date.now() - started < 250) {
+  process.stderr.write('supervisor did not wait for the shared queue lock\n');
+  process.exit(1);
+}
+NODE
+wait "$QUEUE_LOCK_PID"
+
 scripts/org queue-job example-app scout "inspect smoke path; quoted ' value" --id smoke-scout >/dev/null
 scripts/org update-job smoke-scout --description "inspect updated smoke path" --max-runtime 90 >/dev/null
 scripts/org queue-job example-app scout "inspect dependent smoke path" --id smoke-dependent --after smoke-scout >/dev/null

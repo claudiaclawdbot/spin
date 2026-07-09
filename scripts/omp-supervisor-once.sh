@@ -33,13 +33,64 @@ const cp   = require('child_process');
 const path = require('path');
 
 const root      = process.argv[2];
+const queueFile = process.argv[4];
 const runtime   = require(path.join(root, 'scripts', 'lib', 'spin-runtime.js'));
 const harness   = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const queue     = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
 const now       = new Date().toISOString();
 const jobsDir   = path.join(root, 'org', 'jobs');
 const MAX_PAR   = parseInt(process.env.OMP_MAX_PARALLEL || '3', 10);
 const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
+const queueLock = path.join(root, 'org', 'ceo', 'runs', '.org-queue.lock');
+let queueLockHeld = false;
+
+function acquireQueueLock() {
+  fs.mkdirSync(path.dirname(queueLock), { recursive: true });
+  let tries = 0;
+  for (;;) {
+    try {
+      fs.writeFileSync(queueLock, String(process.pid), { flag: 'wx' });
+      queueLockHeld = true;
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let holder;
+      try { holder = parseInt(fs.readFileSync(queueLock, 'utf8').trim(), 10); }
+      catch (readError) {
+        if (readError.code === 'ENOENT') continue;
+        throw readError;
+      }
+      if (Number.isInteger(holder)) {
+        let alive = false;
+        try { process.kill(holder, 0); alive = true; } catch {}
+        if (!alive) {
+          try { fs.unlinkSync(queueLock); } catch {}
+          continue;
+        }
+      }
+      if (++tries > 50) throw new Error(`could not acquire queue lock (held by ${holder || 'unknown'})`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
+function releaseQueueLock() {
+  if (!queueLockHeld) return;
+  try {
+    if (fs.readFileSync(queueLock, 'utf8').trim() === String(process.pid)) fs.unlinkSync(queueLock);
+  } catch {}
+  queueLockHeld = false;
+}
+
+acquireQueueLock();
+process.on('exit', releaseQueueLock);
+const queue = JSON.parse(fs.readFileSync(queueFile, 'utf8'));
+
+function persistQueue() {
+  queue.updated_at = now;
+  const tmp = `${queueFile}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(queue, null, 2) + '\n');
+  fs.renameSync(tmp, queueFile);
+}
 
 // ── helper: send a cmux command silently ────────────────────────────────────
 function cmux(args) {
@@ -293,6 +344,9 @@ function dispatchQueuedJobs() {
     job.status     = 'running';
     job.started_at = now;
     job.log        = `org/jobs/${job.id}.log`;
+    // Persist before any display work so a crash cannot leave a live detached
+    // process represented as queued and eligible for duplicate dispatch.
+    persistQueue();
 
     // ── cmux display: update the status CHIP only (non-blocking). ──────────
     // We deliberately do NOT push `tail -f` into the pane: tail -f blocks, so a
@@ -314,8 +368,8 @@ function dispatchQueuedJobs() {
 // ── 3. Run ───────────────────────────────────────────────────────────────────
 markRunningJobs();
 const dispatched = dispatchQueuedJobs();
-queue.updated_at = now;
-fs.writeFileSync(process.argv[4], JSON.stringify(queue, null, 2) + '\n');
+persistQueue();
+releaseQueueLock();
 
 // ── 4. Status chips (workspace CEO floor) ───────────────────────────────────
 const ceoCfg = harness.workspace_ceo || {};
