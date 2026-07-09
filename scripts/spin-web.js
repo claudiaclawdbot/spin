@@ -110,7 +110,11 @@ function page(message = '') {
   const waiting = humanQueueItems();
   const pending = pendingApprovals();
   const receipts = latestReceipts();
-  const active = projects.filter(p => String(p.status || '').startsWith('active'));
+  const isActive = status => {
+    const value = String(status || '').toLowerCase();
+    return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+  };
+  const active = projects.filter(p => isActive(p.status));
   const running = jobs.filter(j => j.status === 'running');
   const queued = jobs.filter(j => j.status === 'queued');
   const completed = jobs.filter(j => j.status === 'completed').slice(-5).reverse();

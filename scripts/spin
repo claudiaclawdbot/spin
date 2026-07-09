@@ -375,8 +375,12 @@ fi
 echo; echo "${c_bold}Projects${c_off}"
 node -e '
   const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+  const isActive = status => {
+    const value = String(status || "").toLowerCase();
+    return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+  };
   for (const p of s.project_orchestrators||[]) {
-    if(!String(p.status).startsWith("active")) continue;
+    if(!isActive(p.status)) continue;
     console.log("  • "+p.project+"  "+(p.next_action? "— "+p.next_action.slice(0,80):""));
   }
 ' "$STATE" 2>/dev/null || echo "  (state unreadable)"

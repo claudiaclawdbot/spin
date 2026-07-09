@@ -27,6 +27,7 @@ mkdir -p "$KIT"
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
 cd "$KIT"
+export SPIN_ROOT="$KIT"
 SPIN_NO_DEPS=1 \
 SPIN_INSTALL_SKIP_AGENT_CHECK=1 \
 SPIN_BIN_DIR="$TMP/bin" \
@@ -312,6 +313,16 @@ node -e '
   if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued")) process.exit(1);
 '
 
+# Concurrent state mutations must serialize instead of racing lock release.
+lock_pids=()
+for project in example-app workspace example-app workspace; do
+  scripts/org set-state "$project" --status "smoke-lock-contention" >/dev/null &
+  lock_pids+=("$!")
+done
+for pid in "${lock_pids[@]}"; do
+  wait "$pid"
+done
+
 cat > scripts/project-ceo-agent.sh <<EOF
 #!/usr/bin/env bash
 {
@@ -546,7 +557,7 @@ exit 0
 EOF
 chmod +x "$FAKEBIN/omp"
 
-PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" CEO_OMP_MODEL=openrouter/test-model bash -c "
+PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" SPIN_OMP_DEFAULT_FALLBACKS= CEO_OMP_MODEL=openrouter/test-model bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
   run_agent omp 'hello' '$TMP/omp.log'

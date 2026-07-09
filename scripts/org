@@ -12,6 +12,7 @@
  *   org set-handoff <project> [--file F]            (else reads stdin)
  *   org set-state <project> [--status S] [--next "…"]
  *   org escalate "<human-queue item>"
+ *   org resolve-escalation <index|substr> [--note "…"]
  *   org process-approval <index|substr> <approve|decline|ask> [--note "…"]
  *   org receipt [--file F]                          (else reads stdin) — appends a tick receipt
  *   org inbox <project> "<message>"                 (project → CEO report line)
@@ -175,6 +176,26 @@ const verbs = {
     ok('escalated to HUMAN_QUEUE.md');
   },
 
+  'resolve-escalation'(p) {
+    const selector = p.pos.join(' ').trim();
+    if (!selector) die(1, 'usage: org resolve-escalation <index|substr> [--note "…"]');
+    const note = p.flags.note ? ` — ${String(p.flags.note).replace(/\s+/g, ' ').trim()}` : '';
+    return withLock('human', () => {
+      const lines = fs.readFileSync(F.human, 'utf8').split('\n');
+      const candidates = [];
+      for (let i = 0; i < lines.length; i++) if (/^\s*-\s*\[\s\]/.test(lines[i])) candidates.push(i);
+      let target;
+      if (/^\d+$/.test(selector)) target = candidates[parseInt(selector, 10)];
+      else target = candidates.find(i => lines[i].toLowerCase().includes(selector.toLowerCase()));
+      if (target === undefined) die(2, `no open escalation matches "${selector}"`);
+      lines[target] = `${lines[target].replace(/\[\s\]/, '[x]')} — resolved ${nowISO()}${note}`;
+      const tmp = `${F.human}.tmp.${process.pid}`;
+      fs.writeFileSync(tmp, lines.join('\n'));
+      fs.renameSync(tmp, F.human);
+      ok(`resolved escalation: ${lines[target].slice(0, 90)}…`);
+    });
+  },
+
   'process-approval'(p) {
     const [selector, action] = p.pos;
     if (!selector || !['approve', 'decline', 'ask'].includes(action))
@@ -244,7 +265,8 @@ if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
   ok('org — SPIN state CLI. Verbs:');
   ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC]');
   ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
-  ok('  escalate "<item>"                       process-approval <sel> <approve|decline|ask> [--note "…"]');
+  ok('  escalate "<item>"                       resolve-escalation <sel> [--note "…"]');
+  ok('  process-approval <sel> <approve|decline|ask> [--note "…"]');
   ok('  receipt [--file F]                      inbox <project> "<msg>"                show [--json]');
   process.exit(verb ? 0 : 1);
 }

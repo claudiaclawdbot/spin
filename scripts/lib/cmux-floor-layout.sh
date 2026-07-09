@@ -333,6 +333,10 @@ const fs = require("fs");
 const [harnessFile, stateFile] = process.argv.slice(1);
 const ids = new Set();
 const statusById = new Map();
+const isActive = status => {
+  const value = String(status || "").toLowerCase();
+  return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+};
 try {
   const s = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   for (const p of s.project_orchestrators || []) {
@@ -340,14 +344,14 @@ try {
     if (!id) continue;
     const status = String(p.status || "");
     statusById.set(id, status);
-    if (status.startsWith("active")) ids.add(id);
+    if (isActive(status)) ids.add(id);
   }
 } catch {}
 try {
   const h = JSON.parse(fs.readFileSync(harnessFile, "utf8"));
   for (const [id, p] of Object.entries(h.projects || {})) {
     const status = statusById.get(id);
-    if (p.cmux_workspace && (!status || status.startsWith("active"))) ids.add(id);
+    if (p.cmux_workspace && (!status || isActive(status))) ids.add(id);
   }
 } catch {}
 for (const id of ids) if (id) console.log(id);

@@ -51,10 +51,14 @@ out.push('');
 
 // ── Projects ──────────────────────────────────────────────────────────────
 const state = readJSON(path.join(ORG, 'state.json'));
+const isActive = status => {
+  const value = String(status || '').toLowerCase();
+  return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+};
 out.push(`${c.bold}PROJECTS${c.off}`);
 if (state && state.project_orchestrators) {
   for (const p of state.project_orchestrators) {
-    if (!String(p.status || '').startsWith('active')) continue;
+    if (!isActive(p.status)) continue;
     out.push(`  ${c.bold}${(p.project || p.id || '?').padEnd(14)}${c.off}${c.dim}${trunc(p.next_action || '—', 70)}${c.off}`);
   }
 } else out.push(`  ${c.dim}(state unreadable)${c.off}`);

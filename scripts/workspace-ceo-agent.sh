@@ -24,8 +24,12 @@ if command -v node >/dev/null 2>&1; then
   while IFS= read -r line; do [[ -n "$line" ]] && ACTIVE_PROJECTS+=("$line"); done < <(
     node -e '
       const s = JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+      const isActive = status => {
+        const value = String(status || "").toLowerCase();
+        return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+      };
       for (const p of s.project_orchestrators || [])
-        if (String(p.status || "").startsWith("active")) console.log(p.project || p.id);
+        if (isActive(p.status)) console.log(p.project || p.id);
     ' "$ROOT/org/state.json" 2>/dev/null
   )
 fi
