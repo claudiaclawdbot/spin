@@ -9,6 +9,7 @@
  *
  * Verbs:
  *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID]
+ *   org update-job <id> [--description "..."] [--max-runtime SEC]
  *   org set-handoff <project> [--file F]            (else reads stdin)
  *   org set-state <project> [--status S] [--next "…"]
  *   org escalate "<human-queue item>"
@@ -149,6 +150,33 @@ const verbs = {
     });
   },
 
+  'update-job'(p) {
+    const id = p.pos[0];
+    if (!id || (!p.flags.description && !p.flags['max-runtime']))
+      die(1, 'usage: org update-job <id> [--description "..."] [--max-runtime SEC]');
+    return withLock('queue', () => {
+      const q = readJSON(F.queue, { jobs: [] });
+      const job = (q.jobs || []).find(entry => entry.id === id);
+      if (!job) die(2, `job id "${id}" not found`);
+      if (!['queued', 'blocked'].includes(job.status))
+        die(2, `job "${id}" cannot be updated while status is ${job.status}`);
+      if (p.flags.description) {
+        const description = String(p.flags.description).trim();
+        if (!description) die(2, 'job description cannot be empty');
+        job.description = description;
+      }
+      if (p.flags['max-runtime']) {
+        const seconds = parseInt(p.flags['max-runtime'], 10);
+        if (!Number.isInteger(seconds) || seconds < 1) die(2, 'max runtime must be a positive integer');
+        job.max_runtime_seconds = seconds;
+      }
+      job.updated_at = nowISO();
+      q.updated_at = job.updated_at;
+      writeJSONatomic(F.queue, q);
+      ok(`updated ${id}`);
+    });
+  },
+
   'set-handoff'(p) {
     const project = p.pos[0];
     if (!project) die(1, 'usage: org set-handoff <project> [--file F]   (else stdin)');
@@ -276,6 +304,7 @@ const [, , verb, ...rest] = process.argv;
 if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
   ok('org — SPIN state CLI. Verbs:');
   ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC]');
+  ok('  update-job <id> [--description "..."] [--max-runtime SEC]');
   ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
   ok('  escalate "<item>"                       resolve-escalation <sel> [--note "…"]');
   ok('  process-approval <sel> <approve|decline|ask> [--note "…"]');

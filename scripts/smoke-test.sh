@@ -314,13 +314,14 @@ wait "$WEB_PID" 2>/dev/null || true
 grep -q 'APPROVE: smoke approval needed' org/ceo/APPROVALS.md
 
 scripts/org queue-job example-app scout "inspect smoke path; quoted ' value" --id smoke-scout >/dev/null
+scripts/org update-job smoke-scout --description "inspect updated smoke path" --max-runtime 90 >/dev/null
 if scripts/org queue-job example-app scout "bad id path" --id '../bad' >/dev/null 2>&1; then
   echo "bad job id accepted"
   exit 1
 fi
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
-  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued")) process.exit(1);
+  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued" && j.description === "inspect updated smoke path" && j.max_runtime_seconds === 90)) process.exit(1);
 '
 
 # Concurrent state mutations must serialize instead of racing lock release.
@@ -349,7 +350,7 @@ for _ in 1 2 3 4 5; do
   sleep 0.2
 done
 scripts/omp-supervisor-once.sh >/dev/null
-grep -q "description=inspect smoke path; quoted ' value" "$TMP/project-agent.env"
+grep -q "description=inspect updated smoke path" "$TMP/project-agent.env"
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
   const j = q.jobs.find(j => j.id === "smoke-scout");
