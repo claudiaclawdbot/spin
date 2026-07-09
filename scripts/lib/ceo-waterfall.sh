@@ -27,6 +27,11 @@ source "$CEO_ROOT/scripts/lib/spin-runtime.sh"
 # launchd, cmux pane). Never commit secrets to the repo.
 [[ -f "$HOME/.config/omp.env" ]] && source "$HOME/.config/omp.env" 2>/dev/null || true
 
+# Organization-scoped model policy. This lets one SPIN installation choose its
+# own defaults without changing global OMP behavior. Project agents source their
+# project.env after this file, so per-project routes remain the final override.
+[[ -f "$CEO_ROOT/org/ceo/workspace.env" ]] && source "$CEO_ROOT/org/ceo/workspace.env" 2>/dev/null || true
+
 # Model defaults (override via env before sourcing, or per-call)
 # OMP is the primary harness. It owns model/provider retry and fallback through
 # a generated config overlay; the direct CLIs below are the outer compatibility
