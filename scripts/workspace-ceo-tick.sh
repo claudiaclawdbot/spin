@@ -72,7 +72,9 @@ watched_inputs() {
 
 while true; do
   stop_if_requested
-  clear
+  if [[ -t 1 && -n "${TERM:-}" ]]; then
+    clear
+  fi
   echo "============================================================"
   echo "WORKSPACE CEO  |  $(date '+%Y-%m-%d %H:%M:%S %Z')   tick #$TICK_COUNT"
   echo "============================================================"
