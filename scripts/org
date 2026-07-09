@@ -106,6 +106,16 @@ function appendLine(file, line) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, line.endsWith('\n') ? line : line + '\n');
 }
+function readOpenEscalations() {
+  try {
+    return fs.readFileSync(F.human, 'utf8')
+      .split('\n')
+      .map(line => line.match(/^\s*-\s*\[\s\]\s*(.+?)\s*$/)?.[1])
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 function readStdin() {
   try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
 }
@@ -249,12 +259,14 @@ const verbs = {
   show(p) {
     const s = readJSON(F.state, {});
     const q = readJSON(F.queue, { jobs: [] });
+    const humanQueue = readOpenEscalations();
+    const state = { ...s, human_queue: humanQueue };
     const byStatus = {};
     for (const j of q.jobs || []) byStatus[j.status] = (byStatus[j.status] || 0) + 1;
-    if (p.flags.json) { ok(JSON.stringify({ state: s, queue: byStatus }, null, 2)); return; }
+    if (p.flags.json) { ok(JSON.stringify({ state, queue: byStatus }, null, 2)); return; }
     ok(`SPIN org @ ${ROOT}`);
-    ok(`projects: ${(s.project_orchestrators || []).length}   jobs: ${JSON.stringify(byStatus)}`);
-    for (const e of s.project_orchestrators || [])
+    ok(`projects: ${(state.project_orchestrators || []).length}   jobs: ${JSON.stringify(byStatus)}   waiting: ${humanQueue.length}`);
+    for (const e of state.project_orchestrators || [])
       ok(`  • ${e.id || e.project}  [${e.status || '?'}]  ${(e.next_action || '').slice(0, 60)}`);
   },
 };

@@ -267,6 +267,12 @@ grep -q 'workspace.close' "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
 scripts/org escalate "smoke approval needed" >/dev/null
+org_json="$(scripts/org show --json)"
+node -e '
+  const digest = JSON.parse(process.argv[1]);
+  if (digest.state.human_queue.length !== 1) process.exit(1);
+  if (!digest.state.human_queue[0].includes("smoke approval needed")) process.exit(1);
+' "$org_json"
 status_out="$(SPIN_ROOT="$KIT" scripts/spin)"
 grep -q "smoke approval needed" <<<"$status_out"
 grep -q "1 waiting" <<<"$status_out"
