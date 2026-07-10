@@ -27,6 +27,11 @@ mkdir -p "$KIT"
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
 
 cd "$KIT"
+export SPIN_ROOT="$KIT"
+export SPIN_RUNTIME_ROOT="$KIT"
+export CMUX_SOCKET_PATH="$TMP/cmux-isolated.sock"
+export CMUX_ALLOW_SOCKET_OVERRIDE=1
+unset SPIN_CMUX_BIN SPIN_APP_RESOURCES SPIN_INTERNAL_BIN_DIR CMUX_BUNDLED_CLI_PATH
 SPIN_NO_DEPS=1 \
 SPIN_INSTALL_SKIP_AGENT_CHECK=1 \
 SPIN_BIN_DIR="$TMP/bin" \
@@ -39,6 +44,48 @@ test -f org/projects/workspace/STATE.json
 for f in scripts/*.sh scripts/lib/*.sh scripts/spin install.sh spin-bootstrap.sh; do
   bash -n "$f"
 done
+DOCTOR_ROOT="$TMP/doctor-root"
+mkdir -p "$DOCTOR_ROOT/scripts/lib" "$DOCTOR_ROOT/org/ceo/runs"
+cp scripts/spin "$DOCTOR_ROOT/scripts/spin"
+cp scripts/lib/spin-runtime.sh "$DOCTOR_ROOT/scripts/lib/spin-runtime.sh"
+cat > "$DOCTOR_ROOT/scripts/spin-app-health.js" <<'EOF'
+process.exit(7);
+EOF
+cat > "$DOCTOR_ROOT/scripts/workstation.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$DOCTOR_ROOT/scripts/workstation.sh"
+set +e
+SPIN_ROOT="$DOCTOR_ROOT" bash "$DOCTOR_ROOT/scripts/spin" doctor >/dev/null 2>&1
+doctor_rc=$?
+set -e
+[[ "$doctor_rc" -ne 0 ]]
+mkdir -p \
+  "$TMP/service-home/.codex/tmp/session/bin" \
+  "$TMP/service-home/.cache/codex-runtimes/runtime/bin" \
+  "$TMP/service-home/.local/bin" \
+  "$TMP/stable-service-bin" \
+  "$TMP/cmux-cli-shims/session/bin"
+SERVICE_PATH="$(
+  HOME="$TMP/service-home" \
+  PATH="$TMP/cmux-cli-shims/session/bin:$TMP/service-home/.codex/tmp/session/bin:$TMP/service-home/.cache/codex-runtimes/runtime/bin:$TMP/stable-service-bin:/usr/bin:/bin" \
+    scripts/spin-service.sh path
+)"
+if [[ "$SERVICE_PATH" == *"$TMP/stable-service-bin"* ]]; then
+  echo "service PATH retained an arbitrary temporary directory" >&2
+  exit 1
+fi
+if [[ "$SERVICE_PATH" != *"$TMP/service-home/.local/bin"* ]]; then
+  echo "service PATH dropped the allowlisted user bin directory" >&2
+  exit 1
+fi
+for transient_path in "cmux-cli-shims" "/.codex/tmp/" "/.cache/codex-runtimes/"; do
+  if [[ "$SERVICE_PATH" == *"$transient_path"* ]]; then
+    echo "service PATH retained transient path marker: $transient_path" >&2
+    exit 1
+  fi
+done
 node --check scripts/org >/dev/null
 node --check scripts/ceo-dashboard.js >/dev/null
 node --check scripts/spin-web.js >/dev/null
@@ -48,6 +95,16 @@ node --check scripts/spin-app-update.js >/dev/null
 node --check scripts/spin-app-updates.js >/dev/null
 node --check scripts/lib/spin-runtime.js >/dev/null
 node --check scripts/lib/human-queue-summary.js >/dev/null
+mkdir -p "$TMP/installed-runtime-home/Applications/SPIN.app/Contents/Resources/bin"
+HOME="$TMP/installed-runtime-home" node - "$TMP/installed-runtime-home" <<'NODE'
+const path = require('path');
+const runtime = require('./scripts/lib/spin-runtime.js');
+const home = process.argv[2];
+const root = path.join(home, 'Library', 'Application Support', 'SPIN', 'runtime');
+const expected = path.join(home, 'Applications', 'SPIN.app', 'Contents', 'Resources', 'bin');
+const candidates = runtime.candidateBinDirs(root);
+if (!candidates.includes(expected)) process.exit(1);
+NODE
 node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
 node - <<'NODE'
 const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
@@ -262,6 +319,12 @@ grep -q 'workspace.close' "$FAKE_CMUX/Resources/spin/spin-navigator.swift"
 test -x "$FAKE_CMUX/Resources/bin/spin-open"
 
 scripts/org escalate "smoke approval needed" >/dev/null
+org_json="$(scripts/org show --json)"
+node -e '
+  const digest = JSON.parse(process.argv[1]);
+  if (digest.state.human_queue.length !== 1) process.exit(1);
+  if (!digest.state.human_queue[0].includes("smoke approval needed")) process.exit(1);
+' "$org_json"
 status_out="$(SPIN_ROOT="$KIT" scripts/spin)"
 grep -q "smoke approval needed" <<<"$status_out"
 grep -q "1 waiting" <<<"$status_out"
@@ -301,16 +364,84 @@ NODE
 kill "$WEB_PID" 2>/dev/null || true
 wait "$WEB_PID" 2>/dev/null || true
 grep -q 'APPROVE: smoke approval needed' org/ceo/APPROVALS.md
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/ceo/APPROVALS.md';
+const text = fs.readFileSync(file, 'utf8');
+fs.writeFileSync(file, text.replace('## Pending\n', '## Pending\n\n- owner-only smoke decision\n'));
+NODE
+if scripts/org process-approval owner-only approve --note "agent must not self-approve" >/dev/null 2>&1; then
+  echo "owner-only approval accepted without owner confirmation"
+  exit 1
+fi
+SPIN_OWNER_CONFIRMED=1 scripts/org process-approval owner-only approve --note "smoke owner confirmation" >/dev/null
+grep -q 'owner-only smoke decision.*APPROVE.*smoke owner confirmation' org/ceo/APPROVALS.md
+
+QUEUE_LOCK_READY="$TMP/queue-lock-ready"
+node - "$QUEUE_LOCK_READY" "$KIT/org/ceo/runs/.org-queue.lock" <<'NODE' &
+const fs = require('fs');
+const [ready, lock] = process.argv.slice(2);
+fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
+fs.writeFileSync(ready, 'ready\n');
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 450);
+fs.unlinkSync(lock);
+NODE
+QUEUE_LOCK_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [[ -f "$QUEUE_LOCK_READY" ]] && break
+  sleep 0.05
+done
+node - "$KIT" <<'NODE'
+const path = require('path');
+const { spawnSync } = require('child_process');
+const root = process.argv[2];
+const started = Date.now();
+const result = spawnSync(path.join(root, 'scripts', 'omp-supervisor-once.sh'), [], {
+  cwd: root,
+  env: { ...process.env, SPIN_ROOT: root },
+  encoding: 'utf8',
+});
+if (result.status !== 0) {
+  process.stderr.write(result.stderr || result.stdout || 'supervisor lock smoke failed\n');
+  process.exit(1);
+}
+if (Date.now() - started < 250) {
+  process.stderr.write('supervisor did not wait for the shared queue lock\n');
+  process.exit(1);
+}
+NODE
+wait "$QUEUE_LOCK_PID"
 
 scripts/org queue-job example-app scout "inspect smoke path; quoted ' value" --id smoke-scout >/dev/null
+scripts/org update-job smoke-scout --description "inspect updated smoke path" --max-runtime 90 >/dev/null
+scripts/org queue-job example-app scout "inspect dependent smoke path" --id smoke-dependent --after smoke-scout >/dev/null
 if scripts/org queue-job example-app scout "bad id path" --id '../bad' >/dev/null 2>&1; then
   echo "bad job id accepted"
   exit 1
 fi
+if scripts/org update-job smoke-scout --after smoke-dependent >/dev/null 2>&1; then
+  echo "dependency cycle accepted"
+  exit 1
+fi
+if scripts/org queue-job example-app scout "missing dependency" --id smoke-missing --after does-not-exist >/dev/null 2>&1; then
+  echo "missing dependency accepted"
+  exit 1
+fi
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
-  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued")) process.exit(1);
+  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued" && j.description === "inspect updated smoke path" && j.max_runtime_seconds === 90)) process.exit(1);
+  if (!q.jobs.some(j => j.id === "smoke-dependent" && j.status === "queued" && JSON.stringify(j.depends_on) === JSON.stringify(["smoke-scout"]))) process.exit(1);
 '
+
+# Concurrent state mutations must serialize instead of racing lock release.
+lock_pids=()
+for project in example-app workspace example-app workspace; do
+  scripts/org set-state "$project" --status "smoke-lock-contention" >/dev/null &
+  lock_pids+=("$!")
+done
+for pid in "${lock_pids[@]}"; do
+  wait "$pid"
+done
 
 cat > scripts/project-ceo-agent.sh <<EOF
 #!/usr/bin/env bash
@@ -327,12 +458,85 @@ for _ in 1 2 3 4 5; do
   [[ -f "$TMP/project-agent.env" ]] && break
   sleep 0.2
 done
-scripts/omp-supervisor-once.sh >/dev/null
-grep -q "description=inspect smoke path; quoted ' value" "$TMP/project-agent.env"
+for _ in 1 2 3 4 5; do
+  [[ -s "org/jobs/smoke-scout.heartbeat" ]] && break
+  sleep 0.2
+done
+grep -Eq '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' org/jobs/smoke-scout.heartbeat
+grep -q "description=inspect updated smoke path" "$TMP/project-agent.env"
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
-  const j = q.jobs.find(j => j.id === "smoke-scout");
-  if (!j || j.status !== "completed") process.exit(1);
+  const j = q.jobs.find(j => j.id === "smoke-dependent");
+  if (!j || j.status !== "queued") process.exit(1);
+  const first = q.jobs.find(j => j.id === "smoke-scout");
+  if (!first || first.heartbeat !== "org/jobs/smoke-scout.heartbeat") process.exit(1);
+'
+scripts/omp-supervisor-once.sh >/dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-scout', 'smoke-dependent']) {
+  if (q.jobs.find(job => job.id === id)?.status !== 'completed') process.exit(1);
+}
+if (!q.jobs.find(job => job.id === 'smoke-scout')?.heartbeat_at) process.exit(1);
+NODE
+  then
+    break
+  fi
+  sleep 0.2
+done
+grep -q "description=inspect dependent smoke path" "$TMP/project-agent.env"
+node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+for (const id of ['smoke-scout', 'smoke-dependent']) {
+  if (q.jobs.find(job => job.id === id)?.status !== 'completed') process.exit(1);
+}
+NODE
+
+scripts/org queue-job example-app scout "failed dependency fixture" --id smoke-failed-prereq >/dev/null
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/AGENT_QUEUE.json';
+const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-failed-prereq');
+job.status = 'failed';
+job.failed_at = new Date().toISOString();
+job.result = 'intentional smoke fixture failure';
+fs.writeFileSync(file, JSON.stringify(q, null, 2) + '\n');
+NODE
+scripts/org queue-job example-app scout "recover blocked dependency" --id smoke-requeue --after smoke-failed-prereq >/dev/null
+scripts/omp-supervisor-once.sh >/dev/null
+node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-requeue');
+if (job?.status !== 'blocked' || !/smoke-failed-prereq is failed/.test(job.result || '')) process.exit(1);
+NODE
+node - <<'NODE'
+const fs = require('fs');
+const file = 'org/AGENT_QUEUE.json';
+const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-failed-prereq');
+job.status = 'completed';
+job.completed_at = new Date().toISOString();
+delete job.failed_at;
+delete job.result;
+fs.writeFileSync(file, JSON.stringify(q, null, 2) + '\n');
+NODE
+scripts/org update-job smoke-requeue --requeue >/dev/null
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node -e '
+    const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
+    if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
+  '; then
+    break
+  fi
+  sleep 0.2
+done
+node -e '
+  const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
+  if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
 '
 
 cat > scripts/project-ceo-agent.sh <<'EOF'
@@ -443,6 +647,29 @@ esac
 EOF
 chmod +x "$FAKEBIN/cmux"
 
+cat > "$TMP/slow-cmux" <<'EOF'
+#!/usr/bin/env bash
+/bin/sleep 10
+EOF
+chmod +x "$TMP/slow-cmux"
+timeout_started="$(date +%s)"
+set +e
+SPIN_CMUX_BIN="$TMP/slow-cmux" SPIN_CMUX_COMMAND_TIMEOUT_SECONDS=1 SPIN_ROOT="$KIT" \
+  bash -c 'source scripts/lib/spin-runtime.sh; spin_cmd cmux ping' >/dev/null 2>&1
+timeout_rc=$?
+set -e
+[[ "$timeout_rc" -eq 124 ]]
+(( $(date +%s) - timeout_started < 4 ))
+
+mkdir -p "$TMP/wiki-symlink-project/src"
+printf '# Symlinked project\n' > "$TMP/wiki-symlink-project/README.md"
+printf 'export const linked = true;\n' > "$TMP/wiki-symlink-project/src/index.ts"
+mkdir -p "$KIT/projects"
+ln -s "$TMP/wiki-symlink-project" "$KIT/projects/wiki-symlink"
+SPIN_ROOT="$KIT" scripts/wiki-build.sh wiki-symlink >/dev/null
+grep -q 'src/index.ts' "$KIT/org/wiki/projects/wiki-symlink.md"
+rm -f "$KIT/projects/wiki-symlink" "$KIT/org/wiki/projects/wiki-symlink.md"
+
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/spin-new-project.sh smoke-floor "Smoke-test two-pane floor" > "$TMP/new-project.out"
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
@@ -492,6 +719,66 @@ if grep -q 'send --workspace workspace:3' "$TMP/drift-cmux.calls"; then
   exit 1
 fi
 grep -q '"cmux_workspace": "workspace:9"' org/OMP_HARNESS.json
+
+RECONCILEBIN="$TMP/reconcilebin"
+mkdir -p "$RECONCILEBIN"
+cat > "$RECONCILEBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/reconcile-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  cat <<JSON
+{"workspaces":[
+  {"ref":"workspace:9","title":"example-app","current_directory":"$KIT/projects/example-app"},
+  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/org/projects/example-app"}
+]}
+JSON
+  exit 0
+fi
+case "\${1:-}" in
+  tree)
+    if [[ -f "$TMP/reconcile-board-visible" ]]; then
+      cat <<TREE
+surface:50 [terminal] "π: .omp-ceo" [selected] tty=ttys050
+surface:51 [markdown] "FLOOR.md" [selected]
+surface:52 [markdown] "WORKSPACE_STATUS.md" [selected]
+TREE
+    else
+      cat <<TREE
+surface:50 [terminal] "π: .omp-ceo" [selected] tty=ttys050
+surface:51 [markdown] "FLOOR.md" [selected]
+TREE
+    fi
+    ;;
+  close-workspace|close-surface|markdown) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$RECONCILEBIN/cmux"
+PATH="$RECONCILEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  test "$(spin_cmux_stale_managed_workspace_refs)" = "workspace:3"
+  test "$(spin_cmux_prune_stale_managed_workspaces)" = "workspace:3"
+  bash scripts/workspace-status.sh
+  spin_cmux_open_coordinator_board workspace:50 surface:50
+'
+grep -q 'close-workspace --workspace workspace:3' "$TMP/reconcile-cmux.calls"
+grep -q 'close-surface --workspace workspace:50 --surface surface:51' "$TMP/reconcile-cmux.calls"
+grep -q 'markdown open .*/org/ceo/WORKSPACE_STATUS.md --workspace workspace:50 --surface surface:50 --direction right --focus false' "$TMP/reconcile-cmux.calls"
+touch "$TMP/reconcile-board-visible"
+: > "$TMP/reconcile-cmux.calls"
+PATH="$RECONCILEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_open_coordinator_board workspace:50 surface:50
+'
+grep -q 'close-surface --workspace workspace:50 --surface surface:51' "$TMP/reconcile-cmux.calls"
+if grep -q 'markdown open' "$TMP/reconcile-cmux.calls"; then
+  echo "Coordinator opened a duplicate status board when one was already visible"
+  exit 1
+fi
 
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id smoke-delegate example-app "make ascii art" > "$TMP/delegate.out"
@@ -546,7 +833,7 @@ exit 0
 EOF
 chmod +x "$FAKEBIN/omp"
 
-PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" CEO_OMP_MODEL=openrouter/test-model bash -c "
+PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" SPIN_OMP_DEFAULT_FALLBACKS= CEO_OMP_MODEL=openrouter/test-model bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
   run_agent omp 'hello' '$TMP/omp.log'
@@ -571,6 +858,11 @@ printf '%s\n' "\$*" > "$TMP/internal-omp.args"
 exit 0
 EOF
 chmod +x "$TMP/internal-omp"
+env -u SPIN_ROOT -u OMP_ROOT CEO_ROOT="$KIT" HOME="$SMOKE_HOME" bash -c '
+  set -euo pipefail
+  source "$1/scripts/lib/ceo-waterfall.sh"
+  test "$SPIN_ROOT" = "$1"
+' _ "$KIT"
 SPIN_OMP_BIN="$TMP/internal-omp" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/internal-spin-omp.yml" bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
@@ -655,6 +947,16 @@ cat > "$FAKE_CMUX_APP/Contents/MacOS/SPIN" <<'EOF'
 exit 0
 EOF
 chmod +x "$FAKE_CMUX_APP/Contents/MacOS/SPIN"
+mkdir -p "$TMP/fake-cmux-app/app"
+cat > "$TMP/fake-cmux-app/app/release-compat.json" <<'EOF'
+{
+  "cmux": {
+    "source": {
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+}
+EOF
 
 scripts/ensure-xcode.sh --check >/dev/null 2>&1 || true
 
@@ -662,6 +964,17 @@ SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
 SPIN_CMUX_BIN_SOURCE="$TMP/internal-cmux" \
 SPIN_OMP_BIN_SOURCE="$TMP/internal-omp" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null
+  codesign --verify --strict --verbose=2 "$TMP/SPIN.app/Contents/Resources/SPIN.app" >/dev/null
+  node - "$TMP/SPIN.app/Contents/Resources/app/release-compat.json" <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (manifest.release.channel !== 'local-dev') process.exit(1);
+if (manifest.release.signing.identity !== '-') process.exit(1);
+if (manifest.cmux.source.commit !== 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') process.exit(1);
+NODE
+fi
 printf 'smoke native addon\n' > "$TMP/SPIN.app/Contents/Resources/bin/pi_natives.smoke.node"
 printf '# smoke OMP lock\n' > "$TMP/SPIN.app/Contents/Resources/app/omp-bun.lock"
 node - "$TMP/SPIN.app/Contents/Resources" <<'NODE'
@@ -808,6 +1121,7 @@ NODE
   scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-install.out"
   grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-update-install.out"
   test ! -e "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  codesign --verify --deep --strict --verbose=2 "$INSTALL_APP" >/dev/null
   INSTALL_ROLLBACK_FILE="$(find "$TMP/install-home/updates" -type f -name 'rollback-*.json' | head -1)"
   INSTALL_BACKUP_APP="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name 'SPIN-*.app' | head -1)"
   test -f "$INSTALL_ROLLBACK_FILE"
@@ -820,6 +1134,15 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (!manifest.release || manifest.release.channel !== 'ad-hoc') process.exit(1);
 NODE
   scripts/check-app-release.sh "$INSTALL_APP" >/dev/null
+  CORRUPT_CANDIDATE_APP="$TMP/corrupt-candidate/SPIN.app"
+  mkdir -p "$TMP/corrupt-candidate"
+  ditto "$INSTALL_APP" "$CORRUPT_CANDIDATE_APP"
+  printf 'signature tamper\n' > "$CORRUPT_CANDIDATE_APP/Contents/Resources/app/signature-tamper"
+  if scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/corrupt-install-home" "$CORRUPT_CANDIDATE_APP" >/dev/null 2>&1; then
+    echo "app-update installed a candidate with an invalid code signature"
+    exit 1
+  fi
+  codesign --verify --deep --strict --verbose=2 "$INSTALL_APP" >/dev/null
   UI_INSTALL_APP="$TMP/ui-install-target/SPIN.app"
   mkdir -p "$TMP/ui-install-target"
   if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$UI_INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$UI_INSTALL_APP"; fi
@@ -886,9 +1209,10 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "$TMP/spin-up-launch-cmux"
-env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
+env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
   scripts/spin app-launch > "$TMP/spin-up-launch.out"
 grep -q 'SPIN orchestrator floor open' "$TMP/spin-up-launch.out"
+grep -q 'background driver disabled for this run' "$TMP/spin-up-launch.out"
 grep -q 'new-workspace --name SPIN Coordinator' "$TMP/spin-up-launch-cmux.calls"
 grep -q 'cmux-floor.sh' "$TMP/spin-up-launch-cmux.calls"
 grep -q "'ceo'" "$TMP/spin-up-launch-cmux.calls"

@@ -115,7 +115,7 @@ build_index() {
     local rel="${f#$PROJECT_DIR/}"
     echo "| \`$rel\` | $(file_purpose "$f") |"
   done < <(
-    find "$PROJECT_DIR" -type f \
+    find -L "$PROJECT_DIR" -type f \
       | grep -vE "/($SKIP_DIRS)/" \
       | grep -vE "($(echo "$SKIP_FILES" | tr '|' '\n' | sed 's/\./\\./g; s/\*/.*/g' | tr '\n' '|' | sed 's/|$//'))$" \
       | grep -vE '/\.[^/]+$' \
@@ -128,9 +128,9 @@ build_index() {
 build_tree() {
   # Top-level dirs + notable files, max 3 levels
   if command -v tree &>/dev/null; then
-    tree "$PROJECT_DIR" -L 3 -I "$(echo "$SKIP_DIRS" | tr '|' '|')" --noreport 2>/dev/null | head -40
+    tree -l "$PROJECT_DIR" -L 3 -I "$(echo "$SKIP_DIRS" | tr '|' '|')" --noreport 2>/dev/null | head -40
   else
-    find "$PROJECT_DIR" -maxdepth 2 -not -path "*/.git/*" \
+    find -L "$PROJECT_DIR" -maxdepth 2 -not -path "*/.git/*" \
       | grep -vE "/($SKIP_DIRS)($|/)" \
       | sed "s|$PROJECT_DIR/||" | sort | head -40
   fi

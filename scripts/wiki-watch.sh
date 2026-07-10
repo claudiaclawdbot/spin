@@ -41,7 +41,7 @@ projects_to_watch() {
   if [[ -n "${1:-}" && "${1:-}" != "--rebuild-all" ]]; then
     echo "$1"
   else
-    find "$ROOT/projects" -maxdepth 1 -mindepth 1 -type d 2>/dev/null \
+    find -L "$ROOT/projects" -maxdepth 1 -mindepth 1 -type d 2>/dev/null \
       | xargs -I{} basename {}
   fi
 }
@@ -135,7 +135,7 @@ else
       [[ -d "$ROOT/projects/$p" ]] || continue
       wiki="$ROOT/org/wiki/projects/$p.md"
       # Count files newer than the wiki (or if wiki doesn't exist)
-      changed="$(find "$ROOT/projects/$p" \
+      changed="$(find -L "$ROOT/projects/$p" \
         -newer "${wiki:-/dev/null}" \
         -not -path "*/.git/*" \
         -not -path "*/node_modules/*" \

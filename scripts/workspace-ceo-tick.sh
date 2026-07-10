@@ -72,7 +72,9 @@ watched_inputs() {
 
 while true; do
   stop_if_requested
-  clear
+  if [[ -t 1 && -n "${TERM:-}" ]]; then
+    clear
+  fi
   echo "============================================================"
   echo "WORKSPACE CEO  |  $(date '+%Y-%m-%d %H:%M:%S %Z')   tick #$TICK_COUNT"
   echo "============================================================"
@@ -82,10 +84,14 @@ while true; do
   if [[ -f "$STATE" ]]; then
     node - "$STATE" <<'NODE' 2>/dev/null || echo "(state.json unreadable)"
 const s = JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));
+const isActive = status => {
+  const value = String(status || '').toLowerCase();
+  return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+};
 console.log(`Master: ${s.master_orchestrator?.name}  [${s.master_orchestrator?.status}]`);
 console.log('Project orchestrators:');
 for (const p of s.project_orchestrators || []) {
-  if (!String(p.status).startsWith('active')) continue;
+  if (!isActive(p.status)) continue;
   console.log(`  ${p.id}  [${p.status}]${p.cmux_workspace ? ' | '+p.cmux_workspace : ''}`);
 }
 const hq = s.human_queue || [];

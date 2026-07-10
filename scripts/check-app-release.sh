@@ -332,15 +332,17 @@ if [ "${SPIN_REQUIRE_VENDORED_OMP:-}" = "1" ]; then
 fi
 skip_omp_vendor_hash="${SPIN_SKIP_OMP_VENDOR_HASH:-0}"
 if [ "$skip_omp_vendor_hash" != "1" ] && [ -f "$RES/app/release-compat.json" ]; then
-  compat_channel="$("$NODE_BIN" - "$RES/app/release-compat.json" <<'NODE'
+  compat_uses_packaged_hashes="$("$NODE_BIN" - "$RES/app/release-compat.json" <<'NODE'
 const fs = require('fs');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-process.stdout.write((manifest.release && manifest.release.channel) || '');
+const release = manifest.release || {};
+const identity = release.signing && release.signing.identity;
+process.stdout.write(
+  ['ad-hoc', 'production'].includes(release.channel) || (identity && identity !== 'unsigned') ? '1' : '0',
+);
 NODE
 )"
-  case "$compat_channel" in
-    ad-hoc|production) skip_omp_vendor_hash=1 ;;
-  esac
+  [ "$compat_uses_packaged_hashes" = "1" ] && skip_omp_vendor_hash=1
 fi
 if [ -f "$RES/app/omp-vendor.json" ] && [ "$skip_omp_vendor_hash" != "1" ]; then
   "$NODE_BIN" - "$RES/app/omp-vendor.json" "$RES/bin" "$RES/app/omp-bun.lock" <<'NODE'
@@ -461,8 +463,9 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "$TMP/fake-cmux-spin-up"
-spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
+spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
 grep -q 'SPIN orchestrator floor open' <<<"$spin_up_launch_out" || fail "real app launcher did not report opening the SPIN orchestrator floor"
+grep -q 'background driver disabled for this run' <<<"$spin_up_launch_out" || fail "release check launch did not suppress the background driver"
 grep -q 'args=new-workspace --name SPIN Coordinator' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not create the SPIN Coordinator workspace on OMP-ready launch"
 grep -q 'cmux-floor.sh' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not route Coordinator workspace through cmux-floor.sh"
 grep -q "'ceo'" "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not launch the Coordinator OMP target"
@@ -540,6 +543,8 @@ printf '# Approvals\n\n- [ ] restart approval %s\n' "$SESSION_MARKER" > "$SESSIO
 printf '# Human Queue\n\n- [ ] restart queue %s\n' "$SESSION_MARKER" > "$SESSION_ORG/HUMAN_QUEUE.md"
 printf 'receipt=%s\n' "$SESSION_MARKER" > "$SESSION_ORG/ceo/runs/restart-proof.receipt"
 printf 'log=%s\n' "$SESSION_MARKER" > "$SEEDED_RUNTIME/logs/restart-proof.log"
+mkdir -p "$SEEDED_RUNTIME/projects"
+ln -s "$TMP/restart-proof-project" "$SEEDED_RUNTIME/projects/restart-proof"
 
 relaunch_out="$(app_launcher_dry_run)"
 grep -q 'app-launch: spin up' <<<"$relaunch_out" || fail "launcher did not route onboarded app home to spin up"
@@ -551,7 +556,8 @@ grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/APPROVALS.md" || fail "approvals di
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/HUMAN_QUEUE.md" || fail "human queue did not persist across relaunch"
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/runs/restart-proof.receipt" || fail "receipt did not persist across relaunch"
 grep -Fq "$SESSION_MARKER" "$SEEDED_RUNTIME/logs/restart-proof.log" || fail "logs did not persist across relaunch"
-ok "app relaunch preserves onboarding, workspace refs, and org state"
+[ -L "$SEEDED_RUNTIME/projects/restart-proof" ] || fail "project registration symlink did not persist across relaunch"
+ok "app relaunch preserves onboarding, workspace refs, project registrations, and org state"
 
 cat > "$SEEDED_RUNTIME/scripts/spin" <<'EOF'
 #!/usr/bin/env bash
@@ -569,6 +575,7 @@ grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/APPROVALS.md" || fail "approvals we
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/HUMAN_QUEUE.md" || fail "human queue was overwritten during same-version runtime refresh"
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/runs/restart-proof.receipt" || fail "receipt was overwritten during same-version runtime refresh"
 grep -Fq "$SESSION_MARKER" "$SEEDED_RUNTIME/logs/restart-proof.log" || fail "logs were overwritten during same-version runtime refresh"
+[ -L "$SEEDED_RUNTIME/projects/restart-proof" ] || fail "project registration symlink was deleted during same-version runtime refresh"
 ok "same-version runtime refresh preserves user state"
 
 if [ -f "$RUNTIME/VERSION" ]; then
@@ -584,6 +591,7 @@ if [ -f "$RUNTIME/VERSION" ]; then
   grep -Fq "$SESSION_MARKER" "$SESSION_ORG/HUMAN_QUEUE.md" || fail "human queue was overwritten during runtime refresh"
   grep -Fq "$SESSION_MARKER" "$SESSION_ORG/ceo/runs/restart-proof.receipt" || fail "receipt was overwritten during runtime refresh"
   grep -Fq "$SESSION_MARKER" "$SEEDED_RUNTIME/logs/restart-proof.log" || fail "logs were overwritten during runtime refresh"
+  [ -L "$SEEDED_RUNTIME/projects/restart-proof" ] || fail "project registration symlink was deleted during runtime refresh"
   ok "runtime version refresh preserves user state"
 fi
 

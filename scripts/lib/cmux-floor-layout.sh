@@ -321,10 +321,59 @@ if (target === "ceo") {
   h.projects[target] = h.projects[target] || {};
   h.projects[target].cmux_workspace = workspace;
 }
+
 const tmp = `${file}.tmp.${process.pid}`;
 fs.writeFileSync(tmp, JSON.stringify(h, null, 2) + "\n");
 fs.renameSync(tmp, file);
 ' "$ROOT/org/OMP_HARNESS.json" "$target" "$workspace" 2>/dev/null
+}
+
+spin_cmux_stale_managed_workspace_refs() {
+  local json
+  json="$(spin_cmux_list_workspaces_json)"
+  [[ -n "$json" && -f "$ROOT/org/OMP_HARNESS.json" ]] || return 0
+  printf '%s\n' "$json" | node -e '
+const fs = require("fs");
+const path = require("path");
+const [root, harnessFile] = process.argv.slice(1);
+let live;
+let harness;
+try {
+  live = JSON.parse(fs.readFileSync(0, "utf8"));
+  harness = JSON.parse(fs.readFileSync(harnessFile, "utf8"));
+} catch {
+  process.exit(0);
+}
+const canonical = new Map();
+for (const [id, project] of Object.entries(harness.projects || {})) {
+  if (project && project.cmux_workspace) canonical.set(id, String(project.cmux_workspace));
+}
+for (const workspace of live.workspaces || []) {
+  const title = String(workspace.title || workspace.name || workspace.custom_title || "");
+  const ref = String(workspace.ref || workspace.workspace_ref || workspace.workspace || workspace.id || workspace.workspace_id || "");
+  const cwd = String(workspace.current_directory || workspace.cwd || workspace.path || "");
+  const keep = canonical.get(title);
+  if (!keep || !ref || ref === keep || !cwd) continue;
+  const resolved = path.resolve(cwd);
+  const managedPaths = [
+    path.resolve(root, "projects", title),
+    path.resolve(root, "org", "projects", title),
+  ];
+  if (managedPaths.includes(resolved)) console.log(ref);
+}
+' "$ROOT" "$ROOT/org/OMP_HARNESS.json" 2>/dev/null
+}
+
+spin_cmux_prune_stale_managed_workspaces() {
+  local refs ref
+  refs="$(spin_cmux_stale_managed_workspace_refs)"
+  [[ -n "$refs" ]] || return 0
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
+    if CMUX_QUIET=1 spin_cmd cmux close-workspace --workspace "$ref" >/dev/null 2>&1; then
+      printf '%s\n' "$ref"
+    fi
+  done <<< "$refs"
 }
 
 spin_cmux_project_floor_ids() {
@@ -333,6 +382,10 @@ const fs = require("fs");
 const [harnessFile, stateFile] = process.argv.slice(1);
 const ids = new Set();
 const statusById = new Map();
+const isActive = status => {
+  const value = String(status || "").toLowerCase();
+  return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+};
 try {
   const s = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   for (const p of s.project_orchestrators || []) {
@@ -340,14 +393,14 @@ try {
     if (!id) continue;
     const status = String(p.status || "");
     statusById.set(id, status);
-    if (status.startsWith("active")) ids.add(id);
+    if (isActive(status)) ids.add(id);
   }
 } catch {}
 try {
   const h = JSON.parse(fs.readFileSync(harnessFile, "utf8"));
   for (const [id, p] of Object.entries(h.projects || {})) {
     const status = statusById.get(id);
-    if (p.cmux_workspace && !String(status || "").startsWith("candidate")) ids.add(id);
+    if (p.cmux_workspace && (!status || isActive(status))) ids.add(id);
   }
 } catch {}
 for (const id of ids) if (id) console.log(id);
@@ -403,6 +456,55 @@ spin_cmux_ensure_project_floor() {
 spin_cmux_project_board_path() {
   local project_id="$1"
   printf '%s\n' "$ROOT/org/projects/$project_id/FLOOR.md"
+}
+
+spin_cmux_coordinator_board_path() {
+  printf '%s\n' "$ROOT/org/ceo/WORKSPACE_STATUS.md"
+}
+
+spin_cmux_coordinator_board_visible() {
+  local workspace="$1"
+  [[ -n "$workspace" ]] || return 1
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$workspace" 2>/dev/null \
+    | grep -F '[markdown] "WORKSPACE_STATUS.md"' >/dev/null 2>&1
+}
+
+spin_cmux_stale_coordinator_board_surfaces() {
+  local workspace="$1"
+  [[ -n "$workspace" ]] || return 0
+  CMUX_QUIET=1 spin_cmd cmux tree --workspace "$workspace" 2>/dev/null | awk '
+    /surface:[0-9]+/ && /\[markdown\] "FLOOR\.md"/ {
+      match($0, /surface:[0-9]+/)
+      if (RSTART) print substr($0, RSTART, RLENGTH)
+    }
+  '
+}
+
+spin_cmux_open_coordinator_board() {
+  local workspace="$1" source_surface="${2:-}" board stale_surface
+  [[ -n "$workspace" ]] || return 1
+  board="$(spin_cmux_coordinator_board_path)"
+  [[ -f "$board" ]] || return 1
+
+  while IFS= read -r stale_surface; do
+    [[ -n "$stale_surface" ]] || continue
+    CMUX_QUIET=1 spin_cmd cmux close-surface --workspace "$workspace" \
+      --surface "$stale_surface" >/dev/null 2>&1 || true
+  done < <(spin_cmux_stale_coordinator_board_surfaces "$workspace")
+
+  spin_cmux_coordinator_board_visible "$workspace" && return 0
+
+  if [[ -z "$source_surface" ]]; then
+    source_surface="$(spin_cmux_terminal_surface "$workspace")"
+  fi
+  if [[ -n "$source_surface" ]]; then
+    CMUX_QUIET=1 spin_cmd cmux markdown open "$board" \
+      --workspace "$workspace" --surface "$source_surface" \
+      --direction right --focus false >/dev/null 2>&1
+  else
+    CMUX_QUIET=1 spin_cmd cmux markdown open "$board" \
+      --workspace "$workspace" --direction right --focus false >/dev/null 2>&1
+  fi
 }
 
 spin_cmux_ensure_project_board() {

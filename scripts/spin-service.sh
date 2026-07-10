@@ -4,6 +4,7 @@
 #   spin service install     # set it up + start it (launchd on macOS, systemd --user on Linux)
 #   spin service uninstall   # stop + remove it
 #   spin service status      # is it installed / running?
+#   spin service path        # show the stable executable path saved by the service
 #
 # The supervisor respawns the driver if it dies (crash, closed pane, machine wake)
 # and PAUSES cleanly when you `spin stop` (the STOP file) — no respawn loop. This is
@@ -19,10 +20,46 @@ LABEL="com.spin.driver"
 
 c_g=$'\e[32m'; c_y=$'\e[33m'; c_d=$'\e[2m'; c_o=$'\e[0m'
 
+stable_service_path(){
+  local candidate result="" seen=":"
+  local -a candidates=()
+
+  IFS=':' read -r -a candidates <<< "${PATH:-}"
+  candidates+=(
+    "$HOME/.local/bin"
+    "$HOME/bin"
+    "$HOME/.bun/bin"
+    "/Applications/SPIN.app/Contents/Resources/bin"
+    "/opt/homebrew/bin"
+    "/opt/homebrew/sbin"
+    "/usr/local/bin"
+    "/usr/bin"
+    "/bin"
+    "/usr/sbin"
+    "/sbin"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" && "$candidate" == /* && -d "$candidate" ]] || continue
+    case "$candidate" in
+      "$HOME/.local/bin"|"$HOME/bin"|"$HOME/.bun/bin")
+        ;;
+      /tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*|/var/run/*|/private/var/run/*|*cmux-cli-shims*|"$HOME/.codex/tmp/"*|"$HOME/.cache/codex-runtimes/"*)
+        continue
+        ;;
+    esac
+    [[ "$seen" == *":$candidate:"* ]] && continue
+    result="${result:+$result:}$candidate"
+    seen="$seen$candidate:"
+  done
+
+  printf '%s' "$result"
+}
+
 # ── macOS: launchd LaunchAgent ───────────────────────────────────────────────
 plist_path(){ echo "$HOME/Library/LaunchAgents/$LABEL.plist"; }
 launchd_install(){
-  local p; p="$(plist_path)"; mkdir -p "$(dirname "$p")"
+  local p service_path domain; p="$(plist_path)"; service_path="$(stable_service_path)"; domain="gui/$(id -u)"; mkdir -p "$(dirname "$p")"
   cat > "$p" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -31,7 +68,7 @@ launchd_install(){
   <key>ProgramArguments</key><array><string>/bin/bash</string><string>$TICK</string></array>
   <key>WorkingDirectory</key><string>$ROOT</string>
   <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>$PATH</string>
+    <key>PATH</key><string>$service_path</string>
     <key>HOME</key><string>$HOME</string>
     <key>SPIN_ROOT</key><string>$ROOT</string>
   </dict>
@@ -44,11 +81,15 @@ launchd_install(){
 </dict></plist>
 PLIST
   plutil -lint "$p" >/dev/null || { echo "✗ generated plist invalid"; return 1; }
-  # stop any hand-started driver so the supervised one owns the lock
+  # Reload an existing service so launchd adopts the new program and environment.
+  launchctl bootout "$domain/$LABEL" 2>/dev/null || \
+    launchctl bootout "$domain" "$p" 2>/dev/null || \
+    launchctl unload "$p" 2>/dev/null || true
+  # Stop any hand-started driver so the supervised one owns the lock.
   local cur; cur="$(cat "$ROOT/org/ceo/runs/.workspace-ceo-tick.lock" 2>/dev/null)"
   [[ -n "${cur:-}" ]] && kill -TERM "$cur" 2>/dev/null && sleep 2
   rm -f "$ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
-  launchctl bootstrap "gui/$(id -u)" "$p" 2>/dev/null || launchctl load -w "$p" 2>/dev/null
+  launchctl bootstrap "$domain" "$p" 2>/dev/null || launchctl load -w "$p" 2>/dev/null
   echo "${c_g}✓ installed launchd agent $LABEL${c_o} — driver is now supervised."
 }
 launchd_uninstall(){
@@ -87,6 +128,7 @@ systemd_status(){ systemctl --user is-active spin-driver.service >/dev/null 2>&1
 
 # ── dispatch ─────────────────────────────────────────────────────────────────
 case "$OS:$ACTION" in
+  *:path)             stable_service_path; echo ;;
   Darwin:install)   launchd_install ;;
   Darwin:uninstall) launchd_uninstall ;;
   Darwin:status)    launchd_status ;;

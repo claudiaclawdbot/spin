@@ -15,6 +15,7 @@
 # CLI flags. Edit here, every CEO script inherits it.
 
 CEO_ROOT="${CEO_ROOT:-${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}}"
+export SPIN_ROOT="${SPIN_ROOT:-$CEO_ROOT}"
 CEO_RUN_DIR="${CEO_RUN_DIR:-$CEO_ROOT/org/ceo/runs}"
 CEO_LOCKOUT_FILE="${CEO_LOCKOUT_FILE:-$CEO_RUN_DIR/codex-blocked-until}"
 CEO_LOCKOUT_SECS="${CEO_LOCKOUT_SECS:-86400}"   # 24h
@@ -26,6 +27,11 @@ source "$CEO_ROOT/scripts/lib/spin-runtime.sh"
 # lib — inherit GEMINI_API_KEY regardless of how the driver was launched (nohup,
 # launchd, cmux pane). Never commit secrets to the repo.
 [[ -f "$HOME/.config/omp.env" ]] && source "$HOME/.config/omp.env" 2>/dev/null || true
+
+# Organization-scoped model policy. This lets one SPIN installation choose its
+# own defaults without changing global OMP behavior. Project agents source their
+# project.env after this file, so per-project routes remain the final override.
+[[ -f "$CEO_ROOT/org/ceo/workspace.env" ]] && source "$CEO_ROOT/org/ceo/workspace.env" 2>/dev/null || true
 
 # Model defaults (override via env before sourcing, or per-call)
 # OMP is the primary harness. It owns model/provider retry and fallback through

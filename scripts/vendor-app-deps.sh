@@ -9,7 +9,12 @@ ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CMUX_REPO="${SPIN_CMUX_REPO:-https://github.com/manaflow-ai/cmux.git}"
 OMP_REPO="${SPIN_OMP_REPO:-https://github.com/can1357/oh-my-pi.git}"
 OMP_PACKAGE="${SPIN_OMP_PACKAGE:-@oh-my-pi/pi-coding-agent}"
-OMP_VERSION="${SPIN_OMP_VERSION:-16.1.16}"
+OMP_VERSION="${SPIN_OMP_VERSION:-}"
+if [ -z "$OMP_VERSION" ] && command -v node >/dev/null 2>&1 && [ -f "$ROOT/agent/vendor/omp/package.json" ]; then
+  OMP_VERSION="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.dependencies[process.argv[2]] || "")' \
+    "$ROOT/agent/vendor/omp/package.json" "$OMP_PACKAGE" 2>/dev/null || true)"
+fi
+OMP_VERSION="${OMP_VERSION:-16.4.0}"
 OMP_PACKAGE_SPEC="${SPIN_OMP_PACKAGE_SPEC:-$OMP_PACKAGE@$OMP_VERSION}"
 BUN_MIN_VERSION="${SPIN_BUN_MIN_VERSION:-1.3.14}"
 BUN_BIN="${SPIN_BUN_BIN:-$(command -v bun || true)}"
@@ -23,7 +28,7 @@ Usage: scripts/vendor-app-deps.sh [--cmux-only|--omp-only]
 Fetches app foundation sources and builds the repeatable OMP/Pi release input.
 
 Environment:
-  SPIN_OMP_VERSION        OMP package version to vendor (default: 16.1.16)
+  SPIN_OMP_VERSION        OMP package version to vendor (default: current pinned manifest)
   SPIN_OMP_UPDATE_LOCK    set to 1 to refresh agent/vendor/omp/bun.lock
   SPIN_VENDOR_FULL_CLONE  set to 1 to clone full upstream git history
 EOF
@@ -95,6 +100,12 @@ clone_or_update() {
   else
     git clone --depth 1 --filter=blob:none "$repo" "$dir"
   fi
+}
+
+pin_omp_source() {
+  local dir="$1" tag="v$OMP_VERSION"
+  git -C "$dir" fetch --depth 1 origin "refs/tags/$tag:refs/tags/$tag"
+  git -C "$dir" checkout --detach "$tag" >/dev/null
 }
 
 write_omp_vendor_manifest() {
@@ -247,6 +258,7 @@ fi
 
 if [ "$DO_OMP" = "1" ]; then
   clone_or_update "$OMP_REPO" "$ROOT/agent/upstream/oh-my-pi"
+  pin_omp_source "$ROOT/agent/upstream/oh-my-pi"
   build_omp_vendor
 fi
 

@@ -33,13 +33,64 @@ const cp   = require('child_process');
 const path = require('path');
 
 const root      = process.argv[2];
+const queueFile = process.argv[4];
 const runtime   = require(path.join(root, 'scripts', 'lib', 'spin-runtime.js'));
 const harness   = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const queue     = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
 const now       = new Date().toISOString();
 const jobsDir   = path.join(root, 'org', 'jobs');
 const MAX_PAR   = parseInt(process.env.OMP_MAX_PARALLEL || '3', 10);
 const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
+const queueLock = path.join(root, 'org', 'ceo', 'runs', '.org-queue.lock');
+let queueLockHeld = false;
+
+function acquireQueueLock() {
+  fs.mkdirSync(path.dirname(queueLock), { recursive: true });
+  let tries = 0;
+  for (;;) {
+    try {
+      fs.writeFileSync(queueLock, String(process.pid), { flag: 'wx' });
+      queueLockHeld = true;
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let holder;
+      try { holder = parseInt(fs.readFileSync(queueLock, 'utf8').trim(), 10); }
+      catch (readError) {
+        if (readError.code === 'ENOENT') continue;
+        throw readError;
+      }
+      if (Number.isInteger(holder)) {
+        let alive = false;
+        try { process.kill(holder, 0); alive = true; } catch {}
+        if (!alive) {
+          try { fs.unlinkSync(queueLock); } catch {}
+          continue;
+        }
+      }
+      if (++tries > 50) throw new Error(`could not acquire queue lock (held by ${holder || 'unknown'})`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
+function releaseQueueLock() {
+  if (!queueLockHeld) return;
+  try {
+    if (fs.readFileSync(queueLock, 'utf8').trim() === String(process.pid)) fs.unlinkSync(queueLock);
+  } catch {}
+  queueLockHeld = false;
+}
+
+acquireQueueLock();
+process.on('exit', releaseQueueLock);
+const queue = JSON.parse(fs.readFileSync(queueFile, 'utf8'));
+
+function persistQueue() {
+  queue.updated_at = now;
+  const tmp = `${queueFile}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(queue, null, 2) + '\n');
+  fs.renameSync(tmp, queueFile);
+}
 
 // ── helper: send a cmux command silently ────────────────────────────────────
 function cmux(args) {
@@ -83,6 +134,14 @@ function readExitCode(job) {
   return Number.isNaN(rc) ? null : rc;
 }
 
+function readHeartbeat(job) {
+  const relative = job.heartbeat || `org/jobs/${job.id}.heartbeat`;
+  const file = path.join(root, relative);
+  if (!fs.existsSync(file)) return null;
+  const value = fs.readFileSync(file, 'utf8').trim();
+  return Number.isNaN(Date.parse(value)) ? null : value;
+}
+
 // ── 1. Mark completed jobs ──────────────────────────────────────────────────
 // A "running" job is done when its PID file exists but the process is gone,
 // or when there is no PID file at all (legacy / lost). A job that exceeds its
@@ -98,6 +157,8 @@ function markRunningJobs() {
       job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
       continue;
     }
+    const heartbeat = readHeartbeat(job);
+    if (heartbeat) job.heartbeat_at = heartbeat;
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
 
     if (!fs.existsSync(pidFile)) {
@@ -143,6 +204,49 @@ function markRunningJobs() {
 function dispatchQueuedJobs() {
   const dispatched = [];
 
+  function dependenciesReady(job) {
+    if (job.depends_on === undefined) return true;
+    if (!Array.isArray(job.depends_on) || !job.depends_on.length) {
+      job.status = 'blocked';
+      job.blocked_at = now;
+      job.result = 'Invalid depends_on value; expected a non-empty array of job IDs.';
+      return false;
+    }
+
+    const dependencies = [...new Set(job.depends_on)];
+    if (dependencies.length !== job.depends_on.length || dependencies.some(id => !validJobId(id) || id === job.id)) {
+      job.status = 'blocked';
+      job.blocked_at = now;
+      job.result = 'Invalid depends_on value; dependencies must be unique valid job IDs and cannot reference the job itself.';
+      return false;
+    }
+
+    for (const id of dependencies) {
+      const dependency = (queue.jobs || []).find(candidate => candidate.id === id);
+      if (!dependency) {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency job not found: ${id}. Update dependencies and requeue.`;
+        return false;
+      }
+      if (dependency.status === 'completed') continue;
+      if (dependency.status === 'failed' || dependency.status === 'blocked') {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency ${id} is ${dependency.status}. Update dependencies and requeue after recovery.`;
+        return false;
+      }
+      if (dependency.status !== 'queued' && dependency.status !== 'running') {
+        job.status = 'blocked';
+        job.blocked_at = now;
+        job.result = `Dependency ${id} has unsupported status ${dependency.status || '(missing)'}.`;
+        return false;
+      }
+      return false;
+    }
+    return true;
+  }
+
   // Model selection by job type. OMP is the primary harness, so we set its role
   // overlay vars. Direct-CLI model vars remain as the outer fallback path if OMP
   // is absent or hard-fails.
@@ -178,6 +282,7 @@ function dispatchQueuedJobs() {
       job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
       continue;
     }
+    if (!dependenciesReady(job)) continue;
 
     const project = harness.projects?.[job.project_id];
     if (!project) {
@@ -203,10 +308,12 @@ function dispatchQueuedJobs() {
     const logFile = path.join(jobsDir, `${job.id}.log`);
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
     const rcFile = path.join(jobsDir, `${job.id}.exit`);
+    const heartbeatFile = path.join(jobsDir, `${job.id}.heartbeat`);
 
     let outFd, spawnedPid;
     try {
       try { fs.unlinkSync(rcFile); } catch {}
+      try { fs.unlinkSync(heartbeatFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
       const childEnv = Object.assign(
         {},
@@ -217,6 +324,8 @@ function dispatchQueuedJobs() {
           OMP_JOB_DESCRIPTION: String(job.description || ''),
           OMP_PROJECT_ID: String(job.project_id),
           OMP_RC_FILE: rcFile,
+          OMP_HEARTBEAT_FILE: heartbeatFile,
+          OMP_HEARTBEAT_INTERVAL: process.env.OMP_HEARTBEAT_INTERVAL || '30',
           SPIN_PROJECT_AGENT: path.join(root, 'scripts', 'project-ceo-agent.sh'),
         },
         modelEnvFor(job.type),
@@ -224,8 +333,27 @@ function dispatchQueuedJobs() {
       );
       const wrapper = [
         'set -u',
-        '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID"',
+        'heartbeat_once() {',
+        '  heartbeat_tmp="${OMP_HEARTBEAT_FILE}.tmp.$$"',
+        '  date -u "+%Y-%m-%dT%H:%M:%SZ" > "$heartbeat_tmp"',
+        '  mv "$heartbeat_tmp" "$OMP_HEARTBEAT_FILE"',
+        '}',
+        '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID" &',
+        'agent_pid=$!',
+        'heartbeat_once',
+        '(',
+        '  while kill -0 "$agent_pid" 2>/dev/null; do',
+        '    sleep "$OMP_HEARTBEAT_INTERVAL"',
+        '    kill -0 "$agent_pid" 2>/dev/null || break',
+        '    heartbeat_once',
+        '  done',
+        ') &',
+        'heartbeat_pid=$!',
+        'wait "$agent_pid"',
         'rc=$?',
+        'kill "$heartbeat_pid" 2>/dev/null || true',
+        'wait "$heartbeat_pid" 2>/dev/null || true',
+        'heartbeat_once',
         'printf "%s\\n" "$rc" > "$OMP_RC_FILE"',
         'exit "$rc"',
       ].join('\n');
@@ -249,6 +377,10 @@ function dispatchQueuedJobs() {
     job.status     = 'running';
     job.started_at = now;
     job.log        = `org/jobs/${job.id}.log`;
+    job.heartbeat  = `org/jobs/${job.id}.heartbeat`;
+    // Persist before any display work so a crash cannot leave a live detached
+    // process represented as queued and eligible for duplicate dispatch.
+    persistQueue();
 
     // ── cmux display: update the status CHIP only (non-blocking). ──────────
     // We deliberately do NOT push `tail -f` into the pane: tail -f blocks, so a
@@ -270,8 +402,8 @@ function dispatchQueuedJobs() {
 // ── 3. Run ───────────────────────────────────────────────────────────────────
 markRunningJobs();
 const dispatched = dispatchQueuedJobs();
-queue.updated_at = now;
-fs.writeFileSync(process.argv[4], JSON.stringify(queue, null, 2) + '\n');
+persistQueue();
+releaseQueueLock();
 
 // ── 4. Status chips (workspace CEO floor) ───────────────────────────────────
 const ceoCfg = harness.workspace_ceo || {};
@@ -294,4 +426,5 @@ console.log(`Dispatched: ${dispatched.length ? dispatched.join(', ') : 'none'}`)
 console.log(`Queued:     ${(queue.jobs || []).filter(j => j.status === 'queued').length}`);
 console.log(`Running:    ${(queue.jobs || []).filter(j => j.status === 'running').length}`);
 console.log(`Completed:  ${(queue.jobs || []).filter(j => j.status === 'completed').length}`);
+console.log(`Blocked:    ${(queue.jobs || []).filter(j => j.status === 'blocked').length}`);
 NODE

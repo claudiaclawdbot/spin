@@ -8,10 +8,12 @@
  * the risk of corrupting AGENT_QUEUE.json or clobbering a receipts file.
  *
  * Verbs:
- *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID]
+ *   org queue-job <project> <type> <description> [--max-runtime SEC] [--id ID] [--after ID[,ID...]]
+ *   org update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]
  *   org set-handoff <project> [--file F]            (else reads stdin)
  *   org set-state <project> [--status S] [--next "…"]
  *   org escalate "<human-queue item>"
+ *   org resolve-escalation <index|substr> [--note "…"]
  *   org process-approval <index|substr> <approve|decline|ask> [--note "…"]
  *   org receipt [--file F]                          (else reads stdin) — appends a tick receipt
  *   org inbox <project> "<message>"                 (project → CEO report line)
@@ -62,21 +64,32 @@ function parse(argv) {
 function withLock(name, fn) {
   const lock = path.join(F.runs, `.org-${name}.lock`);
   fs.mkdirSync(F.runs, { recursive: true });
-  let fd, tries = 0;
+  let tries = 0;
   for (;;) {
-    try { fd = fs.openSync(lock, 'wx'); break; }
-    catch (e) {
+    try {
+      fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
+      break;
+    } catch (e) {
       if (e.code !== 'EEXIST') die(3, `lock error: ${e.message}`);
-      // stale-lock break-in: if the holder PID is dead, clear and retry
-      const holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10);
-      let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
-      if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
-      if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
+      // The holder can release the lock between our failed create and read.
+      let holder;
+      try { holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10); }
+      catch (readError) {
+        if (readError.code === 'ENOENT') continue;
+        die(3, `lock read error: ${readError.message}`);
+      }
+      // A competing process may have created the file but not written its PID yet.
+      if (!Number.isInteger(holder)) {
+        if (++tries > 50) die(3, `could not acquire ${name} lock (holder not initialized)`);
+      } else {
+        // stale-lock break-in: if the holder PID is dead, clear and retry
+        let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
+        if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
+        if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
+      }
       const until = Date.now() + 100; while (Date.now() < until) {} // ~100ms spin
     }
   }
-  try { fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); }
-  catch (e) { die(3, `lock write: ${e.message}`); }
   try { return fn(); }
   finally { try { fs.unlinkSync(lock); } catch {} }
 }
@@ -94,11 +107,50 @@ function appendLine(file, line) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, line.endsWith('\n') ? line : line + '\n');
 }
+function readOpenEscalations() {
+  try {
+    return fs.readFileSync(F.human, 'utf8')
+      .split('\n')
+      .map(line => line.match(/^\s*-\s*\[\s\]\s*(.+?)\s*$/)?.[1])
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 function readStdin() {
   try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
 }
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
 function validId(s) { return /^[A-Za-z0-9._:-]+$/.test(String(s)); }
+function hasFlag(flags, name) { return Object.prototype.hasOwnProperty.call(flags, name); }
+function parseDependencyIds(raw) {
+  if (raw === undefined) return [];
+  if (raw === true) die(1, '--after requires a comma-separated job ID value');
+  const ids = [...new Set(String(raw).split(',').map(value => value.trim()).filter(Boolean))];
+  if (!ids.length) die(2, '--after must contain at least one job ID');
+  for (const id of ids) if (!validId(id)) die(2, `invalid dependency job id "${id}"`);
+  return ids;
+}
+function validateDependencies(queue, jobId, dependencyIds) {
+  const jobs = queue.jobs || [];
+  const byId = new Map(jobs.map(job => [job.id, job]));
+  for (const id of dependencyIds) {
+    if (id === jobId) die(2, `job "${jobId}" cannot depend on itself`);
+    if (!byId.has(id)) die(2, `dependency job id "${id}" not found`);
+  }
+
+  const dependenciesFor = id => id === jobId
+    ? dependencyIds
+    : (Array.isArray(byId.get(id)?.depends_on) ? byId.get(id).depends_on : []);
+  const reaches = (current, target, seen = new Set()) => {
+    if (current === target) return true;
+    if (seen.has(current)) return false;
+    seen.add(current);
+    return dependenciesFor(current).some(next => reaches(next, target, seen));
+  };
+  if (dependencyIds.some(id => reaches(id, jobId)))
+    die(2, `dependencies for job "${jobId}" would create a cycle`);
+}
 
 // ── verbs ───────────────────────────────────────────────────────────────────
 const verbs = {
@@ -106,7 +158,7 @@ const verbs = {
     const [project, type, ...rest] = p.pos;
     const description = p.flags.description || rest.join(' ');
     if (!project || !type || !description)
-      die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC]');
+      die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC] [--after ID[,ID...]]');
     const harness = readJSON(F.harness);
     const proj = harness.projects && harness.projects[project];
     if (!proj) die(2, `unknown project_id "${project}" — register it in OMP_HARNESS.json (or run bootstrap-project.sh)`);
@@ -118,12 +170,63 @@ const verbs = {
       const id = p.flags.id || `${project}-${slug(type)}-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`;
       if (!validId(id)) die(2, 'job id may only contain letters, numbers, dot, underscore, colon, or hyphen');
       if (q.jobs.some(j => j.id === id)) die(2, `job id "${id}" already exists`);
+      const dependencies = parseDependencyIds(p.flags.after);
+      validateDependencies(q, id, dependencies);
       const job = { id, project_id: project, type, status: 'queued', description, created_at: nowISO() };
-      if (p.flags['max-runtime']) job.max_runtime_seconds = parseInt(p.flags['max-runtime'], 10);
+      if (dependencies.length) job.depends_on = dependencies;
+      if (hasFlag(p.flags, 'max-runtime')) {
+        const seconds = parseInt(p.flags['max-runtime'], 10);
+        if (!Number.isInteger(seconds) || seconds < 1) die(2, 'max runtime must be a positive integer');
+        job.max_runtime_seconds = seconds;
+      }
       q.jobs.push(job);
       q.updated_at = nowISO();
       writeJSONatomic(F.queue, q);
       ok(`queued ${id}  (${type} → ${project})`);
+    });
+  },
+
+  'update-job'(p) {
+    const id = p.pos[0];
+    const changesRequested = ['description', 'max-runtime', 'after', 'clear-after', 'requeue']
+      .some(name => hasFlag(p.flags, name));
+    if (!id || !changesRequested)
+      die(1, 'usage: org update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]');
+    if (hasFlag(p.flags, 'after') && hasFlag(p.flags, 'clear-after'))
+      die(2, '--after and --clear-after cannot be used together');
+    return withLock('queue', () => {
+      const q = readJSON(F.queue, { jobs: [] });
+      const job = (q.jobs || []).find(entry => entry.id === id);
+      if (!job) die(2, `job id "${id}" not found`);
+      if (!['queued', 'blocked'].includes(job.status))
+        die(2, `job "${id}" cannot be updated while status is ${job.status}`);
+      if (hasFlag(p.flags, 'description')) {
+        if (p.flags.description === true) die(1, '--description requires a value');
+        const description = String(p.flags.description).trim();
+        if (!description) die(2, 'job description cannot be empty');
+        job.description = description;
+      }
+      if (hasFlag(p.flags, 'max-runtime')) {
+        const seconds = parseInt(p.flags['max-runtime'], 10);
+        if (!Number.isInteger(seconds) || seconds < 1) die(2, 'max runtime must be a positive integer');
+        job.max_runtime_seconds = seconds;
+      }
+      if (hasFlag(p.flags, 'after') || hasFlag(p.flags, 'clear-after')) {
+        const dependencies = hasFlag(p.flags, 'clear-after') ? [] : parseDependencyIds(p.flags.after);
+        validateDependencies(q, id, dependencies);
+        if (dependencies.length) job.depends_on = dependencies;
+        else delete job.depends_on;
+      }
+      if (hasFlag(p.flags, 'requeue')) {
+        if (job.status !== 'blocked') die(2, `job "${id}" can only be requeued from blocked status`);
+        job.status = 'queued';
+        delete job.blocked_at;
+        delete job.result;
+      }
+      job.updated_at = nowISO();
+      q.updated_at = job.updated_at;
+      writeJSONatomic(F.queue, q);
+      ok(`updated ${id}`);
     });
   },
 
@@ -164,10 +267,32 @@ const verbs = {
     ok('escalated to HUMAN_QUEUE.md');
   },
 
+  'resolve-escalation'(p) {
+    const selector = p.pos.join(' ').trim();
+    if (!selector) die(1, 'usage: org resolve-escalation <index|substr> [--note "…"]');
+    const note = p.flags.note ? ` — ${String(p.flags.note).replace(/\s+/g, ' ').trim()}` : '';
+    return withLock('human', () => {
+      const lines = fs.readFileSync(F.human, 'utf8').split('\n');
+      const candidates = [];
+      for (let i = 0; i < lines.length; i++) if (/^\s*-\s*\[\s\]/.test(lines[i])) candidates.push(i);
+      let target;
+      if (/^\d+$/.test(selector)) target = candidates[parseInt(selector, 10)];
+      else target = candidates.find(i => lines[i].toLowerCase().includes(selector.toLowerCase()));
+      if (target === undefined) die(2, `no open escalation matches "${selector}"`);
+      lines[target] = `${lines[target].replace(/\[\s\]/, '[x]')} — resolved ${nowISO()}${note}`;
+      const tmp = `${F.human}.tmp.${process.pid}`;
+      fs.writeFileSync(tmp, lines.join('\n'));
+      fs.renameSync(tmp, F.human);
+      ok(`resolved escalation: ${lines[target].slice(0, 90)}…`);
+    });
+  },
+
   'process-approval'(p) {
     const [selector, action] = p.pos;
     if (!selector || !['approve', 'decline', 'ask'].includes(action))
       die(1, 'usage: org process-approval <index|substr> <approve|decline|ask> [--note "…"]');
+    if (action !== 'ask' && process.env.SPIN_OWNER_CONFIRMED !== '1')
+      die(2, `${action} requires direct owner confirmation through the owner UI or SPIN_OWNER_CONFIRMED=1`);
     const note = p.flags.note ? ` — ${p.flags.note}` : '';
     return withLock('approvals', () => {
       const txt = fs.readFileSync(F.approvals, 'utf8');
@@ -217,12 +342,14 @@ const verbs = {
   show(p) {
     const s = readJSON(F.state, {});
     const q = readJSON(F.queue, { jobs: [] });
+    const humanQueue = readOpenEscalations();
+    const state = { ...s, human_queue: humanQueue };
     const byStatus = {};
     for (const j of q.jobs || []) byStatus[j.status] = (byStatus[j.status] || 0) + 1;
-    if (p.flags.json) { ok(JSON.stringify({ state: s, queue: byStatus }, null, 2)); return; }
+    if (p.flags.json) { ok(JSON.stringify({ state, queue: byStatus }, null, 2)); return; }
     ok(`SPIN org @ ${ROOT}`);
-    ok(`projects: ${(s.project_orchestrators || []).length}   jobs: ${JSON.stringify(byStatus)}`);
-    for (const e of s.project_orchestrators || [])
+    ok(`projects: ${(state.project_orchestrators || []).length}   jobs: ${JSON.stringify(byStatus)}   waiting: ${humanQueue.length}`);
+    for (const e of state.project_orchestrators || [])
       ok(`  • ${e.id || e.project}  [${e.status || '?'}]  ${(e.next_action || '').slice(0, 60)}`);
   },
 };
@@ -231,9 +358,11 @@ const verbs = {
 const [, , verb, ...rest] = process.argv;
 if (!verb || verb === 'help' || verb === '--help' || verb === '-h') {
   ok('org — SPIN state CLI. Verbs:');
-  ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC]');
+  ok('  queue-job <project> <type> "<desc>" [--max-runtime SEC] [--after ID[,ID...]]');
+  ok('  update-job <id> [--description "..."] [--max-runtime SEC] [--after ID[,ID...]] [--clear-after] [--requeue]');
   ok('  set-handoff <project> [--file F]        set-state <project> [--status S] [--next "…"]');
-  ok('  escalate "<item>"                       process-approval <sel> <approve|decline|ask> [--note "…"]');
+  ok('  escalate "<item>"                       resolve-escalation <sel> [--note "…"]');
+  ok('  process-approval <sel> <approve|decline|ask> [--note "…"]  approve/decline require owner confirmation');
   ok('  receipt [--file F]                      inbox <project> "<msg>"                show [--json]');
   process.exit(verb ? 0 : 1);
 }

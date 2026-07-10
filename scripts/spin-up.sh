@@ -96,7 +96,9 @@ fi
 
 # ── 2. driver ────────────────────────────────────────────────────────────────
 lock="$RUN/.workspace-ceo-tick.lock"
-if [ -f "$lock" ] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
+if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
+  echo "  ${c_d}· background driver disabled for this run${c_o}"
+elif [ -f "$lock" ] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
   echo "  ${c_g}✓${c_o} driver already running"
 else
   bash "$ROOT/scripts/spin" start >/dev/null 2>&1 && echo "  ${c_g}✓${c_o} driver started ${c_d}(tip: 'spin service install' keeps it up across reboots)${c_o}"
@@ -112,15 +114,23 @@ fi
 
 # ── 4. live boards ───────────────────────────────────────────────────────────
 rm -f "$RUN/STATUS_WATCH_STOP" "$RUN/WIKI_WATCH_STOP" 2>/dev/null
-if ! pgrep -f workspace-status-watch >/dev/null 2>&1; then
-  start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
+bash "$ROOT/scripts/workspace-status.sh" >/dev/null 2>&1 || true
+if [[ -n "$coord_ref" ]] && spin_cmux_open_coordinator_board "$coord_ref"; then
+  echo "  ${c_g}✓${c_o} Coordinator board visible"
 fi
-echo "  ${c_g}✓${c_o} live status board running"
-if ! pgrep -f wiki-watch >/dev/null 2>&1; then
-  start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
-  echo "  ${c_g}✓${c_o} wiki-watch daemon started"
+if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
+  echo "  ${c_d}· background board daemons disabled for this run${c_o}"
 else
-  echo "  ${c_g}✓${c_o} wiki-watch daemon already running"
+  if ! spin_locked_process_running "$RUN/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
+    start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
+  fi
+  echo "  ${c_g}✓${c_o} live status board running"
+  if ! spin_locked_process_running "$RUN/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
+    start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
+    echo "  ${c_g}✓${c_o} wiki-watch daemon started"
+  else
+    echo "  ${c_g}✓${c_o} wiki-watch daemon already running"
+  fi
 fi
 
 # ── 5. re-open floors for active projects (after a cmux restart) ─────────────
@@ -137,6 +147,11 @@ spin_cmux_project_floor_ids | while read -r id; do
     echo "  ${c_d}· couldn't open project floor: $id${c_o}"
   fi
 done
+
+pruned_refs="$(spin_cmux_prune_stale_managed_workspaces 2>/dev/null || true)"
+if [[ -n "$pruned_refs" ]]; then
+  echo "  ${c_g}✓${c_o} removed stale duplicate floors: $(printf '%s' "$pruned_refs" | paste -sd, -)"
+fi
 
 echo
 echo "${c_v}SPIN is up.${c_o} Your cmux window is the interface — talk to the Coordinator floor,"

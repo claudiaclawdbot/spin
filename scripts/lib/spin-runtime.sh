@@ -15,6 +15,10 @@ _spin_upper() {
 _spin_candidate_bin_dirs() {
   [ -n "${SPIN_APP_RESOURCES:-}" ] && printf '%s\n' "$SPIN_APP_RESOURCES/bin"
   [ -n "${SPIN_INTERNAL_BIN_DIR:-}" ] && printf '%s\n' "$SPIN_INTERNAL_BIN_DIR"
+  if [ "$SPIN_RUNTIME_ROOT" = "$HOME/Library/Application Support/SPIN/runtime" ]; then
+    [ -d "/Applications/SPIN.app/Contents/Resources/bin" ] && printf '%s\n' "/Applications/SPIN.app/Contents/Resources/bin"
+    [ -d "$HOME/Applications/SPIN.app/Contents/Resources/bin" ] && printf '%s\n' "$HOME/Applications/SPIN.app/Contents/Resources/bin"
+  fi
   printf '%s\n' "$SPIN_RUNTIME_ROOT/vendor/bin"
   printf '%s\n' "$SPIN_RUNTIME_ROOT/agent/bin"
   printf '%s\n' "$SPIN_RUNTIME_ROOT/app/bin"
@@ -54,6 +58,29 @@ spin_cmd() {
     printf '%s\n' "$name not found" >&2
     return 127
   }
+  if [ "$name" = "cmux" ] && [ -x /usr/bin/perl ]; then
+    local timeout="${SPIN_CMUX_COMMAND_TIMEOUT_SECONDS:-8}"
+    case "$timeout" in ''|*[!0-9]*) timeout=8 ;; esac
+    /usr/bin/perl -e '
+      my $seconds = shift @ARGV;
+      my $pid = fork();
+      exit 127 unless defined $pid;
+      if ($pid == 0) {
+        exec @ARGV;
+        exit 127;
+      }
+      $SIG{ALRM} = sub {
+        kill "TERM", $pid;
+        waitpid($pid, 0);
+        exit 124;
+      };
+      alarm $seconds;
+      waitpid($pid, 0);
+      alarm 0;
+      exit(($? & 127) ? 128 + ($? & 127) : $? >> 8);
+    ' "$timeout" "$bin" "$@"
+    return $?
+  fi
   "$bin" "$@"
 }
 
@@ -66,6 +93,25 @@ spin_require_binary() {
     printf '%s\n' "$name not found" >&2
   fi
   return 127
+}
+
+spin_locked_process_running() {
+  local lock_file="$1" expected_command="$2" pid command
+  [ -f "$lock_file" ] || return 1
+  pid="$(cat "$lock_file" 2>/dev/null || true)"
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null || return 1
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  [ -n "$command" ] && printf '%s\n' "$command" | grep -Fq "$expected_command"
+}
+
+spin_stop_locked_process() {
+  local lock_file="$1" expected_command="$2" pid
+  if spin_locked_process_running "$lock_file" "$expected_command"; then
+    pid="$(cat "$lock_file" 2>/dev/null || true)"
+    kill "$pid" 2>/dev/null || true
+  fi
+  rm -f "$lock_file" 2>/dev/null || true
 }
 
 spin_internal_path() {
@@ -114,6 +160,11 @@ spin_prepare_cmux_environment() {
 
 spin_cmux_app_path() {
   local app
+  if [ "$SPIN_RUNTIME_ROOT" = "$HOME/Library/Application Support/SPIN/runtime" ]; then
+    for app in "/Applications/SPIN.app/Contents/Resources/SPIN.app" "$HOME/Applications/SPIN.app/Contents/Resources/SPIN.app"; do
+      [ -d "$app" ] && { printf '%s\n' "$app"; return 0; }
+    done
+  fi
   for app in \
     "${SPIN_CMUX_APP:-}" \
     "${SPIN_APP_RESOURCES:-}/SPIN.app" \

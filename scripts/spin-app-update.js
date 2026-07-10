@@ -175,6 +175,21 @@ function codesignDetails(app) {
   };
 }
 
+function verifyCodeSignature(app, label) {
+  if (process.platform !== 'darwin') return;
+  const verify = runStatus('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
+  if (verify.status !== 0) {
+    const detail = (verify.stderr || verify.stdout || '').trim();
+    fail(`${label} code signature verification failed${detail ? `: ${detail}` : ''}. Rebuild the app with scripts/build-app-proof.sh or use a checked release artifact.`);
+  }
+  const nested = path.join(app, 'Contents', 'Resources', 'SPIN.app');
+  const nestedVerify = runStatus('codesign', ['--verify', '--strict', '--verbose=2', nested]);
+  if (nestedVerify.status !== 0) {
+    const detail = (nestedVerify.stderr || nestedVerify.stdout || '').trim();
+    fail(`${label} nested SPIN app signature verification failed${detail ? `: ${detail}` : ''}`);
+  }
+}
+
 function copyApp(source, destination) {
   fs.rmSync(destination, { recursive: true, force: true });
   if (process.platform === 'darwin') {
@@ -350,10 +365,7 @@ function verifyProductionTrust(candidateApp, candidateManifest) {
   if (signing.notarizationRequested !== true || productionTrust.requiresNotarization !== true) {
     fail('production candidate manifest does not require notarization');
   }
-  const verify = runStatus('codesign', ['--verify', '--deep', '--strict', '--verbose=2', candidateApp]);
-  if (verify.status !== 0) {
-    fail(`production candidate code signature verification failed: ${(verify.stderr || verify.stdout || '').trim()}`);
-  }
+  verifyCodeSignature(candidateApp, 'production candidate');
   const details = codesignDetails(candidateApp);
   if (!details.ok) {
     fail(`production candidate signing details are unreadable: ${details.output.trim()}`);
@@ -383,18 +395,22 @@ function installCandidate(plan, candidateApp) {
   fs.mkdirSync(path.dirname(plan.rollback.backupPath), { recursive: true });
   copyApp(installedApp, plan.rollback.backupPath);
   writeRollback(plan);
-  copyApp(candidateApp, stage);
+  let replacementStarted = false;
   try {
+    copyApp(candidateApp, stage);
+    replacementStarted = true;
     fs.rmSync(installedApp, { recursive: true, force: true });
     fs.renameSync(stage, installedApp);
+    run(process.execPath, [path.join(ROOT, 'scripts', 'app-compatibility.js'), 'verify', installedApp]);
+    verifyCodeSignature(installedApp, 'installed app');
   } catch (error) {
     fs.rmSync(stage, { recursive: true, force: true });
-    if (!fs.existsSync(installedApp) && fs.existsSync(plan.rollback.backupPath)) {
+    if (replacementStarted && fs.existsSync(plan.rollback.backupPath)) {
+      fs.rmSync(installedApp, { recursive: true, force: true });
       copyApp(plan.rollback.backupPath, installedApp);
     }
     throw error;
   }
-  run(process.execPath, [path.join(ROOT, 'scripts', 'app-compatibility.js'), 'verify', installedApp]);
 }
 
 function printPlan(plan) {
@@ -432,6 +448,7 @@ try {
   const installedInfo = requireManifest(installedApp, 'installed');
   const candidateInfo = requireManifest(candidate.app, 'candidate');
   run(process.execPath, [path.join(ROOT, 'scripts', 'app-compatibility.js'), 'verify', candidate.app]);
+  verifyCodeSignature(candidate.app, 'candidate');
   if (channelDowngrade(installedInfo.manifest, candidateInfo.manifest) && !options.forceChannel) {
     fail(`candidate channel ${candidateInfo.manifest.release.channel} would downgrade installed channel ${installedInfo.manifest.release.channel}; pass --force-channel to acknowledge`);
   }

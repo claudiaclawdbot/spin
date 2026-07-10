@@ -289,7 +289,8 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
   doctor)
     echo "${c_bold}═══ SPIN doctor ═══${c_off}"
     echo
-    node "$ROOT/scripts/spin-app-health.js" || true
+    app_health_rc=0
+    node "$ROOT/scripts/spin-app-health.js" || app_health_rc=$?
     echo "  direct fallback CLIs:"; ac=0
     for a in claude codex gemini ollama; do command -v "$a" >/dev/null 2>&1 && { echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1)); }; done
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"
@@ -298,7 +299,13 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     elif [[ -f "$RUN_DIR/.workspace-ceo-tick.lock" ]] && kill -0 "$(cat "$RUN_DIR/.workspace-ceo-tick.lock" 2>/dev/null)" 2>/dev/null; then
       echo "  ${c_grn}● running${c_off} (PID $(cat "$RUN_DIR/.workspace-ceo-tick.lock"))"
     else echo "  ${c_red}○ down${c_off} — spin start"; fi
-    echo; exec "$ROOT/scripts/workstation.sh" status
+    echo
+    workstation_rc=0
+    "$ROOT/scripts/workstation.sh" status || workstation_rc=$?
+    if (( app_health_rc != 0 || workstation_rc != 0 )); then
+      exit 1
+    fi
+    exit 0
     ;;
   jobs)
     JOBS_DIR="$ROOT/org/jobs"
@@ -375,8 +382,12 @@ fi
 echo; echo "${c_bold}Projects${c_off}"
 node -e '
   const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+  const isActive = status => {
+    const value = String(status || "").toLowerCase();
+    return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
+  };
   for (const p of s.project_orchestrators||[]) {
-    if(!String(p.status).startsWith("active")) continue;
+    if(!isActive(p.status)) continue;
     console.log("  • "+p.project+"  "+(p.next_action? "— "+p.next_action.slice(0,80):""));
   }
 ' "$STATE" 2>/dev/null || echo "  (state unreadable)"

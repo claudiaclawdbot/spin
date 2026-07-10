@@ -73,7 +73,7 @@ developer-installed `omp`:
 scripts/vendor-app-deps.sh --omp-only
 ```
 
-That command vendors `@oh-my-pi/pi-coding-agent@16.1.16`, writes
+That command vendors the OMP version pinned in `agent/vendor/omp/package.json`, writes
 `agent/vendor/omp/bun.lock`, compiles `vendor/bin/omp` with Bun, copies the
 matching `vendor/bin/pi_natives.<platform>.node` addon, and writes
 `agent/vendor/omp/metadata.json` with npm integrity plus lockfile, binary, and
