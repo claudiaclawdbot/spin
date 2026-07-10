@@ -1,16 +1,16 @@
 {
   "package": "@oh-my-pi/pi-coding-agent",
-  "version": "16.1.16",
-  "packageSpec": "@oh-my-pi/pi-coding-agent@16.1.16",
+  "version": "16.4.0",
+  "packageSpec": "@oh-my-pi/pi-coding-agent@16.4.0",
   "upstream": "https://github.com/can1357/oh-my-pi.git",
   "upstreamSource": "agent/upstream/oh-my-pi",
-  "upstreamCommit": "93d730c01d84b59833f327fab3ea1972d30f1ebc",
+  "upstreamCommit": "a0f7266fbc623817fdf11354f99bb0afd0d7bb6c",
   "npm": {
-    "tarball": "https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/-/pi-coding-agent-16.1.16.tgz",
-    "shasum": "facf8a4fa562eeba9e310c71ab6aa26ae0075862",
-    "integrity": "sha512-96C2KqYEImjo961V9KLaphZBf1szv58nqNXBbubP66x1hncvm4yf5gQRzf6hayngPB/4xEEdobFtQfeTOXRX1A==",
-    "localPack": "agent/vendor/npm/oh-my-pi-pi-coding-agent-16.1.16.tgz",
-    "localPackSha256": "45d3e4c2f8ee90a6cef4c9df59f0434677d47541051866ab699ddc659c3b98fa"
+    "tarball": "https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/-/pi-coding-agent-16.4.0.tgz",
+    "shasum": "b4b5051f9a0bca49aa1cdb0cae9c99d3d7b2b6b4",
+    "integrity": "sha512-qlqHYTidxpTVoZ8zP9SHCZjwM5xsq0BMUzHpYy6rxC22+IaNq1p22JJOMK3QL6VqVE2t7z/WtpX7GkukKAMN8Q==",
+    "localPack": "agent/vendor/npm/oh-my-pi-pi-coding-agent-16.4.0.tgz",
+    "localPackSha256": "046df236b6a6db2ec44ab7d653a31257a27ccf3e7284dbdf8ce9edebccea0f34"
   },
   "build": {
     "runtime": "bun build --compile",
@@ -18,7 +18,7 @@
     "bunVersion": "1.3.14",
     "lockfile": {
       "path": "agent/vendor/omp/bun.lock",
-      "sha256": "b997ae8e21f0dcb3207126376c96cb2d9dee2f57dac7c75db2dc85e1e454e80f"
+      "sha256": "fb8e43195d9f4a6f625ba5f31eb3e5cd4b9651774105f777911405e4b9628aec"
     },
     "platformTag": "darwin-arm64",
     "nativeAddon": "pi_natives.darwin-arm64.node"
@@ -27,12 +27,12 @@
     {
       "kind": "compiled-cli",
       "path": "vendor/bin/omp",
-      "sha256": "d630afeb0dfee8825601c7de69c6c23dd74343cc7d7d3fe79b66ec09eef6ebe7"
+      "sha256": "300082ff2f9fa78be0dab983479f120af431350c8ef5070aef520571324dfc8a"
     },
     {
       "kind": "native-addon",
       "path": "vendor/bin/pi_natives.darwin-arm64.node",
-      "sha256": "5ce7eaad7dcd194b9b8f6dadcbdffcedea0dc28b206ffb8d20b4b46e81fa9ac9"
+      "sha256": "4bced9039ac5f845357f2332c101c5f6234bd8ebb0017351b47b8f81cf926dad"
     }
   ]
 }

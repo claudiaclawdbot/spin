@@ -44,6 +44,23 @@ test -f org/projects/workspace/STATE.json
 for f in scripts/*.sh scripts/lib/*.sh scripts/spin install.sh spin-bootstrap.sh; do
   bash -n "$f"
 done
+DOCTOR_ROOT="$TMP/doctor-root"
+mkdir -p "$DOCTOR_ROOT/scripts/lib" "$DOCTOR_ROOT/org/ceo/runs"
+cp scripts/spin "$DOCTOR_ROOT/scripts/spin"
+cp scripts/lib/spin-runtime.sh "$DOCTOR_ROOT/scripts/lib/spin-runtime.sh"
+cat > "$DOCTOR_ROOT/scripts/spin-app-health.js" <<'EOF'
+process.exit(7);
+EOF
+cat > "$DOCTOR_ROOT/scripts/workstation.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$DOCTOR_ROOT/scripts/workstation.sh"
+set +e
+SPIN_ROOT="$DOCTOR_ROOT" bash "$DOCTOR_ROOT/scripts/spin" doctor >/dev/null 2>&1
+doctor_rc=$?
+set -e
+[[ "$doctor_rc" -ne 0 ]]
 mkdir -p \
   "$TMP/service-home/.codex/tmp/session/bin" \
   "$TMP/service-home/.cache/codex-runtimes/runtime/bin" \
@@ -69,6 +86,16 @@ node --check scripts/spin-app-update.js >/dev/null
 node --check scripts/spin-app-updates.js >/dev/null
 node --check scripts/lib/spin-runtime.js >/dev/null
 node --check scripts/lib/human-queue-summary.js >/dev/null
+mkdir -p "$TMP/installed-runtime-home/Applications/SPIN.app/Contents/Resources/bin"
+HOME="$TMP/installed-runtime-home" node - "$TMP/installed-runtime-home" <<'NODE'
+const path = require('path');
+const runtime = require('./scripts/lib/spin-runtime.js');
+const home = process.argv[2];
+const root = path.join(home, 'Library', 'Application Support', 'SPIN', 'runtime');
+const expected = path.join(home, 'Applications', 'SPIN.app', 'Contents', 'Resources', 'bin');
+const candidates = runtime.candidateBinDirs(root);
+if (!candidates.includes(expected)) process.exit(1);
+NODE
 node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
 node - <<'NODE'
 const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
@@ -611,6 +638,29 @@ esac
 EOF
 chmod +x "$FAKEBIN/cmux"
 
+cat > "$TMP/slow-cmux" <<'EOF'
+#!/usr/bin/env bash
+/bin/sleep 10
+EOF
+chmod +x "$TMP/slow-cmux"
+timeout_started="$(date +%s)"
+set +e
+SPIN_CMUX_BIN="$TMP/slow-cmux" SPIN_CMUX_COMMAND_TIMEOUT_SECONDS=1 SPIN_ROOT="$KIT" \
+  bash -c 'source scripts/lib/spin-runtime.sh; spin_cmd cmux ping' >/dev/null 2>&1
+timeout_rc=$?
+set -e
+[[ "$timeout_rc" -eq 124 ]]
+(( $(date +%s) - timeout_started < 4 ))
+
+mkdir -p "$TMP/wiki-symlink-project/src"
+printf '# Symlinked project\n' > "$TMP/wiki-symlink-project/README.md"
+printf 'export const linked = true;\n' > "$TMP/wiki-symlink-project/src/index.ts"
+mkdir -p "$KIT/projects"
+ln -s "$TMP/wiki-symlink-project" "$KIT/projects/wiki-symlink"
+SPIN_ROOT="$KIT" scripts/wiki-build.sh wiki-symlink >/dev/null
+grep -q 'src/index.ts' "$KIT/org/wiki/projects/wiki-symlink.md"
+rm -f "$KIT/projects/wiki-symlink" "$KIT/org/wiki/projects/wiki-symlink.md"
+
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/spin-new-project.sh smoke-floor "Smoke-test two-pane floor" > "$TMP/new-project.out"
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
@@ -660,6 +710,66 @@ if grep -q 'send --workspace workspace:3' "$TMP/drift-cmux.calls"; then
   exit 1
 fi
 grep -q '"cmux_workspace": "workspace:9"' org/OMP_HARNESS.json
+
+RECONCILEBIN="$TMP/reconcilebin"
+mkdir -p "$RECONCILEBIN"
+cat > "$RECONCILEBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/reconcile-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  cat <<JSON
+{"workspaces":[
+  {"ref":"workspace:9","title":"example-app","current_directory":"$KIT/projects/example-app"},
+  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/org/projects/example-app"}
+]}
+JSON
+  exit 0
+fi
+case "\${1:-}" in
+  tree)
+    if [[ -f "$TMP/reconcile-board-visible" ]]; then
+      cat <<TREE
+surface:50 [terminal] "π: .omp-ceo" [selected] tty=ttys050
+surface:51 [markdown] "FLOOR.md" [selected]
+surface:52 [markdown] "WORKSPACE_STATUS.md" [selected]
+TREE
+    else
+      cat <<TREE
+surface:50 [terminal] "π: .omp-ceo" [selected] tty=ttys050
+surface:51 [markdown] "FLOOR.md" [selected]
+TREE
+    fi
+    ;;
+  close-workspace|close-surface|markdown) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$RECONCILEBIN/cmux"
+PATH="$RECONCILEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  test "$(spin_cmux_stale_managed_workspace_refs)" = "workspace:3"
+  test "$(spin_cmux_prune_stale_managed_workspaces)" = "workspace:3"
+  bash scripts/workspace-status.sh
+  spin_cmux_open_coordinator_board workspace:50 surface:50
+'
+grep -q 'close-workspace --workspace workspace:3' "$TMP/reconcile-cmux.calls"
+grep -q 'close-surface --workspace workspace:50 --surface surface:51' "$TMP/reconcile-cmux.calls"
+grep -q 'markdown open .*/org/ceo/WORKSPACE_STATUS.md --workspace workspace:50 --surface surface:50 --direction right --focus false' "$TMP/reconcile-cmux.calls"
+touch "$TMP/reconcile-board-visible"
+: > "$TMP/reconcile-cmux.calls"
+PATH="$RECONCILEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_open_coordinator_board workspace:50 surface:50
+'
+grep -q 'close-surface --workspace workspace:50 --surface surface:51' "$TMP/reconcile-cmux.calls"
+if grep -q 'markdown open' "$TMP/reconcile-cmux.calls"; then
+  echo "Coordinator opened a duplicate status board when one was already visible"
+  exit 1
+fi
 
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/delegate.sh --id smoke-delegate example-app "make ascii art" > "$TMP/delegate.out"
@@ -1059,9 +1169,10 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "$TMP/spin-up-launch-cmux"
-env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
+env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
   scripts/spin app-launch > "$TMP/spin-up-launch.out"
 grep -q 'SPIN orchestrator floor open' "$TMP/spin-up-launch.out"
+grep -q 'background driver disabled for this run' "$TMP/spin-up-launch.out"
 grep -q 'new-workspace --name SPIN Coordinator' "$TMP/spin-up-launch-cmux.calls"
 grep -q 'cmux-floor.sh' "$TMP/spin-up-launch-cmux.calls"
 grep -q "'ceo'" "$TMP/spin-up-launch-cmux.calls"

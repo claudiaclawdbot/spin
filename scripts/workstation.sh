@@ -11,24 +11,27 @@ OS="$(uname -s)"
 source "$ROOT/scripts/lib/spin-runtime.sh"
 source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
-# floor map: "<workspace-ref> <floor-target>", derived from org/OMP_HARNESS.json —
-# the registry is the single source of truth (this list drifted when hardcoded).
-# Candidate projects (status candidate*) don't get floors until activated.
 FLOORS=()
-while IFS= read -r line; do [[ -n "$line" ]] && FLOORS+=("$line"); done < <(node -e '
-const fs = require("fs");
-const [hf, sf] = process.argv.slice(1);
-const h = JSON.parse(fs.readFileSync(hf, "utf8"));
-let state = {};
-try { state = JSON.parse(fs.readFileSync(sf, "utf8")); } catch {}
-const byId = new Map((state.project_orchestrators || []).map(p => [p.id || p.project, p]));
-if (h.workspace_ceo?.cmux_workspace) console.log(h.workspace_ceo.cmux_workspace + " ceo");
-for (const [id, p] of Object.entries(h.projects || {})) {
-  const st = byId.get(id)?.status || "";
-  if (p.cmux_workspace && !String(st).startsWith("candidate")) console.log(p.cmux_workspace + " " + id);
-}
-' "$ROOT/org/OMP_HARNESS.json" "$ROOT/org/state.json" 2>/dev/null)
-[[ ${#FLOORS[@]} -eq 0 ]] && { echo "no floors found in org/OMP_HARNESS.json" >&2; exit 1; }
+MISSING_FLOORS=()
+MISSING_FLOOR_COUNT=0
+ceo_ref="$(spin_cmux_saved_workspace_ref ceo 2>/dev/null || true)"
+if [[ -n "$ceo_ref" ]] && spin_cmux_workspace_context_matches "$ceo_ref" "SPIN Coordinator"; then
+  FLOORS+=("$ceo_ref ceo")
+else
+  MISSING_FLOORS+=("ceo")
+  MISSING_FLOOR_COUNT=$((MISSING_FLOOR_COUNT + 1))
+fi
+while IFS= read -r id; do
+  [[ -n "$id" ]] || continue
+  ref="$(spin_cmux_saved_workspace_ref "$id" 2>/dev/null || true)"
+  cwd="$(spin_cmux_project_cwd "$id")"
+  if [[ -n "$ref" ]] && spin_cmux_workspace_context_matches "$ref" "$id" "$cwd"; then
+    FLOORS+=("$ref $id")
+  else
+    MISSING_FLOORS+=("$id")
+    MISSING_FLOOR_COUNT=$((MISSING_FLOOR_COUNT + 1))
+  fi
+done < <(spin_cmux_project_floor_ids)
 
 term_surface() {  # first terminal surface in a workspace (robust to ID drift)
   spin_cmd cmux tree --workspace "$1" 2>/dev/null | awk '
@@ -81,11 +84,11 @@ start_daemon() {
 
 daemon_up() {
   rm -f "$ROOT/org/ceo/runs/STATUS_WATCH_STOP" "$ROOT/org/ceo/runs/WIKI_WATCH_STOP"
-  if ! pgrep -f workspace-status-watch >/dev/null 2>&1; then
+  if ! spin_locked_process_running "$ROOT/org/ceo/runs/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
     start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
   fi
   echo "  ✓ roll-up daemon running"
-  if ! pgrep -f wiki-watch >/dev/null 2>&1; then
+  if ! spin_locked_process_running "$ROOT/org/ceo/runs/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
     start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
     echo "  ✓ wiki-watch daemon started (initial build running in background)"
   else
@@ -98,14 +101,18 @@ daemon_down() {
     launchctl remove com.spin.status-watch >/dev/null 2>&1 || true
     launchctl remove com.spin.wiki-watch >/dev/null 2>&1 || true
   fi
-  pkill -f workspace-status-watch 2>/dev/null && echo "  ✓ roll-up daemon stopped" || echo "  (roll-up daemon was not running)"
-  pkill -f wiki-watch 2>/dev/null && echo "  ✓ wiki-watch stopped" || echo "  (wiki-watch was not running)"
+  spin_stop_locked_process "$ROOT/org/ceo/runs/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"
+  spin_stop_locked_process "$ROOT/org/ceo/runs/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"
+  echo "  ✓ root-scoped board daemons stopped"
 }
 
 case "${1:-status}" in
   up)
     echo "Workstation UP:"
-    for f in "${FLOORS[@]}"; do
+    for id in "${MISSING_FLOORS[@]+"${MISSING_FLOORS[@]}"}"; do
+      echo "  ✗ missing canonical floor: $id (run: spin up)"
+    done
+    for f in "${FLOORS[@]+"${FLOORS[@]}"}"; do
       set -- $f
       agent_cmd "$1" "$2" "bash $ROOT/scripts/cmux-floor.sh $2"
       if [[ "$2" != "ceo" ]]; then
@@ -115,30 +122,69 @@ case "${1:-status}" in
     done
     daemon_up
     echo "Give agents ~8s to boot, then: workstation.sh status"
+    (( MISSING_FLOOR_COUNT == 0 ))
     ;;
   down)
     echo "Workstation DOWN:"
-    for f in "${FLOORS[@]}"; do set -- $f; agent_cmd "$1" "$2" "/quit"; done
+    for f in "${FLOORS[@]+"${FLOORS[@]}"}"; do set -- $f; agent_cmd "$1" "$2" "/quit"; done
     daemon_down
     ;;
   status|*)
     echo "Workstation status:"
-    for f in "${FLOORS[@]}"; do
+    health_failures=0
+    for id in "${MISSING_FLOORS[@]+"${MISSING_FLOORS[@]}"}"; do
+      echo "  ✗ missing canonical floor: $id (run: spin up)"
+      health_failures=$((health_failures + 1))
+    done
+    for f in "${FLOORS[@]+"${FLOORS[@]}"}"; do
       set -- $f; sf="$(term_surface "$1")"
       if [[ -n "$sf" ]] && agent_floor_active "$1" "$sf" "$2"; then echo "  ✓ $2 agent floor active ($1/$sf)"
-      else echo "  ? $2 not at omp prompt ($1/$sf)"; fi
+      else
+        echo "  ✗ $2 not at omp prompt ($1/$sf)"
+        health_failures=$((health_failures + 1))
+      fi
     done
-    if pgrep -f workspace-status-watch >/dev/null 2>&1; then
+    stale_refs="$(spin_cmux_stale_managed_workspace_refs 2>/dev/null || true)"
+    if [[ -n "$stale_refs" ]]; then
+      echo "  ✗ stale duplicate managed floors: $(printf '%s' "$stale_refs" | paste -sd, -)"
+      health_failures=$((health_failures + 1))
+    else
+      echo "  ✓ no stale duplicate managed floors"
+    fi
+    ceo_ref="$(spin_cmux_saved_workspace_ref ceo 2>/dev/null || true)"
+    if [[ -n "$ceo_ref" ]] && spin_cmux_coordinator_board_visible "$ceo_ref"; then
+      echo "  ✓ Coordinator portfolio board visible ($ceo_ref)"
+    else
+      echo "  ✗ Coordinator portfolio board missing or stale (${ceo_ref:-no workspace})"
+      health_failures=$((health_failures + 1))
+    fi
+    if spin_locked_process_running "$ROOT/org/ceo/runs/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
       age=$(( $(date +%s) - $(stat -f %m "$ROOT/org/ceo/WORKSPACE_STATUS.md" 2>/dev/null || echo 0) ))
-      echo "  ✓ roll-up daemon running (status doc refreshed ${age}s ago)"
+      if (( age <= 60 )); then
+        echo "  ✓ roll-up daemon running (status doc refreshed ${age}s ago)"
+      else
+        echo "  ✗ roll-up daemon is stale (status doc refreshed ${age}s ago)"
+        health_failures=$((health_failures + 1))
+      fi
     else
       echo "  ✗ roll-up daemon DOWN  (start: workstation.sh up)"
+      health_failures=$((health_failures + 1))
     fi
-    if pgrep -f wiki-watch >/dev/null 2>&1; then
+    if spin_locked_process_running "$ROOT/org/ceo/runs/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
       wiki_count=$(find "$ROOT/org/wiki/projects" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-      echo "  ✓ wiki-watch running ($wiki_count project wikis indexed)"
+      missing_wikis="$(while IFS= read -r id; do
+        [[ -s "$ROOT/org/wiki/projects/$id.md" ]] || printf '%s\n' "$id"
+      done < <(spin_cmux_project_floor_ids))"
+      if [[ -n "$missing_wikis" ]]; then
+        echo "  ✗ wiki-watch running but active indexes are missing: $(printf '%s' "$missing_wikis" | paste -sd, -)"
+        health_failures=$((health_failures + 1))
+      else
+        echo "  ✓ wiki-watch running ($wiki_count project wikis indexed)"
+      fi
     else
       echo "  ✗ wiki-watch DOWN  (start: workstation.sh up  or  WORKSPACE_ROOT=$ROOT bash scripts/wiki-watch.sh --rebuild-all)"
+      health_failures=$((health_failures + 1))
     fi
+    (( health_failures == 0 ))
     ;;
 esac

@@ -10,7 +10,7 @@ const runtime = require('./lib/spin-runtime.js');
 const args = new Set(process.argv.slice(2));
 const jsonMode = args.has('--json');
 const root = process.env.SPIN_ROOT || process.env.OMP_ROOT || path.resolve(__dirname, '..');
-const appResources = process.env.SPIN_APP_RESOURCES || '';
+const appResources = process.env.SPIN_APP_RESOURCES || runtime.installedAppResources(root)[0] || '';
 const internalBinDir = process.env.SPIN_INTERNAL_BIN_DIR || (appResources ? path.join(appResources, 'bin') : '');
 const bundledRuntime = process.env.SPIN_BUNDLED_RUNTIME || (appResources ? path.join(appResources, 'runtime') : '');
 

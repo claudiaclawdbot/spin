@@ -2,6 +2,7 @@
 // Resolve SPIN-owned app/runtime binaries before PATH fallbacks.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 function runtimeRoot() {
@@ -15,10 +16,27 @@ function envName(name) {
   return `SPIN_${String(name).replace(/-/g, '_').toUpperCase()}_BIN`;
 }
 
+function installedAppResources(root = runtimeRoot()) {
+  const home = process.env.HOME || os.homedir();
+  const installedRuntime = path.join(home, 'Library', 'Application Support', 'SPIN', 'runtime');
+  if (path.resolve(root) !== path.resolve(installedRuntime)) return [];
+  return [
+    '/Applications/SPIN.app/Contents/Resources',
+    path.join(home, 'Applications', 'SPIN.app', 'Contents', 'Resources'),
+  ].filter((dir) => {
+    try {
+      return fs.statSync(dir).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+}
+
 function candidateBinDirs(root = runtimeRoot()) {
   return [
     process.env.SPIN_APP_RESOURCES ? path.join(process.env.SPIN_APP_RESOURCES, 'bin') : '',
     process.env.SPIN_INTERNAL_BIN_DIR || '',
+    ...installedAppResources(root).map((dir) => path.join(dir, 'bin')),
     path.join(root, 'vendor', 'bin'),
     path.join(root, 'agent', 'bin'),
     path.join(root, 'app', 'bin'),
@@ -63,6 +81,7 @@ function internalPath(root = runtimeRoot()) {
 
 module.exports = {
   candidateBinDirs,
+  installedAppResources,
   internalPath,
   resolveBinary,
   runtimeRoot,

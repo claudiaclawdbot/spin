@@ -36,12 +36,13 @@ copy_runtime() {
     rsync -a --delete \
       --exclude '/org' \
       --exclude '/logs' \
+      --exclude '/projects' \
       --exclude '/dist' \
       --exclude '/vendor/sources' \
       "$SPIN_BUNDLED_RUNTIME"/ "$RUNTIME_DIR"/
   else
     mkdir -p "$RUNTIME_DIR"
-    (cd "$SPIN_BUNDLED_RUNTIME" && tar --exclude './org' --exclude './logs' --exclude './dist' --exclude './vendor/sources' -cf - .) \
+    (cd "$SPIN_BUNDLED_RUNTIME" && tar --exclude './org' --exclude './logs' --exclude './projects' --exclude './dist' --exclude './vendor/sources' -cf - .) \
       | (cd "$RUNTIME_DIR" && tar -xf -)
   fi
 }
