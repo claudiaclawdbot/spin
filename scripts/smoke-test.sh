@@ -947,6 +947,16 @@ cat > "$FAKE_CMUX_APP/Contents/MacOS/SPIN" <<'EOF'
 exit 0
 EOF
 chmod +x "$FAKE_CMUX_APP/Contents/MacOS/SPIN"
+mkdir -p "$TMP/fake-cmux-app/app"
+cat > "$TMP/fake-cmux-app/app/release-compat.json" <<'EOF'
+{
+  "cmux": {
+    "source": {
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+}
+EOF
 
 scripts/ensure-xcode.sh --check >/dev/null 2>&1 || true
 
@@ -954,6 +964,17 @@ SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
 SPIN_CMUX_BIN_SOURCE="$TMP/internal-cmux" \
 SPIN_OMP_BIN_SOURCE="$TMP/internal-omp" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null
+  codesign --verify --strict --verbose=2 "$TMP/SPIN.app/Contents/Resources/SPIN.app" >/dev/null
+  node - "$TMP/SPIN.app/Contents/Resources/app/release-compat.json" <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (manifest.release.channel !== 'local-dev') process.exit(1);
+if (manifest.release.signing.identity !== '-') process.exit(1);
+if (manifest.cmux.source.commit !== 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') process.exit(1);
+NODE
+fi
 printf 'smoke native addon\n' > "$TMP/SPIN.app/Contents/Resources/bin/pi_natives.smoke.node"
 printf '# smoke OMP lock\n' > "$TMP/SPIN.app/Contents/Resources/app/omp-bun.lock"
 node - "$TMP/SPIN.app/Contents/Resources" <<'NODE'
@@ -1100,6 +1121,7 @@ NODE
   scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/install-home" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-install.out"
   grep -q 'Mode: install complete, app-owned code replaced' "$TMP/app-update-install.out"
   test ! -e "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
+  codesign --verify --deep --strict --verbose=2 "$INSTALL_APP" >/dev/null
   INSTALL_ROLLBACK_FILE="$(find "$TMP/install-home/updates" -type f -name 'rollback-*.json' | head -1)"
   INSTALL_BACKUP_APP="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name 'SPIN-*.app' | head -1)"
   test -f "$INSTALL_ROLLBACK_FILE"
@@ -1112,6 +1134,15 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (!manifest.release || manifest.release.channel !== 'ad-hoc') process.exit(1);
 NODE
   scripts/check-app-release.sh "$INSTALL_APP" >/dev/null
+  CORRUPT_CANDIDATE_APP="$TMP/corrupt-candidate/SPIN.app"
+  mkdir -p "$TMP/corrupt-candidate"
+  ditto "$INSTALL_APP" "$CORRUPT_CANDIDATE_APP"
+  printf 'signature tamper\n' > "$CORRUPT_CANDIDATE_APP/Contents/Resources/app/signature-tamper"
+  if scripts/spin app-update --install --allow-ad-hoc --installed-app "$INSTALL_APP" --app-home "$TMP/corrupt-install-home" "$CORRUPT_CANDIDATE_APP" >/dev/null 2>&1; then
+    echo "app-update installed a candidate with an invalid code signature"
+    exit 1
+  fi
+  codesign --verify --deep --strict --verbose=2 "$INSTALL_APP" >/dev/null
   UI_INSTALL_APP="$TMP/ui-install-target/SPIN.app"
   mkdir -p "$TMP/ui-install-target"
   if command -v ditto >/dev/null 2>&1; then ditto "$TMP/SPIN.app" "$UI_INSTALL_APP"; else cp -R "$TMP/SPIN.app" "$UI_INSTALL_APP"; fi

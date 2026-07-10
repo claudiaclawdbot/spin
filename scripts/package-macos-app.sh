@@ -150,6 +150,18 @@ copy_app_icon_if_present() {
   echo "  bundled app icon from $icon"
 }
 
+cmux_source_commit_from_manifest() {
+  local manifest="$1"
+  [ -f "$manifest" ] || return 1
+  node - "$manifest" <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const commit = manifest.cmux && manifest.cmux.source && manifest.cmux.source.commit;
+if (!commit) process.exit(1);
+process.stdout.write(commit);
+NODE
+}
+
 normalize_bundled_cmux_app_icon_plist() {
   local plist="$1"
   [ -f "$plist" ] || return 0
@@ -195,6 +207,37 @@ apply_icon_to_bundled_cmux_app() {
   echo "  applied SPIN icon to bundled cmux app"
 }
 
+codesign_developer_inner_code() {
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  local codesign_bin="/usr/bin/codesign" target
+  [ -x "$codesign_bin" ] || {
+    echo "  error: codesign is required to stage a runnable macOS app" >&2
+    return 1
+  }
+
+  while IFS= read -r -d '' target; do
+    "$codesign_bin" --force --sign - --timestamp=none "$target" >/dev/null
+  done < <(find "$RES/bin" -type f \( -perm +111 -o -name '*.node' -o -name '*.dylib' \) -print0)
+  "$codesign_bin" --force --sign - --timestamp=none --deep "$RES/SPIN.app" >/dev/null
+}
+
+codesign_developer_outer_app() {
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  local codesign_bin="/usr/bin/codesign"
+  "$codesign_bin" --force --sign - --timestamp=none "$OUT" >/dev/null
+  "$codesign_bin" --verify --deep --strict --verbose=2 "$OUT" >/dev/null
+  "$codesign_bin" --verify --strict --verbose=2 "$RES/SPIN.app" >/dev/null
+  echo "  ad-hoc codesigned developer app"
+}
+
+stage_cmux_source_commit="${SPIN_CMUX_SOURCE_COMMIT:-}"
+if [ -z "$stage_cmux_source_commit" ] && [ -n "${SPIN_CMUX_APP_SOURCE:-}" ]; then
+  stage_cmux_source_commit="$(cmux_source_commit_from_manifest "$(dirname "$SPIN_CMUX_APP_SOURCE")/app/release-compat.json" 2>/dev/null || true)"
+fi
+if [ -z "$stage_cmux_source_commit" ] && [ -f "$OUT/Contents/Resources/app/release-compat.json" ]; then
+  stage_cmux_source_commit="$(cmux_source_commit_from_manifest "$OUT/Contents/Resources/app/release-compat.json" 2>/dev/null || true)"
+fi
+
 rm -rf "$OUT"
 mkdir -p "$MACOS" "$RES/bin" "$RES/app/cmux" "$RES/assets" "$RES/licenses"
 
@@ -218,8 +261,22 @@ copy_omp_companions_if_present
 copy_agent_alias_if_present
 copy_cmux_app_if_present || true
 apply_icon_to_bundled_cmux_app
-SPIN_COMPAT_ROOT="$ROOT" node "$ROOT/scripts/app-compatibility.js" write "$OUT" >/dev/null
+stage_codesign_identity="unsigned"
+if [ "$(uname -s)" = "Darwin" ]; then
+  stage_codesign_identity="-"
+fi
+codesign_developer_inner_code
+SPIN_COMPAT_ROOT="$ROOT" \
+SPIN_RELEASE_CHANNEL=local-dev \
+SPIN_CODESIGN_IDENTITY="$stage_codesign_identity" \
+SPIN_APPLE_TEAM_ID= \
+SPIN_CODESIGN_HARDENED=0 \
+SPIN_NOTARIZE=0 \
+SPIN_NOTARY_PROFILE= \
+SPIN_CMUX_SOURCE_COMMIT="$stage_cmux_source_commit" \
+  node "$ROOT/scripts/app-compatibility.js" write "$OUT" >/dev/null
 echo "  wrote release compatibility manifest"
+codesign_developer_outer_app
 
 echo "SPIN.app staged at: $OUT"
 echo "Run release checks with: scripts/check-app-release.sh '$OUT'"

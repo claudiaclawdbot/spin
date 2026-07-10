@@ -332,15 +332,17 @@ if [ "${SPIN_REQUIRE_VENDORED_OMP:-}" = "1" ]; then
 fi
 skip_omp_vendor_hash="${SPIN_SKIP_OMP_VENDOR_HASH:-0}"
 if [ "$skip_omp_vendor_hash" != "1" ] && [ -f "$RES/app/release-compat.json" ]; then
-  compat_channel="$("$NODE_BIN" - "$RES/app/release-compat.json" <<'NODE'
+  compat_uses_packaged_hashes="$("$NODE_BIN" - "$RES/app/release-compat.json" <<'NODE'
 const fs = require('fs');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-process.stdout.write((manifest.release && manifest.release.channel) || '');
+const release = manifest.release || {};
+const identity = release.signing && release.signing.identity;
+process.stdout.write(
+  ['ad-hoc', 'production'].includes(release.channel) || (identity && identity !== 'unsigned') ? '1' : '0',
+);
 NODE
 )"
-  case "$compat_channel" in
-    ad-hoc|production) skip_omp_vendor_hash=1 ;;
-  esac
+  [ "$compat_uses_packaged_hashes" = "1" ] && skip_omp_vendor_hash=1
 fi
 if [ -f "$RES/app/omp-vendor.json" ] && [ "$skip_omp_vendor_hash" != "1" ]; then
   "$NODE_BIN" - "$RES/app/omp-vendor.json" "$RES/bin" "$RES/app/omp-bun.lock" <<'NODE'
