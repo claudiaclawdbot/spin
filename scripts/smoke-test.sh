@@ -72,11 +72,20 @@ SERVICE_PATH="$(
   PATH="$TMP/cmux-cli-shims/session/bin:$TMP/service-home/.codex/tmp/session/bin:$TMP/service-home/.cache/codex-runtimes/runtime/bin:$TMP/stable-service-bin:/usr/bin:/bin" \
     scripts/spin-service.sh path
 )"
-[[ "$SERVICE_PATH" == *"$TMP/stable-service-bin"* ]]
-[[ "$SERVICE_PATH" == *"$TMP/service-home/.local/bin"* ]]
-[[ "$SERVICE_PATH" != *"cmux-cli-shims"* ]]
-[[ "$SERVICE_PATH" != *"/.codex/tmp/"* ]]
-[[ "$SERVICE_PATH" != *"/.cache/codex-runtimes/"* ]]
+if [[ "$SERVICE_PATH" == *"$TMP/stable-service-bin"* ]]; then
+  echo "service PATH retained an arbitrary temporary directory" >&2
+  exit 1
+fi
+if [[ "$SERVICE_PATH" != *"$TMP/service-home/.local/bin"* ]]; then
+  echo "service PATH dropped the allowlisted user bin directory" >&2
+  exit 1
+fi
+for transient_path in "cmux-cli-shims" "/.codex/tmp/" "/.cache/codex-runtimes/"; do
+  if [[ "$SERVICE_PATH" == *"$transient_path"* ]]; then
+    echo "service PATH retained transient path marker: $transient_path" >&2
+    exit 1
+  fi
+done
 node --check scripts/org >/dev/null
 node --check scripts/ceo-dashboard.js >/dev/null
 node --check scripts/spin-web.js >/dev/null

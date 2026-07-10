@@ -42,6 +42,8 @@ stable_service_path(){
   for candidate in "${candidates[@]}"; do
     [[ -n "$candidate" && "$candidate" == /* && -d "$candidate" ]] || continue
     case "$candidate" in
+      "$HOME/.local/bin"|"$HOME/bin"|"$HOME/.bun/bin")
+        ;;
       /tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*|/var/run/*|/private/var/run/*|*cmux-cli-shims*|"$HOME/.codex/tmp/"*|"$HOME/.cache/codex-runtimes/"*)
         continue
         ;;
