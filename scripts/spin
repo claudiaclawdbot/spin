@@ -311,8 +311,14 @@ let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () 
     fi
     echo "  direct fallback CLIs:"; ac=0
     for a in claude codex gemini ollama; do
-      if command -v "$a" >/dev/null 2>&1 && "$a" --version >/dev/null 2>&1; then
-        echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1))
+      resolved=""
+      if [[ "$a" == "codex" ]]; then
+        resolved="$(spin_resolve_codex_cli 2>/dev/null || true)"
+      elif command -v "$a" >/dev/null 2>&1 && "$a" --version >/dev/null 2>&1; then
+        resolved="$(command -v "$a")"
+      fi
+      if [[ -n "$resolved" ]]; then
+        echo "    ${c_grn}✓${c_off} $a ($resolved)"; ac=$((ac+1))
       fi
     done
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"

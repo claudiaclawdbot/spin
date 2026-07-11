@@ -47,6 +47,39 @@ EOF
   command -v "$name" 2>/dev/null || return 1
 }
 
+_spin_codex_candidates() {
+  local dir
+  [ -n "${SPIN_CODEX_BIN:-}" ] && printf '%s\n' "$SPIN_CODEX_BIN"
+  [ -n "${CODEX_CLI_PATH:-}" ] && printf '%s\n' "$CODEX_CLI_PATH"
+  printf '%s\n' \
+    "/Applications/ChatGPT.app/Contents/Resources/codex" \
+    "/Applications/Codex.app/Contents/Resources/codex"
+  while IFS= read -r dir; do
+    [ -n "$dir" ] && printf '%s\n' "$dir/codex"
+  done <<EOF
+$(_spin_candidate_bin_dirs)
+EOF
+  command -v codex 2>/dev/null || true
+}
+
+# Resolve a working Codex CLI, not merely the first executable named `codex`.
+# Homebrew/npm shims can survive after their architecture package is removed.
+spin_resolve_codex_cli() {
+  local candidate seen="|"
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    case "$seen" in *"|$candidate|"*) continue ;; esac
+    seen="$seen$candidate|"
+    [ -x "$candidate" ] || continue
+    "$candidate" --version >/dev/null 2>&1 || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done <<EOF
+$(_spin_codex_candidates)
+EOF
+  return 1
+}
+
 spin_have_binary() {
   spin_resolve_binary "$1" >/dev/null 2>&1
 }

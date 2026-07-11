@@ -113,6 +113,11 @@ The outer SPIN fallback is only for cases where OMP is unavailable or hard-fails
 omp → codex → claude → gemini → ollama
 ```
 
+SPIN validates Codex candidates before using them and prefers an explicit
+`SPIN_CODEX_BIN`/`CODEX_CLI_PATH` or the signed CLI inside ChatGPT/Codex.app over
+a broken PATH shim. Unless `CEO_CODEX_MODEL` is explicitly set, the direct lane
+uses the subscription account's current default instead of pinning a stale model.
+
 Direct CLI providers still use SPIN's old bench files
 (`org/ceo/runs/.<provider>-blocked-until`) when they report usage/session/rate
 limits. OMP is deliberately not benched by SPIN for provider 429s because OMP

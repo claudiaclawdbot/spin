@@ -272,7 +272,7 @@ function dispatchQueuedJobs() {
         return {
           SPIN_OMP_DEFAULT_MODEL: process.env.SPIN_OMP_SCOUT_MODEL || process.env.SPIN_OMP_SMOL_MODEL || 'anthropic/claude-haiku-4-5',
           SPIN_OMP_DEFAULT_FALLBACKS: process.env.SPIN_OMP_SCOUT_FALLBACKS || process.env.SPIN_OMP_SMOL_FALLBACKS || 'openai-codex/gpt-5.1-codex-mini openrouter/~anthropic/claude-haiku-latest openai/gpt-5-mini',
-          CEO_CODEX_MODEL: 'gpt-4.5-preview',
+          CEO_CODEX_MODEL: process.env.CEO_CODEX_MODEL || '',
           CEO_CODEX_REASONING: 'low',
         };
       default:

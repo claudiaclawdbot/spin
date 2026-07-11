@@ -37,7 +37,7 @@ source "$CEO_ROOT/scripts/lib/spin-runtime.sh"
 # OMP is the primary harness. It owns model/provider retry and fallback through
 # a generated config overlay; the direct CLIs below are the outer compatibility
 # fallback when OMP is missing or hard-fails.
-CEO_CODEX_MODEL="${CEO_CODEX_MODEL:-gpt-4.5-preview}"    # codex CLI model (OpenAI subscription)
+CEO_CODEX_MODEL="${CEO_CODEX_MODEL:-}"                   # empty uses the subscription account default
 CEO_CODEX_REASONING="${CEO_CODEX_REASONING:-low}"         # reasoning effort: low|medium|high
 CEO_CLAUDE_MODEL="${CEO_CLAUDE_MODEL:-claude-sonnet-4-6}"
 CEO_SCOUT_MODEL="${CEO_SCOUT_MODEL:-$CEO_CODEX_MODEL}"   # direct-CLI scout fallback model
@@ -210,8 +210,9 @@ mark_codex_blocked_if_seen() { mark_blocked_if_limited codex "$1"; }
 
 # --- provider probes (each respects its lockout) --------------------------
 probe_codex()  {
+  local codex_bin=""
   provider_is_blocked codex && return 1
-  if command -v codex >/dev/null 2>&1; then codex --version >/dev/null 2>&1
+  if codex_bin="$(spin_resolve_codex_cli 2>/dev/null)"; then "$codex_bin" --version >/dev/null 2>&1
   elif command -v omx >/dev/null 2>&1; then omx --version >/dev/null 2>&1
   else return 1
   fi
@@ -262,9 +263,9 @@ run_agent() {
 
   case "$provider" in
     codex)
-      local codex_cmd=()
-      if command -v codex >/dev/null 2>&1; then
-        codex_cmd=(codex exec --cd "$CEO_ROOT" --full-auto)
+      local codex_bin="" codex_cmd=()
+      if codex_bin="$(spin_resolve_codex_cli 2>/dev/null)"; then
+        codex_cmd=("$codex_bin" exec --cd "$CEO_ROOT" --full-auto)
         [[ -n "${CEO_CODEX_MODEL:-}" ]] && codex_cmd+=(--model "$CEO_CODEX_MODEL")
         for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
         codex_cmd+=(-)

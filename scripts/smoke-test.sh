@@ -1091,12 +1091,28 @@ cat >/dev/null
 EOF
 chmod +x "$FAKEBIN/codex"
 
-PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" bash -c "
+BROKEN_CODEX_BIN="$TMP/broken-codex-bin"
+mkdir -p "$BROKEN_CODEX_BIN"
+cat > "$BROKEN_CODEX_BIN/codex" <<'EOF'
+#!/usr/bin/env bash
+echo "broken codex shim" >&2
+exit 127
+EOF
+chmod +x "$BROKEN_CODEX_BIN/codex"
+
+PATH="$BROKEN_CODEX_BIN:$PATH" CODEX_CLI_PATH="$FAKEBIN/codex" HOME="$SMOKE_HOME" bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
+  test \"\$(spin_resolve_codex_cli)\" = '$FAKEBIN/codex'
+  probe_codex
   run_agent codex 'hello' '$TMP/codex.log'
 "
 grep -q '^exec --cd ' "$TMP/codex.args"
+grep -q -- '--full-auto' "$TMP/codex.args"
+if grep -q 'gpt-4.5-preview' "$TMP/codex.args"; then
+  echo "direct Codex fallback pinned the retired gpt-4.5-preview model"
+  exit 1
+fi
 
 cat > "$FAKEBIN/omp" <<EOF
 #!/usr/bin/env bash
