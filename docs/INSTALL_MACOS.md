@@ -12,11 +12,11 @@ workspace UI, OMP/Pi agent runtime, and SPIN orchestration tools; `cmux` and
 - Git and any development tools required by the projects being managed
 
 The current release is
-[SPIN for Mac 4.1.0 Beta 3](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3).
+[SPIN for Mac 4.1.0 Beta 4](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.4).
 
 ## Download And Install
 
-1. Download `SPIN-4.1.0-beta.3-macos-arm64.dmg` from the release page.
+1. Download `SPIN-4.1.0-beta.4-macos-arm64.dmg` from the release page.
 2. Open the DMG.
 3. Drag `SPIN.app` into the Applications folder.
 4. Eject the SPIN disk image.
@@ -61,13 +61,13 @@ the same folder, then run:
 
 ```bash
 cd ~/Downloads
-shasum -a 256 -c SPIN-4.1.0-beta.3-macos-arm64.dmg.sha256
+shasum -a 256 -c SPIN-4.1.0-beta.4-macos-arm64.dmg.sha256
 ```
 
-The expected SHA-256 for Beta 3 is:
+The expected SHA-256 for Beta 4 is:
 
 ```text
-6b99c32db54365f3aa0025bf201a44cb91b409ef4c705c191e42f76c2ee2b7bf
+c5db5612220eb37dc740d7f5d1a79126d73ecbb14d0fbb1905233ab120cdc7f8
 ```
 
 ## Complete Onboarding

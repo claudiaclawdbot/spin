@@ -15,7 +15,7 @@
 ![platform](https://img.shields.io/badge/app-macOS-lightgrey)
 ![runtime](https://img.shields.io/badge/runtime-OMP%20%2B%20cmux-8a2be2)
 
-**[Download SPIN for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3)** | **[Install guide](docs/INSTALL_MACOS.md)** | **[Product site](https://claudiaclawdbot.github.io/spin/)**
+**[Download SPIN for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.4)** | **[Install guide](docs/INSTALL_MACOS.md)** | **[Product site](https://claudiaclawdbot.github.io/spin/)**
 
 </div>
 
@@ -84,7 +84,7 @@ keeps that layer from depending on a single vendor, model, CLI, or quota window.
 
 ## Download SPIN For Mac
 
-The current release is [SPIN for Mac 4.1.0 Beta 3](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3).
+The current release is [SPIN for Mac 4.1.0 Beta 4](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.4).
 
 Requirements:
 

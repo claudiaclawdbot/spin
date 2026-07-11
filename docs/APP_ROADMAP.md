@@ -250,7 +250,7 @@ into an app issue.
 
 23. **Clean beta install polish**
 
-   The app release lane now uses `4.1.0-beta.3` versioning for beta builds,
+   The app release lane now uses `4.1.0-beta.4` versioning for beta builds,
    stages DMGs with `SPIN.app`, an Applications shortcut, and `README.txt`, and
    verifies that layout during installed-app checks. `docs/INSTALL_MACOS.md`
    is the single user-facing install guide for download, checksum verification,

@@ -243,7 +243,9 @@ grep -q 'AI agent command center for Mac' README.md
 grep -q 'SPIN for Mac packages' README.md
 grep -q 'Download SPIN For Mac' README.md
 grep -q 'Source And CLI Setup' README.md
-grep -q 'v4.1.0-beta.3' README.md
+PUBLIC_VERSION="$(tr -d '[:space:]' < VERSION)"
+PUBLIC_RELEASE_DOC="docs/releases/SPIN-${PUBLIC_VERSION}.md"
+grep -q "v${PUBLIC_VERSION}" README.md
 grep -q 'signed Codex CLI' README.md
 grep -q 'spin computer-use probe' README.md
 grep -q 'docs/INSTALL_MACOS.md' README.md
@@ -257,7 +259,7 @@ grep -q 'id="app"' docs/index.html
 grep -q 'SPIN for Mac' docs/index.html
 grep -q 'visual command center' docs/index.html
 grep -q 'Source and CLI' docs/index.html
-grep -q 'v4.1.0-beta.3' docs/index.html
+grep -q "v${PUBLIC_VERSION}" docs/index.html
 grep -q 'INSTALL_MACOS.md' docs/index.html
 grep -q 'Project isolation comes first' docs/index.html
 grep -q 'class="spinner"' docs/index.html
@@ -269,8 +271,8 @@ grep -q 'assets/spin-icon.svg' docs/index.html
 grep -q 'Install SPIN for Mac' docs/INSTALL_MACOS.md
 grep -q 'Control-click `SPIN.app`' docs/INSTALL_MACOS.md
 grep -q 'DMG opens and includes `SPIN.app`, `Applications`, and `README.txt`' docs/RELEASING_MACOS.md
-grep -q 'SPIN for Mac 4.1.0 Beta 3' docs/releases/SPIN-4.1.0-beta.3.md
-! grep -qi 'attach these files\|maintainer checks\|open-source tester' docs/releases/SPIN-4.1.0-beta.3.md
+grep -q "SPIN for Mac ${PUBLIC_VERSION}" "$PUBLIC_RELEASE_DOC"
+! grep -qi 'attach these files\|maintainer checks\|open-source tester' "$PUBLIC_RELEASE_DOC"
 test -f SECURITY.md
 grep -q 'Security Policy' SECURITY.md
 test -f .github/ISSUE_TEMPLATE/config.yml

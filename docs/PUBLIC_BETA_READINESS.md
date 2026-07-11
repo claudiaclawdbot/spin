@@ -5,7 +5,7 @@ Public product information is available on the
 [README](../README.md).
 
 - [Install SPIN for Mac](INSTALL_MACOS.md)
-- [Current release notes](releases/SPIN-4.1.0-beta.3.md)
+- [Current release notes](releases/SPIN-4.1.0-beta.4.md)
 - [macOS release process](RELEASING_MACOS.md)
 - [Security policy](../SECURITY.md)
 
