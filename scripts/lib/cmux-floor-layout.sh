@@ -350,10 +350,15 @@ const canonical = new Map();
 for (const [id, project] of Object.entries(harness.projects || {})) {
   if (project && project.cmux_workspace) canonical.set(id, String(project.cmux_workspace));
 }
+const coordinatorRef = String(harness.workspace_ceo?.cmux_workspace || "");
 for (const workspace of live.workspaces || []) {
   const title = String(workspace.title || workspace.name || workspace.custom_title || "");
   const ref = String(workspace.ref || workspace.workspace_ref || workspace.workspace || workspace.id || workspace.workspace_id || "");
   const cwd = String(workspace.current_directory || workspace.cwd || workspace.path || "");
+  if (title === "SPIN Coordinator") {
+    if (coordinatorRef && ref && ref !== coordinatorRef) console.log(ref);
+    continue;
+  }
   const keep = canonical.get(title);
   if (!keep || !ref || ref === keep || !cwd) continue;
   const resolved = path.resolve(cwd);

@@ -977,6 +977,15 @@ PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" STALE_TITLE='π: Example Product' bash -
 
 RECONCILEBIN="$TMP/reconcilebin"
 mkdir -p "$RECONCILEBIN"
+node - "$KIT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+harness.workspace_ceo = harness.workspace_ceo || {};
+harness.workspace_ceo.cmux_workspace = 'workspace:7';
+harness.projects['example-app'].cmux_workspace = 'workspace:9';
+fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+NODE
 cat > "$RECONCILEBIN/cmux" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$TMP/reconcile-cmux.calls"
@@ -984,7 +993,9 @@ if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
   cat <<JSON
 {"workspaces":[
   {"ref":"workspace:9","title":"example-app","current_directory":"$KIT/projects/example-app"},
-  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/org/projects/example-app"}
+  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/org/projects/example-app"},
+  {"ref":"workspace:7","title":"SPIN Coordinator","current_directory":"$SMOKE_HOME"},
+  {"ref":"workspace:8","title":"SPIN Coordinator","current_directory":"$SMOKE_HOME"}
 ]}
 JSON
   exit 0
@@ -1013,12 +1024,18 @@ PATH="$RECONCILEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
   ROOT="$SPIN_ROOT"
   source scripts/lib/spin-runtime.sh
   source scripts/lib/cmux-floor-layout.sh
-  test "$(spin_cmux_stale_managed_workspace_refs)" = "workspace:3"
-  test "$(spin_cmux_prune_stale_managed_workspaces)" = "workspace:3"
+  expected_refs="$(printf "workspace:3\nworkspace:8\n")"
+  test "$(spin_cmux_stale_managed_workspace_refs)" = "$expected_refs"
+  test "$(spin_cmux_prune_stale_managed_workspaces)" = "$expected_refs"
   bash scripts/workspace-status.sh
   spin_cmux_open_coordinator_board workspace:50 surface:50
 '
 grep -q 'close-workspace --workspace workspace:3' "$TMP/reconcile-cmux.calls"
+grep -q 'close-workspace --workspace workspace:8' "$TMP/reconcile-cmux.calls"
+if grep -Eq 'close-workspace --workspace workspace:(7|9)$' "$TMP/reconcile-cmux.calls"; then
+  echo "canonical Coordinator or project workspace was pruned" >&2
+  exit 1
+fi
 grep -q 'close-surface --workspace workspace:50 --surface surface:51' "$TMP/reconcile-cmux.calls"
 grep -q 'markdown open .*/org/ceo/WORKSPACE_STATUS.md --workspace workspace:50 --surface surface:50 --direction right --focus false' "$TMP/reconcile-cmux.calls"
 touch "$TMP/reconcile-board-visible"
