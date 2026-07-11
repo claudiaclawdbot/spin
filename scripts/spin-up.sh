@@ -130,11 +130,13 @@ else
 fi
 
 # ── 3. SPIN orchestrator floor (the omp agent you talk to) ───────────────────
+startup_failures=0
 coord_ref="$(spin_cmux_ensure_coordinator_floor true 2>/dev/null || true)"
 if [[ -n "$coord_ref" ]]; then
   echo "  ${c_g}✓${c_o} SPIN orchestrator floor open → $coord_ref ${c_d}(talk to it there)${c_o}"
 else
   echo "  ${c_d}· couldn't open the SPIN orchestrator floor (is cmux running?)${c_o}"
+  startup_failures=$((startup_failures + 1))
 fi
 
 # ── 4. live boards ───────────────────────────────────────────────────────────
@@ -142,6 +144,9 @@ rm -f "$RUN/STATUS_WATCH_STOP" "$RUN/WIKI_WATCH_STOP" 2>/dev/null
 bash "$ROOT/scripts/workspace-status.sh" >/dev/null 2>&1 || true
 if [[ -n "$coord_ref" ]] && spin_cmux_open_coordinator_board "$coord_ref"; then
   echo "  ${c_g}✓${c_o} Coordinator board visible"
+elif [[ -n "$coord_ref" ]]; then
+  echo "  ${c_d}· couldn't open the Coordinator board${c_o}"
+  startup_failures=$((startup_failures + 1))
 fi
 if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
   echo "  ${c_d}· background board daemons disabled for this run${c_o}"
@@ -159,7 +164,7 @@ else
 fi
 
 # ── 5. re-open floors for active projects (after a cmux restart) ─────────────
-spin_cmux_project_floor_ids | while read -r id; do
+while IFS= read -r id; do
   [ -z "$id" ] && continue
   ref="$(spin_cmux_ensure_project_floor "$id" false 2>/dev/null || true)"
   if [[ -n "$ref" ]]; then
@@ -167,15 +172,26 @@ spin_cmux_project_floor_ids | while read -r id; do
     sf="$(spin_cmux_terminal_surface "$ref")"
     if spin_cmux_open_project_board "$ref" "$id" "$sf"; then
       echo "  ${c_g}✓${c_o} $id board visible"
+    else
+      echo "  ${c_d}· couldn't open project board: $id${c_o}"
+      startup_failures=$((startup_failures + 1))
     fi
   else
     echo "  ${c_d}· couldn't open project floor: $id${c_o}"
+    startup_failures=$((startup_failures + 1))
   fi
-done
+done < <(spin_cmux_project_floor_ids)
 
 pruned_refs="$(spin_cmux_prune_stale_managed_workspaces 2>/dev/null || true)"
 if [[ -n "$pruned_refs" ]]; then
   echo "  ${c_g}✓${c_o} removed stale duplicate floors: $(printf '%s' "$pruned_refs" | paste -sd, -)"
+fi
+
+if (( startup_failures > 0 )); then
+  echo
+  echo "${c_d}SPIN startup incomplete: $startup_failures required floor or board operation(s) failed.${c_o}"
+  echo "Rerun: spin up"
+  exit 1
 fi
 
 echo

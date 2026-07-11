@@ -799,6 +799,68 @@ grep -q 'new-workspace --name SPIN Coordinator' "$TMP/cmux.calls"
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/ceo/WORKSPACE_STATUS.md' "$TMP/cmux.calls"
 
+ASYNCBIN="$TMP/asyncbin"
+mkdir -p "$ASYNCBIN" "$KIT/projects/async-app" "$KIT/org/projects/async-app"
+node - "$KIT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+harness.projects['async-app'] = { cmux_workspace: null };
+fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+NODE
+cat > "$ASYNCBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/async-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  if [[ -f "$TMP/async-workspace-created" ]]; then
+    printf '%s\n' '{"workspaces":[{"ref":"workspace:77","title":"async-app","current_directory":"$KIT/projects/async-app"}]}'
+  else
+    printf '%s\n' '{"workspaces":[]}'
+  fi
+  exit 0
+fi
+case "\${1:-}" in
+  new-workspace) touch "$TMP/async-workspace-created"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$ASYNCBIN/cmux"
+PATH="$ASYNCBIN:$PATH" SPIN_ROOT="$KIT" SPIN_CMUX_ASYNC_CREATE_RETRIES=2 \
+  SPIN_CMUX_ASYNC_CREATE_DELAY=0 bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_ensure_project_floor async-app false
+' > "$TMP/async-floor.out"
+grep -q '^workspace:77$' "$TMP/async-floor.out"
+test "$(grep -c 'new-workspace --name async-app' "$TMP/async-cmux.calls")" -eq 1
+grep -q '"cmux_workspace": "workspace:77"' "$KIT/org/OMP_HARNESS.json"
+
+FAILEDUPBIN="$TMP/failed-up-bin"
+mkdir -p "$FAILEDUPBIN"
+cat > "$FAILEDUPBIN/cmux" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "ping" ]]; then exit 0; fi
+if [[ "${1:-}" == "--json" && "${2:-}" == "list-workspaces" ]]; then
+  printf '%s\n' '{"workspaces":[]}'
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$FAILEDUPBIN/cmux"
+if PATH="$FAILEDUPBIN:$PATH" HOME="$SMOKE_HOME" SPIN_ROOT="$KIT" \
+  SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_OMP_MCP_BOOTSTRAP=0 \
+  SPIN_CMUX_ASYNC_CREATE_RETRIES=1 SPIN_CMUX_ASYNC_CREATE_DELAY=0 \
+  scripts/spin-up.sh > "$TMP/failed-spin-up.out" 2>&1; then
+  echo "spin up reported success with every required workspace unavailable" >&2
+  exit 1
+fi
+grep -q 'SPIN startup incomplete:' "$TMP/failed-spin-up.out"
+if grep -q 'SPIN is up' "$TMP/failed-spin-up.out"; then
+  echo "spin up printed a false success banner" >&2
+  exit 1
+fi
+
 DRIFTBIN="$TMP/driftbin"
 mkdir -p "$DRIFTBIN"
 node - "$KIT/org/OMP_HARNESS.json" <<'NODE'

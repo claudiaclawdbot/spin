@@ -416,6 +416,23 @@ spin_cmux_project_cwd() {
   printf '%s\n' "$cwd"
 }
 
+spin_cmux_wait_for_workspace_context() {
+  local title="$1" cwd="${2:-}" attempts delay workspace
+  attempts="${SPIN_CMUX_ASYNC_CREATE_RETRIES:-10}"
+  delay="${SPIN_CMUX_ASYNC_CREATE_DELAY:-0.5}"
+  case "$attempts" in ''|*[!0-9]*) attempts=10 ;; esac
+  while (( attempts > 0 )); do
+    workspace="$(spin_cmux_workspace_ref_by_context "$title" "$cwd")"
+    if [[ -n "$workspace" ]]; then
+      printf '%s\n' "$workspace"
+      return 0
+    fi
+    attempts=$((attempts - 1))
+    (( attempts > 0 )) && sleep "$delay"
+  done
+  return 1
+}
+
 spin_cmux_ensure_floor() {
   local target="$1" title="$2" cwd="$3" focus="${4:-false}" workspace="" match_cwd="" created=0
   [[ -n "$target" && -n "$title" && -n "$cwd" ]] || return 1
@@ -430,6 +447,7 @@ spin_cmux_ensure_floor() {
     workspace="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$title" --cwd "$cwd" \
       --command "bash '$ROOT/scripts/cmux-floor.sh' '$target'" --focus "$focus" 2>/dev/null \
       | grep -oE 'workspace:[^[:space:]]+' | head -1)"
+    [[ -n "$workspace" ]] || workspace="$(spin_cmux_wait_for_workspace_context "$title" "$match_cwd")"
     [[ -n "$workspace" ]] && created=1
   fi
   [[ -n "$workspace" ]] || return 1
@@ -438,6 +456,7 @@ spin_cmux_ensure_floor() {
     workspace="$(CMUX_QUIET=1 spin_cmd cmux new-workspace --name "$title" --cwd "$cwd" \
       --command "bash '$ROOT/scripts/cmux-floor.sh' '$target'" --focus "$focus" 2>/dev/null \
       | grep -oE 'workspace:[^[:space:]]+' | head -1)"
+    [[ -n "$workspace" ]] || workspace="$(spin_cmux_wait_for_workspace_context "$title" "$match_cwd")"
     [[ -n "$workspace" ]] || return 1
     spin_cmux_remember_workspace_ref "$target" "$workspace" >/dev/null 2>&1 || true
   fi
