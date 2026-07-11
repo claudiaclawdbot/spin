@@ -1074,6 +1074,9 @@ git -C "$FAKE_CMUX_SOURCE" -c user.name=SPIN -c user.email=spin@example.invalid 
   commit -q -m "fake source fixture"
 FAKE_CMUX_COMMIT="$(git -C "$FAKE_CMUX_SOURCE" rev-parse HEAD)"
 printf 'modified overlay fixture\n' > "$FAKE_CMUX_SOURCE/SPIN-OVERLAY.txt"
+mkdir -p "$FAKE_CMUX_SOURCE/build-spin" "$FAKE_CMUX_SOURCE/.spm-cache"
+printf 'generated build output\n' > "$FAKE_CMUX_SOURCE/build-spin/generated.bin"
+printf 'generated package cache\n' > "$FAKE_CMUX_SOURCE/.spm-cache/cache.bin"
 mkdir -p "$TMP/fake-cmux-app/app"
 cat > "$TMP/fake-cmux-app/app/release-compat.json" <<EOF
 {
@@ -1193,6 +1196,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   test -f "$TESTER_SOURCE_ARCHIVE.sha256"
   tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-OVERLAY.txt$'
   tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-CORRESPONDING-SOURCE.txt$'
+  if tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -Eq '/(build-spin|\.spm-cache)/'; then
+    echo "corresponding-source archive included generated build/cache output" >&2
+    exit 1
+  fi
+  (
+    cd "$TESTER_RELEASE_DIR"
+    shasum -a 256 -c "$(basename "$TESTER_SOURCE_ARCHIVE").sha256"
+  ) >/dev/null
   grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
   grep -q 'ad-hoc signed' "$TESTER_NOTES"
   grep -q 'not notarized' "$TESTER_NOTES"

@@ -204,7 +204,11 @@ NODE
     cd "$CMUX_SOURCE_DIR"
     {
       git ls-files -z
-      git ls-files -z --others --exclude-standard
+      git ls-files -z --others --exclude-standard \
+        --exclude='build-spin/' \
+        --exclude='.spm-cache/' \
+        --exclude='DerivedData/' \
+        --exclude='.build/'
     } | tar --null -cf - --files-from -
   ) | (cd "$source_stage" && tar -xf -)
   cat > "$source_stage/SPIN-CORRESPONDING-SOURCE.txt" <<EOF
@@ -221,7 +225,10 @@ EOF
   SOURCE_ARCHIVE="$RELEASE_DIR/$source_name.tar.gz"
   COPYFILE_DISABLE=1 tar -czf "$SOURCE_ARCHIVE" -C "$source_parent" "$source_name"
   SOURCE_ARCHIVE_SHA="$SOURCE_ARCHIVE.sha256"
-  shasum -a 256 "$SOURCE_ARCHIVE" > "$SOURCE_ARCHIVE_SHA"
+  (
+    cd "$RELEASE_DIR"
+    shasum -a 256 "$(basename "$SOURCE_ARCHIVE")" > "$(basename "$SOURCE_ARCHIVE_SHA")"
+  )
   SOURCE_ASSET_LINES="- \`$(basename "$SOURCE_ARCHIVE")\`
 - \`$(basename "$SOURCE_ARCHIVE_SHA")\`"
   SOURCE_RELEASE_SECTION="The release also includes the exact modified cmux source tree used to build
