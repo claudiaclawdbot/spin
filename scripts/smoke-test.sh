@@ -805,31 +805,67 @@ grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
 
-SPIN_ROOT="$KIT" scripts/workspace-status.sh
-grep -q '^## smoke-floor' "$KIT/org/ceo/WORKSPACE_STATUS.md"
-if grep -Eq '^## (example-app|workspace)' "$KIT/org/ceo/WORKSPACE_STATUS.md"; then
-  echo "Coordinator status retained inactive project floors" >&2
+ROLLUP_ROOT="$TMP/semantic-rollup"
+mkdir -p "$ROLLUP_ROOT/scripts/lib" "$ROLLUP_ROOT/org/ceo/runs" \
+  "$ROLLUP_ROOT/org/projects/active-app" "$ROLLUP_ROOT/org/projects/old-app" \
+  "$ROLLUP_ROOT/org/wiki"
+cp scripts/workspace-status.sh scripts/wiki-update.sh "$ROLLUP_ROOT/scripts/"
+cp scripts/lib/spin-runtime.sh scripts/lib/human-queue-summary.js "$ROLLUP_ROOT/scripts/lib/"
+cat > "$ROLLUP_ROOT/org/state.json" <<'EOF'
+{
+  "project_orchestrators": [
+    { "project": "active-app", "status": "active-company-project" },
+    { "project": "old-app", "status": "completed" }
+  ]
+}
+EOF
+cat > "$ROLLUP_ROOT/org/OMP_HARNESS.json" <<'EOF'
+{
+  "projects": {
+    "active-app": { "cmux_workspace": "workspace:1" },
+    "old-app": { "cmux_workspace": "workspace:2" }
+  }
+}
+EOF
+printf '%s\n' '{ "jobs": [] }' > "$ROLLUP_ROOT/org/AGENT_QUEUE.json"
+printf '%s\n' '# Human Queue' > "$ROLLUP_ROOT/org/HUMAN_QUEUE.md"
+for id in active-app old-app; do
+  cat > "$ROLLUP_ROOT/org/projects/$id/FLOOR.md" <<EOF
+# $id
+## In progress
+- Stable status
+## Next
+- Stable next action
+## Waiting on human
+- Nothing
+EOF
+done
+
+SPIN_ROOT="$ROLLUP_ROOT" "$ROLLUP_ROOT/scripts/workspace-status.sh"
+grep -q '^## active-app' "$ROLLUP_ROOT/org/ceo/WORKSPACE_STATUS.md"
+if grep -q '^## old-app' "$ROLLUP_ROOT/org/ceo/WORKSPACE_STATUS.md"; then
+  echo "Coordinator status retained an inactive project floor" >&2
   exit 1
 fi
-status_hash_before="$(shasum -a 256 "$KIT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
+status_hash_before="$(shasum -a 256 "$ROLLUP_ROOT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
 sleep 1
-SPIN_ROOT="$KIT" scripts/workspace-status.sh
-status_hash_after="$(shasum -a 256 "$KIT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
-test "$status_hash_before" = "$status_hash_after"
+SPIN_ROOT="$ROLLUP_ROOT" "$ROLLUP_ROOT/scripts/workspace-status.sh"
+status_hash_after="$(shasum -a 256 "$ROLLUP_ROOT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
+[[ "$status_hash_before" == "$status_hash_after" ]] || { echo "semantic status rewrote timestamp-only output" >&2; exit 1; }
 grep -q 'status-watch.heartbeat' scripts/workspace-status-watch.sh
 grep -q 'heartbeat .*s ago' scripts/workstation.sh
 
-SPIN_ROOT="$KIT" scripts/wiki-update.sh > "$TMP/wiki-update-first.out"
-grep -q '^### smoke-floor -' "$KIT/org/wiki/workspace.md"
-if grep -Eq 'fidget-play|built-by-ai|agentclaudia' "$KIT/org/wiki/workspace.md"; then
-  echo "workspace wiki retained hardcoded legacy projects" >&2
+SPIN_ROOT="$ROLLUP_ROOT" "$ROLLUP_ROOT/scripts/wiki-update.sh" > "$TMP/wiki-update-first.out"
+grep -q '^### active-app -' "$ROLLUP_ROOT/org/wiki/workspace.md"
+if grep -q '^### old-app -' "$ROLLUP_ROOT/org/wiki/workspace.md"; then
+  echo "workspace wiki retained an inactive project" >&2
   exit 1
 fi
-wiki_hash_before="$(shasum -a 256 "$KIT/org/wiki/workspace.md" | awk '{print $1}')"
+wiki_hash_before="$(shasum -a 256 "$ROLLUP_ROOT/org/wiki/workspace.md" | awk '{print $1}')"
 sleep 1
-SPIN_ROOT="$KIT" scripts/wiki-update.sh > "$TMP/wiki-update-second.out"
-wiki_hash_after="$(shasum -a 256 "$KIT/org/wiki/workspace.md" | awk '{print $1}')"
-test "$wiki_hash_before" = "$wiki_hash_after"
+SPIN_ROOT="$ROLLUP_ROOT" "$ROLLUP_ROOT/scripts/wiki-update.sh" > "$TMP/wiki-update-second.out"
+wiki_hash_after="$(shasum -a 256 "$ROLLUP_ROOT/org/wiki/workspace.md" | awk '{print $1}')"
+[[ "$wiki_hash_before" == "$wiki_hash_after" ]] || { echo "semantic wiki rewrote timestamp-only output" >&2; exit 1; }
 test ! -s "$TMP/wiki-update-second.out"
 
 # Project floors keep OMP itself in SPIN-owned metadata even when the product
