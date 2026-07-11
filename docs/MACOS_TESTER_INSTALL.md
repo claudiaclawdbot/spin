@@ -6,8 +6,8 @@ the app. You do not install `cmux` or `omp` separately.
 
 The current beta release is:
 
-- Release: https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.2
-- Artifact: `SPIN-4.1.0-beta.2-macos-arm64.dmg`
+- Release: https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3
+- Artifact: `SPIN-4.1.0-beta.3-macos-arm64.dmg`
 - Apple support: Apple Silicon / arm64
 - Signing: ad-hoc
 - Notarized: no
@@ -26,7 +26,7 @@ warning. That is expected for this beta lane.
 Equivalent terminal install:
 
 ```bash
-hdiutil attach SPIN-4.1.0-beta.2-macos-arm64.dmg
+hdiutil attach SPIN-4.1.0-beta.3-macos-arm64.dmg
 cp -R /Volumes/SPIN/SPIN.app /Applications/
 hdiutil detach /Volumes/SPIN
 open /Applications/SPIN.app
@@ -40,7 +40,7 @@ before opening it. It is separate because a checksum stored inside the DMG would
 not prove anything if the DMG itself had been changed.
 
 ```bash
-shasum -a 256 -c SPIN-4.1.0-beta.2-macos-arm64.dmg.sha256
+shasum -a 256 -c SPIN-4.1.0-beta.3-macos-arm64.dmg.sha256
 ```
 
 ## First Launch
@@ -96,14 +96,14 @@ runtime state, and OMP setup readiness.
 To check a downloaded future app artifact before installing it:
 
 ```bash
-spin app-updates --check --candidate ~/Downloads/SPIN-4.1.0-beta.2-macos-arm64.dmg
+spin app-updates --check --candidate ~/Downloads/SPIN-4.1.0-beta.3-macos-arm64.dmg
 ```
 
 Tester builds require an explicit opt-in before app code replacement:
 
 ```bash
 spin app-updates --install --yes --allow-test-builds \
-  --candidate ~/Downloads/SPIN-4.1.0-beta.2-macos-arm64.dmg
+  --candidate ~/Downloads/SPIN-4.1.0-beta.3-macos-arm64.dmg
 ```
 
 ## Clean Tester Checklist

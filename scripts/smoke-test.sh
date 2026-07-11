@@ -41,6 +41,23 @@ test -f org/ceo/CEO_CHAT_PROMPT.md
 test -f org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md
 test -f org/projects/workspace/STATE.json
 
+# One scheduled CEO brain must exclude overlapping manual ticks. The fake
+# holder's command line includes the exact script path expected by the lock
+# validator, so this exercises the live-process branch without invoking an LLM.
+CEO_AGENT_LOCK="$KIT/org/ceo/runs/.workspace-ceo-agent.lock"
+bash -c 'while :; do sleep 1; done' "$KIT/scripts/workspace-ceo-agent.sh" &
+ceo_agent_holder=$!
+printf '%s\n' "$ceo_agent_holder" > "$CEO_AGENT_LOCK"
+set +e
+ceo_agent_output="$(SPIN_ROOT="$KIT" bash "$KIT/scripts/workspace-ceo-agent.sh" 2>&1)"
+ceo_agent_rc=$?
+set -e
+kill "$ceo_agent_holder" 2>/dev/null || true
+wait "$ceo_agent_holder" 2>/dev/null || true
+rm -f "$CEO_AGENT_LOCK"
+[[ "$ceo_agent_rc" -eq 0 ]]
+grep -q "already running (PID $ceo_agent_holder); skipping duplicate tick" <<<"$ceo_agent_output"
+
 for f in scripts/*.sh scripts/lib/*.sh scripts/spin install.sh spin-bootstrap.sh; do
   bash -n "$f"
 done
@@ -219,7 +236,7 @@ grep -q 'A local app for running a small AI software org' README.md
 grep -q 'SPIN.app is the main product' README.md
 grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
-grep -q 'v4.1.0-beta.2' README.md
+grep -q 'v4.1.0-beta.3' README.md
 grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'signed Codex CLI' README.md
 grep -q 'spin computer-use probe' README.md
@@ -231,7 +248,7 @@ grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
 grep -q 'main Mac experience' docs/index.html
 grep -q 'Source / CLI install' docs/index.html
-grep -q 'v4.1.0-beta.2' docs/index.html
+grep -q 'v4.1.0-beta.3' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
 grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
 grep -q 'Run a small AI software org from one local app' docs/index.html
@@ -1570,7 +1587,7 @@ node - "$TMP/SPIN.app/Contents/Info.plist" <<'NODE'
 const fs = require('fs');
 const xml = fs.readFileSync(process.argv[2], 'utf8');
 const value = key => (xml.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`)) || [])[1];
-if (value('CFBundleShortVersionString') !== '4.1.0' || value('CFBundleVersion') !== '2') process.exit(1);
+if (value('CFBundleShortVersionString') !== '4.1.0' || value('CFBundleVersion') !== '3') process.exit(1);
 NODE
 if [[ "$(uname -s)" == "Darwin" ]]; then
   codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null

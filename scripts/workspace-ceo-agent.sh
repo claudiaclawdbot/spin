@@ -13,6 +13,25 @@ set -euo pipefail
 
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
+source "$ROOT/scripts/lib/spin-runtime.sh"
+
+AGENT_LOCK="$CEO_RUN_DIR/.workspace-ceo-agent.lock"
+while ! ( set -o noclobber; printf '%s\n' "$$" > "$AGENT_LOCK" ) 2>/dev/null; do
+  if spin_locked_process_running "$AGENT_LOCK" "$ROOT/scripts/workspace-ceo-agent.sh"; then
+    echo "[workspace-ceo-agent] already running (PID $(cat "$AGENT_LOCK")); skipping duplicate tick." >&2
+    exit 0
+  fi
+  rm -f "$AGENT_LOCK"
+done
+
+CONTEXT=""
+cleanup() {
+  [[ -n "$CONTEXT" ]] && rm -f "$CONTEXT"
+  rm -f "$AGENT_LOCK"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 PROMPT_FILE="$ROOT/org/ceo/WORKSPACE_CONTROLLER_PROMPT.md"
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -36,7 +55,6 @@ fi
 
 # --- build curated context ------------------------------------------------
 CONTEXT="$(mktemp)"
-trap 'rm -f "$CONTEXT"' EXIT
 {
   echo "# Workspace CEO Tick Context — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   echo
