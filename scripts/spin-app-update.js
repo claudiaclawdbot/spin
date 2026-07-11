@@ -309,7 +309,9 @@ function buildPlan(options, installedInfo, candidateInfo) {
       metadataPath: rollbackFile,
       willWrite: options.recordRollback || options.install,
       appHome: path.resolve(options.appHome),
-      backupPath: path.join(path.resolve(options.appHome), 'updates', 'backups', `SPIN-${new Date().toISOString().replace(/[:.]/g, '-')}.app`),
+      // Do not use an .app suffix: Spotlight/LaunchServices would register every
+      // rollback copy as another installed SPIN application.
+      backupPath: path.join(path.resolve(options.appHome), 'updates', 'backups', `SPIN-${new Date().toISOString().replace(/[:.]/g, '-')}.spin-backup`),
     },
     nextStep: options.install
       ? 'Installed app code replaced; rerun check-app-release or launch SPIN.app to validate runtime behavior.'

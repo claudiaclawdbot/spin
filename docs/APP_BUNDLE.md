@@ -312,7 +312,8 @@ The install path:
 - requires `--allow-production` for production candidates and then verifies
   Developer ID identity, Apple team id, hardened runtime intent, notarization
   intent, code signature, and Gatekeeper assessment;
-- backs up the replaced app under `<app-home>/updates/backups/`;
+- backs up the replaced app as a non-launchable `.spin-backup` directory under
+  `<app-home>/updates/backups/`, avoiding duplicate LaunchServices app entries;
 - writes rollback metadata under `<app-home>/updates/`;
 - stages the candidate app before replacing the installed app path;
 - verifies the installed app compatibility manifest after replacement.
