@@ -324,8 +324,10 @@ through `--allow-ad-hoc` and `--allow-local-dev`.
 
 Source builds also fail closed on dependency identity. The cmux commit is pinned
 in `app/spin-app.json`; `scripts/vendor-app-deps.sh` fetches and detaches to that
-exact commit before applying the SPIN overlay. `SPIN_CMUX_COMMIT` is an explicit
-release-engineering override, not a floating default.
+exact commit, the overlay cannot refetch a floating branch, and release
+preparation rejects an artifact whose compatibility metadata differs from the
+tracked pin. `SPIN_CMUX_COMMIT` is an explicit release-engineering override, not
+a floating default.
 
 Update rollback copies are verified ZIP archives ending in
 `.spin-backup.zip`. Keeping both the outer launcher and its bundled cmux UI

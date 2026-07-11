@@ -1502,7 +1502,12 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
   RELEASE_COMMAND_ZIP="$(ls "$TMP/release-command"/SPIN-*-macos-*.zip | head -1)"
   TESTER_RELEASE_DIR="$TMP/open-source-tester-release"
-  SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
+  if SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" >/dev/null 2>&1; then
+    echo "open-source release accepted an artifact outside the tracked cmux pin" >&2
+    exit 1
+  fi
+  SPIN_CMUX_COMMIT="$FAKE_CMUX_COMMIT" SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" \
+    scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
   TESTER_NOTES="$(ls "$TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
   test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
   test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"

@@ -192,6 +192,9 @@ if (!commit) process.exit(1);
 process.stdout.write(commit);
 NODE
 )" || fail "artifact compatibility manifest is missing the cmux source commit"
+  tracked_cmux_commit="${SPIN_CMUX_COMMIT:-$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.components?.uiEngine?.upstreamCommit || "")' "$ROOT/app/spin-app.json" 2>/dev/null || true)}"
+  [ -n "$tracked_cmux_commit" ] || fail "tracked cmux source commit is missing from app/spin-app.json"
+  [ "$cmux_source_commit" = "$tracked_cmux_commit" ] || fail "artifact cmux commit $cmux_source_commit does not match tracked pin $tracked_cmux_commit"
   checkout_commit="$(git -C "$CMUX_SOURCE_DIR" rev-parse HEAD 2>/dev/null || true)"
   [ "$checkout_commit" = "$cmux_source_commit" ] || fail "cmux source checkout $checkout_commit does not match artifact $cmux_source_commit"
 

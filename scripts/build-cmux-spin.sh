@@ -9,6 +9,16 @@ OUT_ENV="${SPIN_CMUX_BUILD_ENV:-$ROOT/dist/cmux-spin-build.env}"
 CONFIGURATION="${SPIN_CMUX_CONFIGURATION:-Release}"
 ARCHS="${SPIN_CMUX_ARCHS:-$(uname -m)}"
 ONLY_ACTIVE_ARCH="${SPIN_CMUX_ONLY_ACTIVE_ARCH:-YES}"
+CMUX_COMMIT="${SPIN_CMUX_COMMIT:-}"
+if [ -z "$CMUX_COMMIT" ] && command -v node >/dev/null 2>&1 && [ -f "$ROOT/app/spin-app.json" ]; then
+  CMUX_COMMIT="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.components?.uiEngine?.upstreamCommit || "")' \
+    "$ROOT/app/spin-app.json" 2>/dev/null || true)"
+fi
+
+if [[ ! "$CMUX_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "cmux source build requires a pinned 40-character commit" >&2
+  exit 1
+fi
 
 quote_sh() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
@@ -19,7 +29,24 @@ quote_sh() {
   exit 2
 }
 
-"$ROOT/scripts/apply-cmux-spin-overlay.sh" "$CMUX_DIR"
+if [ ! -d "$CMUX_DIR/.git" ] || [ "$(git -C "$CMUX_DIR" rev-parse HEAD 2>/dev/null || true)" != "$CMUX_COMMIT" ]; then
+  SPIN_CMUX_COMMIT="$CMUX_COMMIT" "$ROOT/scripts/vendor-app-deps.sh" --cmux-only
+fi
+
+actual_cmux_commit="$(git -C "$CMUX_DIR" rev-parse HEAD 2>/dev/null || true)"
+[ "$actual_cmux_commit" = "$CMUX_COMMIT" ] || {
+  echo "cmux source checkout mismatch before overlay: expected $CMUX_COMMIT, got ${actual_cmux_commit:-missing}" >&2
+  exit 1
+}
+
+SPIN_CMUX_COMMIT="$CMUX_COMMIT" SPIN_CMUX_REF="$CMUX_COMMIT" SPIN_CMUX_OVERLAY_NO_FETCH=1 \
+  "$ROOT/scripts/apply-cmux-spin-overlay.sh" "$CMUX_DIR"
+
+actual_cmux_commit="$(git -C "$CMUX_DIR" rev-parse HEAD 2>/dev/null || true)"
+[ "$actual_cmux_commit" = "$CMUX_COMMIT" ] || {
+  echo "cmux source checkout drifted during overlay: expected $CMUX_COMMIT, got ${actual_cmux_commit:-missing}" >&2
+  exit 1
+}
 
 cd "$CMUX_DIR"
 echo "Building SPIN cmux app with Xcode..."

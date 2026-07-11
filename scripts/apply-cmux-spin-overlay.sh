@@ -8,8 +8,13 @@ set -euo pipefail
 ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CMUX_DIR="${1:-$ROOT/app/upstream/cmux}"
 CMUX_REPO="${SPIN_CMUX_REPO:-https://github.com/manaflow-ai/cmux.git}"
-CMUX_REF="${SPIN_CMUX_REF:-main}"
-CMUX_ARCHIVE_URL="${SPIN_CMUX_ARCHIVE_URL:-https://github.com/manaflow-ai/cmux/archive/refs/heads/${CMUX_REF}.tar.gz}"
+CMUX_REF="${SPIN_CMUX_REF:-${SPIN_CMUX_COMMIT:-}}"
+if [ -z "$CMUX_REF" ] && command -v node >/dev/null 2>&1 && [ -f "$ROOT/app/spin-app.json" ]; then
+  CMUX_REF="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.components?.uiEngine?.upstreamCommit || "")' \
+    "$ROOT/app/spin-app.json" 2>/dev/null || true)"
+fi
+CMUX_REF="${CMUX_REF:-main}"
+CMUX_ARCHIVE_URL="${SPIN_CMUX_ARCHIVE_URL:-https://github.com/manaflow-ai/cmux/archive/${CMUX_REF}.tar.gz}"
 CMUX_FETCH_MODE="${SPIN_CMUX_FETCH_MODE:-archive}"
 
 valid_cmux_checkout() {
