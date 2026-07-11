@@ -20,6 +20,7 @@
 #   spin app-update      plan a SPIN.app artifact update from compatibility manifests
 #   spin app-updates     user-facing SPIN.app update check/install surface
 #   spin app-release-notes prepare open-source tester release notes for a macOS artifact
+#   spin computer-use ... delegate a bounded desktop task to signed Codex; `probe` verifies it
 #   spin omp-setup       hand off to OMP's built-in setup wizard
 #   spin update          safely update SPIN, back up state, run migrations
 #   spin version         show installed version + git checkout
@@ -178,6 +179,7 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
   decline|no|hold)  exec "$ROOT/scripts/approve.sh" "DECLINE: $*" ;;
   ask)              exec "$ROOT/scripts/approve.sh" "ASK: $*" ;;
   delegate)         exec bash "$ROOT/scripts/delegate.sh" "$@" ;;
+  computer-use|desktop) exec bash "$ROOT/scripts/codex-computer-use.sh" "$@" ;;
   log)              exec tail -f "$RUN_DIR/workspace-ceo-driver.log" ;;
   watch)
     trap 'tput cnorm 2>/dev/null; exit 0' INT TERM
@@ -299,16 +301,20 @@ let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () 
 });
 ' 2>/dev/null)"
       case "$bridge_state" in
-        ready)       echo "  [OK] OMP computer-use bridge: node_repl plugin route ready" ;;
+        configured)  echo "  [OK] Codex Computer Use lane: configured (runtime proof: spin computer-use probe)" ;;
         custom)      echo "  [OK] OMP computer-use bridge: custom executable configured" ;;
         custom-disabled) echo "  [SKIP] OMP computer-use bridge: custom executable is disabled" ;;
         repairable)  echo "  [WARN] OMP computer-use bridge: repairable (run: spin up)" ;;
-        unavailable) echo "  [SKIP] OMP computer-use bridge: optional client not installed" ;;
-        *)           echo "  [FAIL] OMP computer-use bridge: invalid or unreadable MCP config"; app_health_rc=1 ;;
+        unavailable) echo "  [SKIP] Codex Computer Use lane: signed runtime or plugin not installed" ;;
+        *)           echo "  [FAIL] Computer Use routing: invalid or unreadable MCP config"; app_health_rc=1 ;;
       esac
     fi
     echo "  direct fallback CLIs:"; ac=0
-    for a in claude codex gemini ollama; do command -v "$a" >/dev/null 2>&1 && { echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1)); }; done
+    for a in claude codex gemini ollama; do
+      if command -v "$a" >/dev/null 2>&1 && "$a" --version >/dev/null 2>&1; then
+        echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1))
+      fi
+    done
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"
     echo; echo "${c_bold}Driver${c_off}"
     if [[ -f "$RUN_DIR/STOP" ]]; then echo "  ${c_yel}⏸ paused (STOP flag) — spin start to resume${c_off}"

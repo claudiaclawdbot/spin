@@ -150,12 +150,14 @@ SPIN writes a runtime OMP config overlay for coordinator and project work:
 
 The intended waterfall is OMP first. Inside OMP, fallback can move between authenticated model/provider lanes such as Anthropic, OpenAI Codex, OpenRouter, Gemini, or local runtimes, depending on what you configured. If OMP itself is missing or hard-fails, SPIN still has an outer direct-CLI fallback lane through tools such as `codex`, `claude`, `gemini`, and `ollama`.
 
-When Codex Computer Use is installed, SPIN routes desktop control through the
-supported `node_repl` plugin wrapper. OMP 16.4 incorrectly imports Codex's
-disabled legacy direct `computer-use` MCP, so SPIN suppresses that one server in
-`~/.omp/agent/mcp.json` and injects the current plugin instructions into its
-agents. The repair is idempotent and preserves unrelated or custom MCP servers.
-`spin doctor` reports the bridge state before project floors are launched.
+When Codex Computer Use is installed, SPIN delegates bounded desktop tasks from
+OMP to the signed Codex CLI. Codex then owns its supported `node_repl` plugin
+wrapper and native service trust chain. OMP 16.4 incorrectly imports Codex's
+disabled direct `computer-use` MCP, so SPIN suppresses that server in
+`~/.omp/agent/mcp.json`; OMP's own `node_repl` is not advertised as a desktop
+bridge. The repair is idempotent and preserves unrelated or custom MCP servers.
+`spin doctor` reports configuration truth, while `spin computer-use probe`
+performs the read-only live proof required before calling the lane ready.
 
 ## Safety Model
 

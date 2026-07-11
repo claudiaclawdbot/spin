@@ -18,7 +18,7 @@ mkdir -p "$KIT"
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
       scripts/lib/cmux-floor-layout.sh \
       scripts/lib/human-queue-summary.js \
-      scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js \
+      scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js scripts/codex-computer-use.sh \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
       docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/assets \
@@ -205,7 +205,8 @@ grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.2' README.md
 grep -q 'PUBLIC_BETA_READINESS.md' README.md
-grep -q 'node_repl.*plugin wrapper' README.md
+grep -q 'signed Codex CLI' README.md
+grep -q 'spin computer-use probe' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
 test -s docs/assets/spin-public-beta-demo.gif
@@ -1107,6 +1108,7 @@ chmod +x "$FAKEBIN/omp"
 
 MCP_NODE_REPL="$TMP/computer-use-fixture/node_repl"
 MCP_PLUGIN_ROOT="$TMP/computer-use-fixture/plugin"
+MCP_CODEX="$TMP/computer-use-fixture/codex"
 MCP_FIXTURE_CONFIG="$TMP/omp-agent/mcp.json"
 mkdir -p "$MCP_PLUGIN_ROOT/scripts" "$MCP_PLUGIN_ROOT/skills/computer-use" \
   "$(dirname "$MCP_FIXTURE_CONFIG")"
@@ -1115,6 +1117,19 @@ cat > "$MCP_NODE_REPL" <<'EOF'
 exit 0
 EOF
 chmod +x "$MCP_NODE_REPL"
+cat > "$MCP_CODEX" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--version" ]]; then echo "codex fake signed lane"; exit 0; fi
+printf '%s\n' "\$@" > "$TMP/computer-use-codex.args"
+out=""
+while [[ \$# -gt 0 ]]; do
+  if [[ "\$1" == "--output-last-message" && \$# -ge 2 ]]; then out="\$2"; shift 2; continue; fi
+  shift
+done
+[[ -n "\$out" ]] && printf '%s\n' 'VISIBLE_CODEX_CUA_OK SPIN - SPIN Coordinator' > "\$out"
+exit 0
+EOF
+chmod +x "$MCP_CODEX"
 : > "$MCP_PLUGIN_ROOT/scripts/computer-use-client.mjs"
 : > "$MCP_PLUGIN_ROOT/skills/computer-use/SKILL.md"
 cat > "$MCP_FIXTURE_CONFIG" <<'EOF'
@@ -1125,17 +1140,19 @@ cat > "$MCP_FIXTURE_CONFIG" <<'EOF'
   }
 }
 EOF
-SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
   SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
   node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-mcp-repair.json"
-node - "$MCP_FIXTURE_CONFIG" "$TMP/omp-mcp-repair.json" <<'NODE'
+node - "$MCP_FIXTURE_CONFIG" "$TMP/omp-mcp-repair.json" "$MCP_CODEX" <<'NODE'
 const fs = require('fs');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const result = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 if (config.mcpServers['keep-me'].command !== '/usr/bin/true') process.exit(1);
 if (config.mcpServers['computer-use']) process.exit(1);
 if (!config.disabledServers.includes('computer-use')) process.exit(1);
-if (result.status !== 'ready' || result.route !== 'node_repl' || !result.changed) process.exit(1);
+if (result.status !== 'configured' || result.route !== 'codex-delegate' || !result.changed) process.exit(1);
+if (result.codexBin !== process.argv[4]) process.exit(1);
 NODE
 if [[ "$(uname -s)" == "Darwin" ]]; then
   mcp_config_mode="$(stat -f '%Lp' "$MCP_FIXTURE_CONFIG")"
@@ -1144,24 +1161,39 @@ else
 fi
 test "$mcp_config_mode" = "600"
 before_mcp_hash="$(shasum -a 256 "$MCP_FIXTURE_CONFIG" | awk '{print $1}')"
-SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
   SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
   node scripts/omp-mcp-bootstrap.js repair --quiet
 after_mcp_hash="$(shasum -a 256 "$MCP_FIXTURE_CONFIG" | awk '{print $1}')"
 test "$before_mcp_hash" = "$after_mcp_hash"
-SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
   SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
   node scripts/omp-mcp-bootstrap.js prompt > "$TMP/omp-mcp-prompt.txt"
-grep -q 'connected node_repl MCP' "$TMP/omp-mcp-prompt.txt"
-grep -q "$MCP_PLUGIN_ROOT/scripts/computer-use-client.mjs" "$TMP/omp-mcp-prompt.txt"
-grep -q 'setupComputerUseRuntime' "$TMP/omp-mcp-prompt.txt"
+grep -q 'Do not call OMP.*node_repl' "$TMP/omp-mcp-prompt.txt"
+grep -q 'codex-computer-use.sh' "$TMP/omp-mcp-prompt.txt"
+grep -q -- '--read-only' "$TMP/omp-mcp-prompt.txt"
+grep -q 'action-time confirmation' "$TMP/omp-mcp-prompt.txt"
+grep -q 'explicit user-authored pre-approval' "$TMP/omp-mcp-prompt.txt"
 cat > "$TMP/omp-disabled-mcp.json" <<'EOF'
 { "disabledServers": ["computer-use"], "mcpServers": {} }
 EOF
-SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
   SPIN_OMP_MCP_CONFIG="$TMP/omp-disabled-mcp.json" \
   node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-disabled-result.json"
-node -e 'const r=require(process.argv[1]); if(r.status!=="ready"||r.route!=="node_repl"||r.changed) process.exit(1)' "$TMP/omp-disabled-result.json"
+node -e 'const r=require(process.argv[1]); if(r.status!=="configured"||r.route!=="codex-delegate"||r.changed) process.exit(1)' "$TMP/omp-disabled-result.json"
+SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$TMP/omp-disabled-mcp.json" \
+  bash scripts/codex-computer-use.sh probe > "$TMP/computer-use-probe.out"
+grep -q '^VISIBLE_CODEX_CUA_OK SPIN - SPIN Coordinator$' "$TMP/computer-use-probe.out"
+grep -qx 'exec' "$TMP/computer-use-codex.args"
+grep -qx -- '--ephemeral' "$TMP/computer-use-codex.args"
+grep -qx -- '--sandbox' "$TMP/computer-use-codex.args"
+grep -q 'Read-only scope:' "$TMP/computer-use-codex.args"
+grep -q 'VISIBLE_CODEX_CUA_OK' "$TMP/computer-use-codex.args"
 MCP_CUSTOM_CLIENT="$TMP/custom-computer-use"
 cat > "$MCP_CUSTOM_CLIENT" <<'EOF'
 #!/usr/bin/env bash
@@ -1195,6 +1227,7 @@ node -e 'const r=require(process.argv[1]); if(r.status!=="unavailable"||r.change
 test ! -e "$TMP/missing-mcp.json"
 
 PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" \
+  SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
   SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
   SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" SPIN_OMP_DEFAULT_FALLBACKS= \
   CEO_OMP_MODEL=openrouter/test-model bash -c "
@@ -1212,7 +1245,11 @@ grep -q 'fallbackChains:' "$TMP/spin-omp.yml"
 grep -q 'openai-codex/gpt-5-codex' "$TMP/spin-omp.yml"
 grep -q 'openrouter/test-model' "$TMP/spin-omp.yml"
 grep -q -- '--append-system-prompt' "$TMP/omp.args"
-grep -q 'setupComputerUseRuntime' "$TMP/omp.args"
+grep -q 'codex-computer-use.sh' "$TMP/omp.args"
+if grep -q 'setupComputerUseRuntime' "$TMP/omp.args"; then
+  echo "omp prompt advertised the unsupported direct node_repl Computer Use path"
+  exit 1
+fi
 
 cat > "$TMP/internal-omp" <<EOF
 #!/usr/bin/env bash

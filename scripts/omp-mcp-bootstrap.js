@@ -4,6 +4,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const SERVER_NAME = 'computer-use';
 const CLIENT_RELATIVE_PATH = path.join(
@@ -46,6 +47,44 @@ function findNodeRepl() {
   addCandidate(candidates, '/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl');
   addCandidate(candidates, '/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl');
   return candidates.find(isExecutable) || null;
+}
+
+function addPathCandidate(candidates, name) {
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (dir) addCandidate(candidates, path.join(dir, name));
+  }
+}
+
+function commandWorks(file) {
+  if (!isExecutable(file)) return false;
+  const result = spawnSync(file, ['--version'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 5000,
+  });
+  return !result.error && result.status === 0;
+}
+
+function trustedForComputerUse(file) {
+  if (process.env.SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE === '1') return true;
+  if (process.platform !== 'darwin') return true;
+  const result = spawnSync('/usr/bin/codesign', ['-d', '--verbose=4', file], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 5000,
+  });
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  return !result.error && result.status === 0 && /TeamIdentifier=2DC432GLL2/.test(output);
+}
+
+function findCodex() {
+  const candidates = [];
+  addCandidate(candidates, process.env.SPIN_CODEX_BIN);
+  addCandidate(candidates, process.env.CODEX_CLI_PATH);
+  addCandidate(candidates, '/Applications/ChatGPT.app/Contents/Resources/codex');
+  addCandidate(candidates, '/Applications/Codex.app/Contents/Resources/codex');
+  addPathCandidate(candidates, 'codex');
+  return candidates.find((file) => commandWorks(file) && trustedForComputerUse(file)) || null;
 }
 
 function validPluginRoot(root) {
@@ -130,6 +169,7 @@ function isCustomServer(server) {
 
 function bridgeComponents() {
   return {
+    codexBin: findCodex(),
     nodeRepl: findNodeRepl(),
     pluginRoot: findPluginRoot(),
   };
@@ -168,17 +208,18 @@ function status() {
   const components = bridgeComponents();
   const suppressed = disabled;
   const directEntryPresent = Boolean(server);
-  const componentsReady = Boolean(components.nodeRepl && components.pluginRoot);
+  const componentsReady = Boolean(components.codexBin && components.nodeRepl && components.pluginRoot);
 
   if (componentsReady && suppressed && !directEntryPresent) {
     return {
       ok: true,
-      status: 'ready',
-      route: 'node_repl',
+      status: 'configured',
+      route: 'codex-delegate',
       changed: false,
       configPath: file,
       ...components,
-      detail: 'OMP Computer Use is ready through node_repl; the disabled legacy direct MCP is suppressed',
+      probeCommand: 'spin computer-use probe',
+      detail: 'Codex Computer Use delegation is configured; run the read-only probe before claiming runtime readiness',
     };
   }
 
@@ -186,11 +227,11 @@ function status() {
     return {
       ok: true,
       status: 'repairable',
-      route: 'node_repl',
+      route: 'codex-delegate',
       changed: false,
       configPath: file,
       ...components,
-      detail: 'node_repl and the Computer Use plugin are installed; OMP needs the legacy direct MCP suppressed',
+      detail: 'signed Codex, node_repl, and the Computer Use plugin are installed; OMP needs the unsupported direct MCP suppressed',
     };
   }
 
@@ -202,8 +243,8 @@ function status() {
     configPath: file,
     ...components,
     detail: suppressed
-      ? 'legacy direct computer-use MCP is suppressed; node_repl or the Computer Use plugin is unavailable'
-      : 'node_repl or the Computer Use plugin is unavailable; OMP will continue without desktop control',
+      ? 'unsupported direct computer-use MCP is suppressed; signed Codex, node_repl, or the Computer Use plugin is unavailable'
+      : 'signed Codex, node_repl, or the Computer Use plugin is unavailable; OMP will continue without desktop control',
   };
 }
 
@@ -257,17 +298,17 @@ function repair() {
     ...status(),
     changed,
     detail: changed
-      ? 'suppressed OMP 16.4 legacy direct computer-use discovery; node_repl is the supported route'
+      ? 'suppressed OMP 16.4 direct computer-use discovery; desktop work delegates to signed Codex'
       : before.detail,
   };
 }
 
 function computerUsePrompt() {
   const current = status();
-  if (current.status !== 'ready' || !current.pluginRoot) return '';
+  if (current.status !== 'configured' || !current.pluginRoot) return '';
   const skill = path.join(current.pluginRoot, 'skills', 'computer-use', 'SKILL.md');
-  const wrapper = path.join(current.pluginRoot, 'scripts', 'computer-use-client.mjs');
-  return `## macOS Computer Use\n\nFor desktop UI work, use the connected node_repl MCP, not a direct computer-use MCP. Read ${skill} before acting. In node_repl, initialize the supported plugin wrapper with:\n\nif (!globalThis.sky) {\n  var { setupComputerUseRuntime } = await import(${JSON.stringify(wrapper)});\n  await setupComputerUseRuntime({ globals: globalThis });\n}\n\nThen use sky.get_app_state and the other sky methods exactly as the skill describes. Re-read app state after each action and follow the skill's confirmation policy.`;
+  const delegate = path.join(__dirname, 'codex-computer-use.sh');
+  return `## macOS Computer Use\n\nOMP does not own Codex's native Computer Use trust chain. Do not call OMP's imported node_repl or a direct computer-use MCP for desktop work. Delegate each exact, bounded desktop task to the signed Codex lane:\n\n${JSON.stringify(delegate)} --cwd \"$PWD\" -- \"<exact desktop task and acceptance evidence>\"\n\nFor inspection-only work, add --read-only. The delegated Codex agent must read ${skill}, use its connected node_repl MCP, and follow the skill's action-time confirmation policy. Generic delegation is not confirmation for a risky UI action. Quote any relevant explicit user-authored pre-approval exactly in the task; never infer or invent it. If the command reports quota, approval, or native-runtime failure, report that exact blocker and do not invent UI evidence. Run ${JSON.stringify(delegate)} probe for a read-only runtime proof.`;
 }
 
 function printResult(result) {

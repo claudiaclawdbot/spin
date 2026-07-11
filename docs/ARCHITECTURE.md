@@ -119,6 +119,20 @@ limits. OMP is deliberately not benched by SPIN for provider 429s because OMP
 tracks those per account/provider internally; benching the whole OMP harness would
 throw away the fallback chain.
 
+### Desktop execution
+
+Desktop control is a separate Codex-owned lane, not an OMP MCP capability. OMP
+delegates a bounded task through `scripts/codex-computer-use.sh`; the script
+selects a working signed OpenAI Codex CLI, and that Codex process owns the
+`node_repl` Computer Use wrapper and native service trust chain. SPIN suppresses
+OMP's imported direct `computer-use` MCP because an OMP child cannot inherit
+that trust relationship. `spin doctor` proves configuration only. A live
+release gate must also pass `spin computer-use probe`.
+
+Set `SPIN_CODEX_COMPUTER_USE_MODEL` to pin this lane to a separately selected
+Codex model. Without it, the signed Codex CLI uses the account's configured
+default, independently of OMP's model fallback chain.
+
 Useful overrides in `~/.config/omp.env`:
 
 ```

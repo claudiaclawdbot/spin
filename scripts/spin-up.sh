@@ -24,10 +24,11 @@ let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () 
 });
 ' 2>/dev/null)"
   case "$bridge_state" in
-    ready|custom) echo "  ${c_g}✓${c_o} OMP computer-use bridge ready" ;;
+    configured) echo "  ${c_g}✓${c_o} Codex Computer Use lane configured ${c_d}(probe: spin computer-use probe)${c_o}" ;;
+    custom) echo "  ${c_g}✓${c_o} custom OMP computer-use bridge configured" ;;
     custom-disabled) echo "  ${c_d}· custom OMP computer-use bridge disabled${c_o}" ;;
-    unavailable) echo "  ${c_d}· optional OMP computer-use bridge not installed${c_o}" ;;
-    *)           echo "  ${c_d}· OMP computer-use bridge needs attention ${c_o}(run: spin doctor)" ;;
+    unavailable) echo "  ${c_d}· optional Codex Computer Use lane not installed${c_o}" ;;
+    *)           echo "  ${c_d}· Computer Use routing needs attention ${c_o}(run: spin doctor)" ;;
   esac
 fi
 
