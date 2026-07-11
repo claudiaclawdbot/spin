@@ -144,8 +144,11 @@ fi
 # ── 3. SPIN orchestrator floor (the omp agent you talk to) ───────────────────
 startup_failures=0
 coord_ref="$(spin_cmux_ensure_coordinator_floor true 2>/dev/null || true)"
-if [[ -n "$coord_ref" ]]; then
+if [[ -n "$coord_ref" ]] && spin_cmux_wait_for_floor_active "$coord_ref" ceo; then
   echo "  ${c_g}✓${c_o} SPIN orchestrator floor open → $coord_ref ${c_d}(talk to it there)${c_o}"
+elif [[ -n "$coord_ref" ]]; then
+  echo "  ${c_d}· SPIN orchestrator floor did not reach a live OMP prompt → $coord_ref${c_o}"
+  startup_failures=$((startup_failures + 1))
 else
   echo "  ${c_d}· couldn't open the SPIN orchestrator floor (is cmux running?)${c_o}"
   startup_failures=$((startup_failures + 1))
@@ -165,7 +168,12 @@ while IFS= read -r id; do
   [ -z "$id" ] && continue
   ref="$(spin_cmux_ensure_project_floor "$id" false 2>/dev/null || true)"
   if [[ -n "$ref" ]]; then
-    echo "  ${c_g}✓${c_o} project floor ready: $id → $ref"
+    if spin_cmux_wait_for_floor_active "$ref" "$id"; then
+      echo "  ${c_g}✓${c_o} project floor ready: $id → $ref"
+    else
+      echo "  ${c_d}· project floor did not reach a live OMP prompt: $id → $ref${c_o}"
+      startup_failures=$((startup_failures + 1))
+    fi
     sf="$(spin_cmux_terminal_surface "$ref")"
     if spin_cmux_open_project_board "$ref" "$id" "$sf"; then
       echo "  ${c_g}✓${c_o} $id board visible"

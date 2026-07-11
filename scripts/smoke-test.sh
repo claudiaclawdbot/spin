@@ -804,6 +804,35 @@ PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
+
+# Project floors keep OMP itself in SPIN-owned metadata even when the product
+# path resolves elsewhere. The real code path remains explicit and exported.
+FLOORBIN="$TMP/floorbin"
+FLOOR_CAPTURE="$TMP/floor-omp.capture"
+mkdir -p "$FLOORBIN" "$TMP/protected-project" \
+  "$KIT/org/projects/protected-floor"
+ln -s "$TMP/protected-project" "$KIT/projects/protected-floor"
+cat > "$FLOORBIN/omp" <<'EOF'
+#!/usr/bin/env bash
+{
+  printf 'cwd=%s\n' "$PWD"
+  printf 'project=%s\n' "${SPIN_PROJECT_ROOT:-}"
+  printf 'args=%s\n' "$*"
+} > "$FLOOR_CAPTURE"
+EOF
+chmod +x "$FLOORBIN/omp"
+TERM=xterm FLOOR_CAPTURE="$FLOOR_CAPTURE" SPIN_OMP_BIN="$FLOORBIN/omp" \
+  SPIN_OMP_MCP_BOOTSTRAP=0 SPIN_ROOT="$KIT" \
+  scripts/cmux-floor.sh protected-floor > "$TMP/protected-floor.out"
+grep -Fx "cwd=$KIT/org/projects/protected-floor" "$FLOOR_CAPTURE"
+grep -Fx "project=$KIT/projects/protected-floor" "$FLOOR_CAPTURE"
+grep -F 'Use absolute project paths' "$FLOOR_CAPTURE"
+grep -F "floor:  $KIT/org/projects/protected-floor" "$TMP/protected-floor.out"
+grep -F "code:   $KIT/projects/protected-floor" "$TMP/protected-floor.out"
+rm -f "$KIT/projects/protected-floor" \
+  "$KIT/org/ceo/runs/floors/protected-floor.pid"
+rm -rf "$KIT/org/projects/protected-floor"
+
 : > "$TMP/cmux.calls"
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
   ROOT="$SPIN_ROOT"
@@ -1026,6 +1055,20 @@ PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" STALE_TITLE='π: Example Product' bash -
     exit 1
   fi
   spin_cmux_floor_active_in_workspace workspace:15 example-app
+'
+
+PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" STALE_TITLE='Terminal' bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_floor_marker_running() { return 0; }
+  spin_cmux_floor_marker_value() {
+    [[ "$2" == tty ]] && printf "%s\n" /dev/ttys015
+  }
+  if spin_cmux_floor_active_in_workspace workspace:15 example-app; then
+    echo "floor without a live OMP terminal title was accepted" >&2
+    exit 1
+  fi
 '
 
 RECONCILEBIN="$TMP/reconcilebin"
@@ -1738,7 +1781,7 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "$TMP/spin-up-launch-cmux"
-env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
+env -i HOME="$TMP/spin-up-launch-home" PATH="$PATH" SPIN_ROOT="$KIT" SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_TEST_ASSUME_FLOORS_READY=1 SPIN_CMUX_BIN="$TMP/spin-up-launch-cmux" \
   scripts/spin app-launch > "$TMP/spin-up-launch.out"
 grep -q 'SPIN orchestrator floor open' "$TMP/spin-up-launch.out"
 grep -q 'background driver disabled for this run' "$TMP/spin-up-launch.out"

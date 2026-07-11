@@ -272,11 +272,26 @@ spin_cmux_floor_active_in_workspace() {
   [[ -n "$surface" ]] || return 1
   tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
   if [[ -n "$tty_name" ]]; then
-    spin_cmux_floor_running "$target" "$tty_name"
+    spin_cmux_floor_running "$target" "$tty_name" || return 1
+    spin_cmux_terminal_has_agent_title "$workspace"
     return
   fi
   spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
     spin_cmux_floor_screen_active "$workspace" "$surface"
+}
+
+spin_cmux_wait_for_floor_active() {
+  local workspace="$1" target="$2" attempts delay
+  [[ "${SPIN_TEST_ASSUME_FLOORS_READY:-0}" == "1" ]] && return 0
+  attempts="${SPIN_CMUX_FLOOR_READY_RETRIES:-30}"
+  delay="${SPIN_CMUX_FLOOR_READY_DELAY:-1}"
+  case "$attempts" in ''|*[!0-9]*) attempts=30 ;; esac
+  while (( attempts > 0 )); do
+    spin_cmux_floor_active_in_workspace "$workspace" "$target" && return 0
+    attempts=$((attempts - 1))
+    (( attempts > 0 )) && sleep "$delay"
+  done
+  return 1
 }
 
 spin_cmux_start_floor_in_workspace() {

@@ -29,14 +29,18 @@ if [[ "$TARGET" == "ceo" ]]; then
   # request, bloating it until Anthropic rejects it. The CEO reads/writes org files
   # by absolute path via tools, so it doesn't need to sit inside the repo.
   DIR="$HOME/.omp-ceo"; mkdir -p "$DIR"
+  PROJECT_CODE_DIR=""
   TITLE="WORKSPACE CEO  ·  omp agent"
 else
   SYS="$ROOT/org/projects/$TARGET/PROJECT_CONTROLLER_PROMPT.md"
   FLOOR_DOC="$ROOT/org/projects/$TARGET/FLOOR.md"
-  # Project code repos now live under projects/ (consolidated).
-  # Fallback chain: projects/<id> → org/projects/<id> (metadata-only project)
-  DIR="$ROOT/projects/$TARGET"
-  [[ -d "$DIR" ]] || DIR="$ROOT/org/projects/$TARGET"
+  PROJECT_CODE_DIR="$ROOT/projects/$TARGET"
+  [[ -d "$PROJECT_CODE_DIR" ]] || PROJECT_CODE_DIR="$ROOT/org/projects/$TARGET"
+  # Keep the long-lived OMP process in SPIN-owned state. Calling getcwd() from
+  # Desktop/Documents/Downloads can block an ad-hoc app behind macOS privacy.
+  DIR="$(spin_cmux_project_cwd "$TARGET")"
+  mkdir -p "$DIR"
+  export SPIN_PROJECT_ROOT="$PROJECT_CODE_DIR"
   TITLE="$TARGET  ·  omp orchestrator"
 fi
 
@@ -86,6 +90,20 @@ or change what you're working on, update the relevant section (Goal / In progres
 Recently done / Next / Waiting on human) and the 'Last updated' timestamp. Keep it terse —
 it's the human's at-a-glance view of this floor."
 
+if [[ -n "$PROJECT_CODE_DIR" ]]; then
+  BOARD_INSTR="${BOARD_INSTR}
+
+## Project code location
+The real project code path is available as:
+
+\`\$SPIN_PROJECT_ROOT\` = \`$PROJECT_CODE_DIR\`
+
+Your long-lived floor intentionally starts in \`$DIR\` so an ad-hoc macOS app
+does not block in \`getcwd()\` when a repository lives under a protected folder.
+Use absolute project paths, \`git -C \"\$SPIN_PROJECT_ROOT\"\`, and tool-specific
+working-directory options. Do not treat the floor directory as the product repo."
+fi
+
 SYS_CONTENT=""
 [[ -f "$SYS" ]] && SYS_CONTENT="$(cat "$SYS")"
 COMPUTER_USE_INSTR="$(spin_omp_computer_use_prompt)"
@@ -98,7 +116,8 @@ SYSARG=(--append-system-prompt "$SYS_CONTENT")
 clear
 echo "════════════════════════════════════════════════════════════"
 echo "  $TITLE"
-echo "  dir:    $DIR"
+echo "  floor:  $DIR"
+[[ -n "$PROJECT_CODE_DIR" ]] && echo "  code:   $PROJECT_CODE_DIR"
 echo "  model:  OMP default role   (cheap subtasks: OMP smol role)"
 echo "  auth:   OMP-configured accounts with retry/fallback chains"
 echo

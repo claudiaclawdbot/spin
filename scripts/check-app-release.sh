@@ -469,7 +469,7 @@ case "\${1:-}" in
 esac
 EOF
 chmod +x "$TMP/fake-cmux-spin-up"
-spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
+spin_up_launch_out="$(env -i HOME="$TMP/omp-live-home" PATH="$SYSTEM_PATH" SPIN_APP_HOME="$TMP/omp-live-home" SPIN_APP_NO_LOG_REDIRECT=1 SPIN_APP_ASSUME_OMP_CONFIGURED=1 SPIN_DISABLE_BACKGROUND_DAEMONS=1 SPIN_TEST_ASSUME_FLOORS_READY=1 SPIN_CMUX_BIN="$TMP/fake-cmux-spin-up" "$APP/Contents/MacOS/SPIN")"
 grep -q 'SPIN orchestrator floor open' <<<"$spin_up_launch_out" || fail "real app launcher did not report opening the SPIN orchestrator floor"
 grep -q 'background driver disabled for this run' <<<"$spin_up_launch_out" || fail "release check launch did not suppress the background driver"
 grep -q 'args=new-workspace --name SPIN Coordinator' "$TMP/fake-cmux-spin-up.calls" || fail "real app launcher did not create the SPIN Coordinator workspace on OMP-ready launch"
