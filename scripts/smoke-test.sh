@@ -805,6 +805,19 @@ grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
 
+SPIN_ROOT="$KIT" scripts/wiki-update.sh > "$TMP/wiki-update-first.out"
+grep -q '^### smoke-floor -' "$KIT/org/wiki/workspace.md"
+if grep -Eq 'fidget-play|built-by-ai|agentclaudia' "$KIT/org/wiki/workspace.md"; then
+  echo "workspace wiki retained hardcoded legacy projects" >&2
+  exit 1
+fi
+wiki_hash_before="$(shasum -a 256 "$KIT/org/wiki/workspace.md" | awk '{print $1}')"
+sleep 1
+SPIN_ROOT="$KIT" scripts/wiki-update.sh > "$TMP/wiki-update-second.out"
+wiki_hash_after="$(shasum -a 256 "$KIT/org/wiki/workspace.md" | awk '{print $1}')"
+test "$wiki_hash_before" = "$wiki_hash_after"
+test ! -s "$TMP/wiki-update-second.out"
+
 # Project floors keep OMP itself in SPIN-owned metadata even when the product
 # path resolves elsewhere. The real code path remains explicit and exported.
 FLOORBIN="$TMP/floorbin"

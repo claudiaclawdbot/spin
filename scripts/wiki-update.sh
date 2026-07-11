@@ -1,105 +1,147 @@
 #!/usr/bin/env bash
-# wiki-update.sh — regenerates org/wiki/workspace.md from raw state files.
-# Karpathy pattern: agents read the wiki, not the raw files. This script is the librarian.
-#
-# Run: bash scripts/wiki-update.sh
-# Or:  add to workspace-status-watch.sh to keep it fresh automatically
-#
-# Reads:  org/state.json, org/AGENT_QUEUE.json, org/HUMAN_QUEUE.md, org/projects/*/FLOOR.md
-# Writes: org/wiki/workspace.md (overwrites — it's generated, not hand-edited)
-
+# Regenerate the workspace retrieval summary from live SPIN state.
 set -uo pipefail
+
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 OUT="$ROOT/org/wiki/workspace.md"
 TS="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+mkdir -p "$(dirname "$OUT")"
+TMP_OUT="$(mktemp "$OUT.tmp.XXXXXX")"
+trap 'rm -f "$TMP_OUT"' EXIT
 
-# ── helpers ─────────────────────────────────────────────────────────────────
-floor_section() {  # $1=project-id $2=section-heading (e.g. "🔨 In progress")
-  local f="$ROOT/org/projects/$1/FLOOR.md"
-  [[ -f "$f" ]] || { echo "(no FLOOR.md)"; return; }
-  # extract lines between ## $2 and the next ## heading
-  awk "/^## $2/{found=1; next} found && /^## /{exit} found{print}" "$f" | grep -v '^$' | head -3
+floor_section() {
+  local file="$ROOT/org/projects/$1/FLOOR.md" wanted="$2"
+  [[ -f "$file" ]] || return 0
+  awk -v wanted="$wanted" '
+    /^## / {
+      heading=$0
+      sub(/^##[[:space:]]+/, "", heading)
+      if (found) exit
+      found=(index(tolower(heading), tolower(wanted)) > 0)
+      next
+    }
+    found && NF { print }
+  ' "$file" | head -3
 }
 
-floor_now()      { floor_section "$1" "🔨 In progress"; }
-floor_next()     { floor_section "$1" "⏭️ Next"; }
-floor_waiting()  { floor_section "$1" "🚧 Waiting on human"; }
-
 running_jobs() {
-  local count=0
-  local pf
-  for pf in "$ROOT/org/jobs/"*.pid; do
-    [[ -f "$pf" ]] || continue
-    local pid; pid="$(cat "$pf" 2>/dev/null)"
-    kill -0 "$pid" 2>/dev/null && (( count++ )) || true
+  local count=0 pid_file pid
+  for pid_file in "$ROOT/org/jobs/"*.pid; do
+    [[ -f "$pid_file" ]] || continue
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && count=$((count + 1))
   done
-  echo "$count"
+  printf '%s\n' "$count"
 }
 
 queued_jobs() {
-  [[ -f "$ROOT/org/AGENT_QUEUE.json" ]] || { echo "0"; return; }
-  node -e "
-    const q = JSON.parse(require('fs').readFileSync('$ROOT/org/AGENT_QUEUE.json','utf8'));
-    const jobs = Array.isArray(q) ? q : (q.jobs || []);
-    console.log(jobs.filter(j=>j.status==='queued').length);
-  " 2>/dev/null || echo "?"
+  node - "$ROOT/org/AGENT_QUEUE.json" <<'NODE' 2>/dev/null || printf '?\n'
+const fs = require('fs');
+try {
+  const queue = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const jobs = Array.isArray(queue) ? queue : (queue.jobs || []);
+  console.log(jobs.filter(job => job.status === 'queued').length);
+} catch { console.log(0); }
+NODE
 }
 
 human_items() {
-  [[ -f "$ROOT/org/HUMAN_QUEUE.md" ]] || { echo "(none)"; return; }
+  [[ -f "$ROOT/org/HUMAN_QUEUE.md" ]] || { printf '%s\n' '(none)'; return; }
   local items
   items="$(node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --lines 2>/dev/null | head -10 || true)"
-  [[ -n "$items" ]] && printf '%s\n' "$items" || echo "(none)"
+  [[ -n "$items" ]] && printf '%s\n' "$items" || printf '%s\n' '(none)'
 }
 
 human_summary() {
-  node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --text 2>/dev/null || echo "nothing waiting"
+  node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --text 2>/dev/null || printf '%s\n' 'nothing waiting'
 }
 
-# ── project status blocks ────────────────────────────────────────────────────
-project_block() {  # $1=project-id
-  local id="$1"
-  local status; status="$(node -e "
-    try {
-      const s=JSON.parse(require('fs').readFileSync('$ROOT/org/state.json','utf8'));
-      const p=s.project_orchestrators.find(x=>x.project==='$id')||{};
-      console.log(p.status||'unknown');
-    } catch(e){ console.log('unknown'); }
-  " 2>/dev/null)"
-  local now; now="$(floor_now "$id")"
-  local next; next="$(floor_next "$id")"
-  local wait; wait="$(floor_waiting "$id")"
-
-  echo "### $id · $status"
-  [[ -n "$now" ]]  && echo "- **Now:** $now"
-  [[ -n "$next" ]] && echo "- **Next:** $next"
-  [[ -n "$wait" ]] && echo "- **Waiting on human:** $wait"
-  echo ""
+project_ids() {
+  node - "$ROOT/org/state.json" "$ROOT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const [stateFile, harnessFile] = process.argv.slice(2);
+const ordered = [];
+const seen = new Set();
+const statuses = new Map();
+const active = value => {
+  const status = String(value || '').toLowerCase();
+  return status && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(status);
+};
+const add = id => {
+  if (id && !seen.has(id)) {
+    seen.add(id);
+    ordered.push(id);
+  }
+};
+try {
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  for (const project of state.project_orchestrators || []) {
+    const id = project.project || project.id;
+    if (!id) continue;
+    statuses.set(id, project.status || '');
+    if (active(project.status)) add(id);
+  }
+} catch {}
+try {
+  const harness = JSON.parse(fs.readFileSync(harnessFile, 'utf8'));
+  for (const [id, project] of Object.entries(harness.projects || {})) {
+    const status = statuses.get(id);
+    if (project && project.cmux_workspace && (!status || active(status))) add(id);
+  }
+} catch {}
+for (const id of ordered) console.log(id);
+NODE
 }
 
-# ── write the wiki ───────────────────────────────────────────────────────────
-cat > "$OUT" <<WIKI
-# Workspace Overview — auto-generated
-<!-- Regenerated by scripts/wiki-update.sh every ~6s. DO NOT EDIT BY HAND. -->
+project_status() {
+  node - "$ROOT/org/state.json" "$1" <<'NODE' 2>/dev/null || printf '%s\n' unknown
+const fs = require('fs');
+const id = process.argv[3];
+try {
+  const state = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const project = (state.project_orchestrators || []).find(item => (item.project || item.id) === id) || {};
+  console.log(project.status || 'unknown');
+} catch { console.log('unknown'); }
+NODE
+}
 
-_Last updated: ${TS}_
+project_block() {
+  local id="$1" status now next waiting
+  status="$(project_status "$id")"
+  now="$(floor_section "$id" 'in progress')"
+  next="$(floor_section "$id" 'next')"
+  waiting="$(floor_section "$id" 'waiting')"
+  printf '### %s - %s\n' "$id" "$status"
+  [[ -n "$now" ]] && printf '%s\n' "- **Now:** $now"
+  [[ -n "$next" ]] && printf '%s\n' "- **Next:** $next"
+  [[ -n "$waiting" ]] && printf '%s\n' "- **Waiting on human:** $waiting"
+  printf '\n'
+}
+
+PROJECT_BLOCKS=""
+while IFS= read -r project_id; do
+  [[ -n "$project_id" ]] || continue
+  PROJECT_BLOCKS="${PROJECT_BLOCKS}$(project_block "$project_id")
+"
+done < <(project_ids)
+
+cat > "$TMP_OUT" <<WIKI
+# Workspace Overview - auto-generated
+<!-- Regenerated by scripts/wiki-update.sh when portfolio state changes. DO NOT EDIT. -->
+
+_Last content change: ${TS}_
 
 ## Structure
 
 \`\`\`
-~/clawd/
-├── projects/          ← all project code repos
-│   ├── fidget-play/   ← DeFi spindle (Solidity/Foundry)
-│   ├── built-by-ai/   ← web-dev agency (Next.js)
-│   ├── agentclaudia/  ← newsletter automation (Node.js)
-│   └── biible/        ← app (Next.js+Prisma)
-├── org/               ← orchestration brain
-│   ├── ceo/           ← CEO state, receipts
-│   ├── projects/      ← per-project metadata (FLOOR.md, STATE.json, prompts)
-│   ├── wiki/          ← THIS dir — read me, not raw files
-│   ├── state.json     ← workspace truth
-│   └── AGENT_QUEUE.json
-└── scripts/           ← harness scripts
+SPIN runtime
+|-- projects/          registered product-code links
+|-- org/ceo/           Coordinator state, approvals, and receipts
+|-- org/projects/      per-project floor state and prompts
+|-- org/wiki/          generated retrieval indexes
+|-- org/state.json     portfolio truth
+|-- org/AGENT_QUEUE.json
+\`-- scripts/           control-plane commands
 \`\`\`
 
 ## Live status
@@ -108,10 +150,7 @@ Running jobs: $(running_jobs)  |  Queued: $(queued_jobs)
 
 ## Projects
 
-$(project_block fidget-play)
-$(project_block built-by-ai)
-$(project_block agentclaudia)
-$(project_block biible)
+${PROJECT_BLOCKS:-_(no active project floors)_}
 ## Waiting on human
 
 $(human_summary)
@@ -119,9 +158,19 @@ $(human_summary)
 $(human_items)
 
 ---
-> **CEO:** read \`org/wiki/workspace.md\` (this file) for current state.
-> Read raw files (\`state.json\`, \`AGENT_QUEUE.json\`, \`FLOOR.md\`) only when this doc is >10 min old
-> or you need fine-grained detail. Per-project deep dives: \`org/wiki/projects/<id>.md\`.
+> **CEO:** read \`org/wiki/workspace.md\` for current portfolio context.
+> Read raw \`state.json\`, \`AGENT_QUEUE.json\`, and \`FLOOR.md\` files when you
+> need fine-grained evidence. Project indexes: \`org/wiki/projects/<id>.md\`.
 WIKI
 
-echo "wiki updated → $OUT ($TS)"
+normalize_generated() {
+  sed -E 's/^_Last content change: [^_]*_$/_Last content change: <dynamic>_/' "$1"
+}
+
+if [[ -f "$OUT" ]] && cmp -s <(normalize_generated "$OUT") <(normalize_generated "$TMP_OUT"); then
+  exit 0
+fi
+
+mv "$TMP_OUT" "$OUT"
+trap - EXIT
+echo "wiki updated -> $OUT ($TS)"
