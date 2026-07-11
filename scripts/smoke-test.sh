@@ -1209,6 +1209,11 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
   grep -q 'ad-hoc signed' "$TESTER_NOTES"
   grep -q 'not notarized' "$TESTER_NOTES"
+  grep -q -- '--artifact dist/release/SPIN-' "$TESTER_NOTES"
+  if grep -Fq "$TMP" "$TESTER_NOTES"; then
+    echo "tester release notes included an absolute build path" >&2
+    exit 1
+  fi
   grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$TESTER_NOTES"
   grep -q 'GPL-compatible' "$TESTER_NOTES"
   grep -q 'cmux-derived UI engine is GPL-3.0-or-later' "$TESTER_NOTES"

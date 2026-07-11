@@ -330,7 +330,7 @@ This release was prepared by the checked ad-hoc app pipeline:
 
 \`\`\`bash
 scripts/release-macos.sh --source-cmux
-scripts/prepare-open-source-release.sh --artifact $ARTIFACT
+scripts/prepare-open-source-release.sh --artifact dist/release/$(basename "$ARTIFACT")
 \`\`\`
 
 The release pipeline verifies bundled cmux/OMP resolution without global
