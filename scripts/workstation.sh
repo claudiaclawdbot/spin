@@ -166,11 +166,14 @@ case "${1:-status}" in
       health_failures=$((health_failures + 1))
     fi
     if spin_locked_process_running "$ROOT/org/ceo/runs/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
-      age=$(( $(date +%s) - $(stat -f %m "$ROOT/org/ceo/WORKSPACE_STATUS.md" 2>/dev/null || echo 0) ))
+      heartbeat="$ROOT/org/ceo/runs/.status-watch.heartbeat"
+      freshness="$heartbeat"
+      [[ -f "$freshness" ]] || freshness="$ROOT/org/ceo/WORKSPACE_STATUS.md"
+      age=$(( $(date +%s) - $(stat -f %m "$freshness" 2>/dev/null || stat -c %Y "$freshness" 2>/dev/null || echo 0) ))
       if (( age <= 60 )); then
-        echo "  ✓ roll-up daemon running (status doc refreshed ${age}s ago)"
+        echo "  ✓ roll-up daemon running (heartbeat ${age}s ago)"
       else
-        echo "  ✗ roll-up daemon is stale (status doc refreshed ${age}s ago)"
+        echo "  ✗ roll-up daemon is stale (heartbeat ${age}s ago)"
         health_failures=$((health_failures + 1))
       fi
     else

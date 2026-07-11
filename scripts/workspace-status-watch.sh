@@ -13,6 +13,7 @@ source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 RUN_DIR="$ROOT/org/ceo/runs"
 LOCK="$RUN_DIR/.status-watch.lock"
 STOP="$RUN_DIR/STATUS_WATCH_STOP"
+HEARTBEAT="$RUN_DIR/.status-watch.heartbeat"
 INTERVAL="${1:-6}"
 FLOOR_RECONCILE_SECONDS="${SPIN_FLOOR_RECONCILE_SECONDS:-60}"
 FLOOR_RECONCILE_GRACE_SECONDS="${SPIN_FLOOR_RECONCILE_GRACE_SECONDS:-15}"
@@ -49,6 +50,7 @@ while true; do
 
   bash "$ROOT/scripts/workspace-status.sh" 2>/dev/null || true
   bash "$ROOT/scripts/wiki-update.sh"       2>/dev/null || true   # keep wiki fresh alongside WORKSPACE_STATUS
+  touch "$HEARTBEAT"
 
   # ── driver watchdog: status chip + one-shot notification on state change ──
   # Catches the silent-halt situation (e.g. a STOP file or dead loop) that once

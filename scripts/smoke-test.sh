@@ -805,6 +805,20 @@ grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
 
+SPIN_ROOT="$KIT" scripts/workspace-status.sh
+grep -q '^## smoke-floor' "$KIT/org/ceo/WORKSPACE_STATUS.md"
+if grep -Eq '^## (example-app|workspace)' "$KIT/org/ceo/WORKSPACE_STATUS.md"; then
+  echo "Coordinator status retained inactive project floors" >&2
+  exit 1
+fi
+status_hash_before="$(shasum -a 256 "$KIT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
+sleep 1
+SPIN_ROOT="$KIT" scripts/workspace-status.sh
+status_hash_after="$(shasum -a 256 "$KIT/org/ceo/WORKSPACE_STATUS.md" | awk '{print $1}')"
+test "$status_hash_before" = "$status_hash_after"
+grep -q 'status-watch.heartbeat' scripts/workspace-status-watch.sh
+grep -q 'heartbeat .*s ago' scripts/workstation.sh
+
 SPIN_ROOT="$KIT" scripts/wiki-update.sh > "$TMP/wiki-update-first.out"
 grep -q '^### smoke-floor -' "$KIT/org/wiki/workspace.md"
 if grep -Eq 'fidget-play|built-by-ai|agentclaudia' "$KIT/org/wiki/workspace.md"; then
