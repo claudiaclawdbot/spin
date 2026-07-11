@@ -322,6 +322,11 @@ Production update installs fail closed unless the candidate is a real Developer
 ID signed/notarized artifact. Local/ad-hoc installs remain explicitly separate
 through `--allow-ad-hoc` and `--allow-local-dev`.
 
+Source builds also fail closed on dependency identity. The cmux commit is pinned
+in `app/spin-app.json`; `scripts/vendor-app-deps.sh` fetches and detaches to that
+exact commit before applying the SPIN overlay. `SPIN_CMUX_COMMIT` is an explicit
+release-engineering override, not a floating default.
+
 Checkpoint 20 adds the user-facing wrapper around that checked mechanical path:
 
 ```bash

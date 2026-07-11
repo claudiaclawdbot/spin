@@ -7,6 +7,11 @@ set -euo pipefail
 
 ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CMUX_REPO="${SPIN_CMUX_REPO:-https://github.com/manaflow-ai/cmux.git}"
+CMUX_COMMIT="${SPIN_CMUX_COMMIT:-}"
+if [ -z "$CMUX_COMMIT" ] && command -v node >/dev/null 2>&1 && [ -f "$ROOT/app/spin-app.json" ]; then
+  CMUX_COMMIT="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.components?.uiEngine?.upstreamCommit || "")' \
+    "$ROOT/app/spin-app.json" 2>/dev/null || true)"
+fi
 OMP_REPO="${SPIN_OMP_REPO:-https://github.com/can1357/oh-my-pi.git}"
 OMP_PACKAGE="${SPIN_OMP_PACKAGE:-@oh-my-pi/pi-coding-agent}"
 OMP_VERSION="${SPIN_OMP_VERSION:-}"
@@ -28,6 +33,7 @@ Usage: scripts/vendor-app-deps.sh [--cmux-only|--omp-only]
 Fetches app foundation sources and builds the repeatable OMP/Pi release input.
 
 Environment:
+  SPIN_CMUX_COMMIT       cmux source commit to vendor (default: tracked app manifest pin)
   SPIN_OMP_VERSION        OMP package version to vendor (default: current pinned manifest)
   SPIN_OMP_UPDATE_LOCK    set to 1 to refresh agent/vendor/omp/bun.lock
   SPIN_VENDOR_FULL_CLONE  set to 1 to clone full upstream git history
@@ -106,6 +112,15 @@ pin_omp_source() {
   local dir="$1" tag="v$OMP_VERSION"
   git -C "$dir" fetch --depth 1 origin "refs/tags/$tag:refs/tags/$tag"
   git -C "$dir" checkout --detach "$tag" >/dev/null
+}
+
+pin_cmux_source() {
+  local dir="$1" actual
+  [ -n "$CMUX_COMMIT" ] || fail "cmux source commit is not pinned; set SPIN_CMUX_COMMIT or app/spin-app.json components.uiEngine.upstreamCommit"
+  git -C "$dir" fetch --depth 1 origin "$CMUX_COMMIT"
+  git -C "$dir" checkout --detach "$CMUX_COMMIT" >/dev/null
+  actual="$(git -C "$dir" rev-parse HEAD)"
+  [ "$actual" = "$CMUX_COMMIT" ] || fail "cmux checkout mismatch: expected $CMUX_COMMIT, got $actual"
 }
 
 write_omp_vendor_manifest() {
@@ -254,6 +269,7 @@ NODE
 
 if [ "$DO_CMUX" = "1" ]; then
   clone_or_update "$CMUX_REPO" "$ROOT/app/upstream/cmux"
+  pin_cmux_source "$ROOT/app/upstream/cmux"
 fi
 
 if [ "$DO_OMP" = "1" ]; then

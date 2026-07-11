@@ -8,6 +8,7 @@
     "uiEngine": {
       "name": "SPIN cmux fork",
       "upstream": "https://github.com/manaflow-ai/cmux",
+      "upstreamCommit": "fe87e608cbaef398c00027b0d0e0ba1a2721c165",
       "upstreamLicense": "GPL-3.0-or-later or commercial",
       "plannedLocation": "app/upstream/cmux",
       "bundledBinary": "Resources/bin/cmux",

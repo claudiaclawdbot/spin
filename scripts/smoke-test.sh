@@ -174,7 +174,23 @@ const expected = path.join(home, 'Applications', 'SPIN.app', 'Contents', 'Resour
 const candidates = runtime.candidateBinDirs(root);
 if (!candidates.includes(expected)) process.exit(1);
 NODE
-node -e 'JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
+node -e 'const app=JSON.parse(require("fs").readFileSync("app/spin-app.json","utf8")); if(!/^[0-9a-f]{40}$/.test(app.components?.uiEngine?.upstreamCommit||"")) process.exit(1); JSON.parse(require("fs").readFileSync("app/cmux/config/cmux.json","utf8")); JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8"));'
+CMUX_PIN_REPO="$TMP/cmux-pin-source"
+CMUX_PIN_ROOT="$TMP/cmux-pin-spin"
+mkdir -p "$CMUX_PIN_REPO" "$CMUX_PIN_ROOT/scripts" "$CMUX_PIN_ROOT/app"
+git -C "$CMUX_PIN_REPO" init -q
+printf 'one\n' > "$CMUX_PIN_REPO/source.txt"
+git -C "$CMUX_PIN_REPO" add source.txt
+git -C "$CMUX_PIN_REPO" -c user.name=spin-test -c user.email=spin-test@example.invalid commit -qm one
+CMUX_PIN_COMMIT="$(git -C "$CMUX_PIN_REPO" rev-parse HEAD)"
+printf 'two\n' >> "$CMUX_PIN_REPO/source.txt"
+git -C "$CMUX_PIN_REPO" add source.txt
+git -C "$CMUX_PIN_REPO" -c user.name=spin-test -c user.email=spin-test@example.invalid commit -qm two
+cp scripts/vendor-app-deps.sh "$CMUX_PIN_ROOT/scripts/vendor-app-deps.sh"
+cp app/spin-app.json "$CMUX_PIN_ROOT/app/spin-app.json"
+SPIN_ROOT="$CMUX_PIN_ROOT" SPIN_CMUX_REPO="$CMUX_PIN_REPO" SPIN_CMUX_COMMIT="$CMUX_PIN_COMMIT" \
+  bash "$CMUX_PIN_ROOT/scripts/vendor-app-deps.sh" --cmux-only >/dev/null
+test "$(git -C "$CMUX_PIN_ROOT/app/upstream/cmux" rev-parse HEAD)" = "$CMUX_PIN_COMMIT"
 node - <<'NODE'
 const cfg = JSON.parse(require('fs').readFileSync('app/cmux/config/cmux.json', 'utf8'));
 if (cfg.sidebar.hideAllDetails !== true) process.exit(1);
