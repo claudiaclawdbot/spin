@@ -193,6 +193,8 @@ NODE
 node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1);'
 grep -q 'prepare-open-source-release.sh --artifact' .github/workflows/macos-app.yml
 grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
+grep -q 'cmux-corresponding-source' docs/OPEN_SOURCE_TESTER_RELEASE.md
+grep -q 'matching cmux corresponding-source archive' docs/PUBLIC_BETA_READINESS.md
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md

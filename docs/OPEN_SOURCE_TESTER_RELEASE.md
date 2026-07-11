@@ -42,11 +42,15 @@ SPIN-<version>-macos-<arch>.dmg
 SPIN-<version>-macos-<arch>.dmg.sha256
 SPIN-<version>-macos-<arch>.manifest
 SPIN-<version>-macos-<arch>-open-source-tester-notes.md
+SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz
+SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz.sha256
 ```
 
-GitHub automatically provides source archives for the tag. The release notes
-should state that the binary is a tester build, not a notarized production
-release.
+The corresponding-source archive must come from the same cmux checkout recorded
+in the bundled compatibility manifest. It includes the exact tracked source and
+SPIN overlay used for the build while excluding generated build and package
+caches. The release notes should state that the binary is a tester build, not a
+notarized production release.
 
 ## Tester Install
 

@@ -104,7 +104,8 @@ Then manually verify:
 - A project handoff visibly uses the refined prompt shape.
 - The receipt, inbox, and board agree about the result.
 - Gatekeeper wording in public copy matches the actual signing state.
-- The release page includes DMG, checksum, manifest, and tester notes.
+- The release page includes the DMG, checksum, manifest, tester notes, and the
+  checksummed matching cmux corresponding-source archive.
 
 ## Public Feedback Loop
 

@@ -414,12 +414,19 @@ scripts/spin app-release-notes --artifact dist/release/SPIN-*-macos-*.dmg
 That writes:
 
 ```text
+dist/release/SPIN-<version>-macos-<arch>.dmg
+dist/release/SPIN-<version>-macos-<arch>.dmg.sha256
+dist/release/SPIN-<version>-macos-<arch>.manifest
 dist/release/SPIN-<version>-macos-<arch>-open-source-tester-notes.md
+dist/release/SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz
+dist/release/SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz.sha256
 ```
 
 The tester release notes include checksum verification, install steps, the
 Gatekeeper/quarantine fallback, bundled cmux/OMP explanation, and GPL-compatible
-license posture. See [OPEN_SOURCE_TESTER_RELEASE](OPEN_SOURCE_TESTER_RELEASE.md).
+license posture. The matching cmux source asset contains the exact source and
+SPIN overlay used by the bundled GPL component, without generated build caches.
+See [OPEN_SOURCE_TESTER_RELEASE](OPEN_SOURCE_TESTER_RELEASE.md).
 
 After creating the artifact, prove installed-app launch behavior with:
 
