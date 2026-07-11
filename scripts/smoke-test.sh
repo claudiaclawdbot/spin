@@ -253,6 +253,8 @@ grep -q 'Source and CLI' docs/index.html
 grep -q 'v4.1.0-beta.3' docs/index.html
 grep -q 'INSTALL_MACOS.md' docs/index.html
 grep -q 'Project isolation comes first' docs/index.html
+grep -q 'class="spinner"' docs/index.html
+grep -q '@keyframes spin' docs/index.html
 grep -q 'assets/spin-public-beta-demo.gif' docs/index.html
 grep -q 'assets/spin-public-beta-demo-poster.png' docs/index.html
 grep -q 'assets/spin-icon.svg' docs/index.html

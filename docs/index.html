@@ -32,7 +32,10 @@
   h2{font-size:1.75rem;margin:0 0 8px;letter-spacing:0}
   h2 .n{color:var(--faint);font-family:var(--mono);font-size:.9rem;margin-right:10px}
   .lede{color:var(--dim);max-width:68ch;margin:.2rem 0 1.6rem}
-  .hero{text-align:center;padding:28px 24px}
+  .hero{text-align:center;padding:20px 24px}
+  .spinner{width:84px;height:84px;margin:0 auto 4px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite;transform-origin:center}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spinner{animation:none}}
   .wordmark{font-size:3.5rem;font-weight:800;letter-spacing:0;margin:0;line-height:1;color:var(--ink)}
   .wordmark .pi{color:var(--cyan);text-shadow:0 0 22px rgba(34,211,238,.34)}
   .sub{font-family:var(--mono);color:var(--dim);font-size:.78rem;margin:8px 0 0;text-transform:uppercase;letter-spacing:0}
@@ -46,7 +49,7 @@
   .btn.ghost{background:var(--panel);color:var(--ink)}
   .btn.ghost:hover{border-color:var(--cyan)}
   .hero-demo,.demo-shot{max-width:900px;margin:16px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel2);box-shadow:0 18px 50px rgba(0,0,0,.35)}
-  .hero-demo{max-width:640px}
+  .hero-demo{max-width:540px}
   .hero-demo img,.demo-shot img{display:block;width:100%;height:auto}
   .hero-demo figcaption,.demo-shot figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.84rem}
   .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
@@ -79,7 +82,7 @@
   footer{border-top:1px solid var(--line);padding:34px 0 52px;text-align:center;color:var(--faint);font-size:.85rem}
   footer a{color:var(--dim)}
   @media(max-width:600px){
-    .hero{padding-top:24px}.wordmark{font-size:3rem}.tag{font-size:1.08rem}
+    .hero{padding-top:18px}.spinner{width:68px;height:68px;margin-bottom:4px}.wordmark{font-size:3rem}.tag{font-size:1.08rem}
     section{padding:46px 0}.flow{font-size:.74rem}.btn{width:100%;justify-content:center}
   }
 </style>
@@ -87,6 +90,21 @@
 <body>
 
 <header class="hero wrap">
+  <svg class="spinner" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="spinner-gradient" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#a855f7"/>
+        <stop offset="1" stop-color="#22d3ee"/>
+      </linearGradient>
+    </defs>
+    <g stroke="url(#spinner-gradient)" stroke-width="3">
+      <circle cx="50" cy="22" r="15" fill="#18121f"/>
+      <circle cx="74" cy="64" r="15" fill="#18121f"/>
+      <circle cx="26" cy="64" r="15" fill="#18121f"/>
+      <circle cx="50" cy="50" r="11" fill="#0b0b0d"/>
+    </g>
+    <circle cx="50" cy="50" r="4" fill="url(#spinner-gradient)"/>
+  </svg>
   <h1 class="wordmark">S<span class="pi">PI</span>N</h1>
   <p class="sub">Super | Pi | Interoperable | Navigator</p>
   <p class="tag">Run multiple AI coding projects from <strong>one visual command center</strong>.</p>
