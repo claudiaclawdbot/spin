@@ -4,7 +4,9 @@
 set -euo pipefail
 
 ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-WORKDIR="${SPIN_COMPUTER_USE_CWD:-$PWD}"
+DEFAULT_WORKDIR="$ROOT/org/ceo"
+[[ -d "$DEFAULT_WORKDIR" ]] || DEFAULT_WORKDIR="$ROOT"
+WORKDIR="${SPIN_COMPUTER_USE_CWD:-$DEFAULT_WORKDIR}"
 MODEL="${SPIN_CODEX_COMPUTER_USE_MODEL:-}"
 READ_ONLY=0
 PROBE=0
@@ -16,6 +18,8 @@ Usage:
   spin computer-use [--read-only] [--cwd DIR] [--model MODEL] -- "task"
 
 The probe performs one read-only get_app_state on the running SPIN app.
+The default Codex work directory is SPIN-owned state; pass --cwd when a desktop
+task needs explicit project context.
 EOF
 }
 
@@ -108,7 +112,9 @@ cleanup() {
   fi
   rm -rf "$TMP_RUN"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 clean_path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 codex_env=(
@@ -128,6 +134,7 @@ if [[ "$(uname -s)" == "Darwin" && "${SPIN_CODEX_COMPUTER_USE_DIRECT:-0}" != "1"
   && command -v launchctl >/dev/null 2>&1; then
   LAUNCH_LABEL="dev.spin.codex-computer-use.$$.${RANDOM}"
   launchctl submit -l "$LAUNCH_LABEL" -o "$RUN_LOG" -e "$RUN_LOG" -- \
+    /bin/sh -c 'exec "$@" </dev/null' spin-codex-computer-use \
     "${codex_env[@]}" "${args[@]}" "$PROMPT"
   rc=$?
   if [[ "$rc" -eq 0 ]]; then

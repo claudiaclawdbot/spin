@@ -1233,6 +1233,9 @@ cat > "$MCP_CODEX" <<EOF
 if [[ "\${1:-}" == "--version" ]]; then echo "codex fake signed lane"; exit 0; fi
 printf '%s\n' "\$@" > "$TMP/computer-use-codex.args"
 env | sort > "$TMP/computer-use-codex.env"
+if command -v lsof >/dev/null 2>&1; then
+  lsof -a -p \$\$ -d 0 -Fn > "$TMP/computer-use-codex.stdin" 2>/dev/null || true
+fi
 out=""
 while [[ \$# -gt 0 ]]; do
   if [[ "\$1" == "--output-last-message" && \$# -ge 2 ]]; then out="\$2"; shift 2; continue; fi
@@ -1305,9 +1308,13 @@ grep -q '^VISIBLE_CODEX_CUA_OK SPIN - SPIN Coordinator$' "$TMP/computer-use-prob
 grep -qx 'exec' "$TMP/computer-use-codex.args"
 grep -qx -- '--ephemeral' "$TMP/computer-use-codex.args"
 grep -qx -- '--sandbox' "$TMP/computer-use-codex.args"
+test "$(awk 'take { print; exit } $0 == "-C" { take=1 }' "$TMP/computer-use-codex.args")" = "$KIT/org/ceo"
 grep -q 'Read-only scope:' "$TMP/computer-use-codex.args"
 grep -q 'VISIBLE_CODEX_CUA_OK' "$TMP/computer-use-codex.args"
 grep -q '^CODEX_HOME=' "$TMP/computer-use-codex.env"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  grep -Fx 'n/dev/null' "$TMP/computer-use-codex.stdin"
+fi
 if grep -Eq '^(OPENAI_API_KEY|CODEX_THREAD_ID|CMUX_SURFACE_ID)=' "$TMP/computer-use-codex.env"; then
   echo "Computer Use Codex inherited parent credentials or session context" >&2
   exit 1
