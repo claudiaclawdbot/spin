@@ -179,6 +179,12 @@ while IFS= read -r id; do
   fi
 done < <(spin_cmux_project_floor_ids)
 
+floor_tty_collisions="$(spin_cmux_duplicate_managed_floor_ttys 2>/dev/null || true)"
+if [[ -n "$floor_tty_collisions" ]]; then
+  echo "  ${c_d}· managed floors still share terminal sessions: $(printf '%s' "$floor_tty_collisions" | tr '\n' ';')${c_o}"
+  startup_failures=$((startup_failures + 1))
+fi
+
 pruned_refs="$(spin_cmux_prune_stale_managed_workspaces 2>/dev/null || true)"
 if [[ -n "$pruned_refs" ]]; then
   echo "  ${c_g}✓${c_o} removed stale duplicate floors: $(printf '%s' "$pruned_refs" | paste -sd, -)"

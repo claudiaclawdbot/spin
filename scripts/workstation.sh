@@ -151,6 +151,13 @@ case "${1:-status}" in
     else
       echo "  ✓ no stale duplicate managed floors"
     fi
+    duplicate_ttys="$(spin_cmux_duplicate_managed_floor_ttys 2>/dev/null || true)"
+    if [[ -n "$duplicate_ttys" ]]; then
+      echo "  ✗ managed floors share terminal sessions: $(printf '%s' "$duplicate_ttys" | tr '\n' ';')"
+      health_failures=$((health_failures + 1))
+    else
+      echo "  ✓ every managed floor has an isolated terminal session"
+    fi
     ceo_ref="$(spin_cmux_saved_workspace_ref ceo 2>/dev/null || true)"
     if [[ -n "$ceo_ref" ]] && spin_cmux_coordinator_board_visible "$ceo_ref"; then
       echo "  ✓ Coordinator portfolio board visible ($ceo_ref)"

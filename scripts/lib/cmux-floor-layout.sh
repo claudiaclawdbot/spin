@@ -198,13 +198,15 @@ spin_cmux_floor_process_running_on_tty() {
 
 spin_cmux_floor_running() {
   local target="$1" tty_name="${2:-}" marker_tty
-  if [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target"; then
+  if [[ -n "$target" ]]; then
+    spin_cmux_floor_marker_running "$target" || return 1
     [[ -z "$tty_name" ]] && return 0
     marker_tty="$(spin_cmux_floor_marker_value "$target" tty 2>/dev/null || true)"
     if [[ -n "$marker_tty" ]] &&
       [[ "$(spin_cmux_normalize_tty "$marker_tty")" == "$(spin_cmux_normalize_tty "$tty_name")" ]]; then
       return 0
     fi
+    return 1
   fi
   [[ -n "$tty_name" ]] && spin_cmux_floor_process_running_on_tty "$tty_name"
 }
@@ -278,11 +280,17 @@ spin_cmux_floor_active_in_workspace() {
 }
 
 spin_cmux_start_floor_in_workspace() {
-  local workspace="$1" target="$2" surface
+  local workspace="$1" target="$2" surface tty_name
   [[ -n "$workspace" && -n "$target" ]] || return 1
   surface="$(spin_cmux_terminal_surface "$workspace")"
   [[ -n "$surface" ]] || return 1
   spin_cmux_floor_active_in_workspace "$workspace" "$target" && return 0
+  tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
+  # A restored surface can temporarily point at another floor's live PTY. Do
+  # not type a launch command into that agent; let ensure_floor replace it.
+  if [[ -n "$tty_name" ]] && spin_cmux_floor_process_running_on_tty "$tty_name"; then
+    return 1
+  fi
   if spin_cmux_terminal_has_agent_title "$workspace" && ! spin_cmux_terminal_title_matches_target "$workspace" "$target"; then
     return 1
   fi
@@ -306,6 +314,26 @@ try {
   }
 } catch {}
 ' "$ROOT/org/OMP_HARNESS.json" "$target" 2>/dev/null
+}
+
+spin_cmux_managed_floor_ttys() {
+  local target workspace surface tty_name
+  for target in ceo $(spin_cmux_project_floor_ids); do
+    workspace="$(spin_cmux_saved_workspace_ref "$target" 2>/dev/null || true)"
+    [[ -n "$workspace" ]] || continue
+    surface="$(spin_cmux_terminal_surface "$workspace")"
+    [[ -n "$surface" ]] || continue
+    tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
+    [[ -n "$tty_name" ]] || continue
+    printf '%s\t%s\t%s\n' "$(spin_cmux_normalize_tty "$tty_name")" "$target" "$workspace"
+  done
+}
+
+spin_cmux_duplicate_managed_floor_ttys() {
+  spin_cmux_managed_floor_ttys | awk -F '\t' '
+    seen[$1] { print $1 "\t" owner[$1] "\t" $2 }
+    !seen[$1] { seen[$1]=1; owner[$1]=$2 }
+  '
 }
 
 spin_cmux_remember_workspace_ref() {

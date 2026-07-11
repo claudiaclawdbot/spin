@@ -976,6 +976,41 @@ if grep -q 'new-workspace' "$TMP/stale-cmux.calls"; then
   exit 1
 fi
 
+# A different live floor on the restored TTY must not make a dead target marker
+# look healthy, and SPIN must never type a launch command into that agent.
+: > "$TMP/stale-cmux.calls"
+PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_floor_process_running_on_tty() { return 0; }
+  if spin_cmux_floor_active_in_workspace workspace:15 example-app; then
+    echo "wrong live floor on shared TTY was accepted as example-app" >&2
+    exit 1
+  fi
+  spin_cmux_ensure_project_floor example-app false
+' > "$TMP/shared-tty-floor.out"
+grep -q 'workspace:99' "$TMP/shared-tty-floor.out"
+grep -q 'new-workspace --name example-app' "$TMP/stale-cmux.calls"
+if grep -q 'send --workspace workspace:15' "$TMP/stale-cmux.calls"; then
+  echo "SPIN typed a floor launch into another live agent on the shared TTY" >&2
+  exit 1
+fi
+
+SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_project_floor_ids() { printf "%s\n" example-app; }
+  spin_cmux_saved_workspace_ref() {
+    [[ "$1" == ceo ]] && printf "%s\n" workspace:1 || printf "%s\n" workspace:2
+  }
+  spin_cmux_terminal_surface() { printf "%s\n" surface:1; }
+  spin_cmux_surface_tty() { printf "%s\n" ttys001; }
+  collision="$(spin_cmux_duplicate_managed_floor_ttys)"
+  [[ "$collision" == $'"'"'ttys001\tceo\texample-app'"'"' ]]
+'
+
 # A live target marker on the exact TTY remains authoritative even when cmux
 # renders a display-name alias instead of the registry id in the terminal title.
 PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" STALE_TITLE='π: Example Product' bash -c '
