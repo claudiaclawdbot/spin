@@ -41,7 +41,8 @@ while true; do
   if (( FLOOR_RECONCILE_SECONDS > 0 && now_epoch >= NEXT_FLOOR_RECONCILE )); then
     NEXT_FLOOR_RECONCILE=$(( now_epoch + FLOOR_RECONCILE_SECONDS ))
     spin_prepare_cmux_environment
-    if CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; then
+    if ! spin_locked_process_running "$RUN_DIR/.spin-up.lock" "spin-up.sh" \
+      && CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; then
       spin_cmux_reconcile_managed_floors >/dev/null 2>&1 || true
     fi
   fi

@@ -13,6 +13,17 @@ RUN="$ROOT/org/ceo/runs"; c_v=$'\e[35m'; c_g=$'\e[32m'; c_d=$'\e[2m'; c_o=$'\e[0
 source "$ROOT/scripts/lib/spin-runtime.sh"
 source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
+mkdir -p "$RUN"
+STARTUP_LOCK="$RUN/.spin-up.lock"
+while ! ( set -o noclobber; echo $$ > "$STARTUP_LOCK" ) 2>/dev/null; do
+  if spin_locked_process_running "$STARTUP_LOCK" "spin-up.sh"; then
+    echo "SPIN interface startup is already in progress."
+    exit 0
+  fi
+  rm -f "$STARTUP_LOCK"
+done
+trap 'rm -f "$STARTUP_LOCK"' EXIT
+
 spin_prepare_cmux_environment
 spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or install cmux for the development visual interface. Headless: spin start" || exit 1
 
@@ -149,21 +160,6 @@ elif [[ -n "$coord_ref" ]]; then
   echo "  ${c_d}· couldn't open the Coordinator board${c_o}"
   startup_failures=$((startup_failures + 1))
 fi
-if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
-  echo "  ${c_d}· background board daemons disabled for this run${c_o}"
-else
-  if ! spin_locked_process_running "$RUN/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
-    start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
-  fi
-  echo "  ${c_g}✓${c_o} live status board running"
-  if ! spin_locked_process_running "$RUN/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
-    start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
-    echo "  ${c_g}✓${c_o} wiki-watch daemon started"
-  else
-    echo "  ${c_g}✓${c_o} wiki-watch daemon already running"
-  fi
-fi
-
 # ── 5. re-open floors for active projects (after a cmux restart) ─────────────
 while IFS= read -r id; do
   [ -z "$id" ] && continue
@@ -186,6 +182,23 @@ done < <(spin_cmux_project_floor_ids)
 pruned_refs="$(spin_cmux_prune_stale_managed_workspaces 2>/dev/null || true)"
 if [[ -n "$pruned_refs" ]]; then
   echo "  ${c_g}✓${c_o} removed stale duplicate floors: $(printf '%s' "$pruned_refs" | paste -sd, -)"
+fi
+
+# Start reconcilers only after the initial floor layout is complete. Otherwise
+# their first pass can race session restoration and queue duplicate cmux work.
+if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
+  echo "  ${c_d}· background board daemons disabled for this run${c_o}"
+else
+  if ! spin_locked_process_running "$RUN/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
+    start_daemon com.spin.status-watch "$ROOT/logs/status-watch.log" "$ROOT/scripts/workspace-status-watch.sh"
+  fi
+  echo "  ${c_g}✓${c_o} live status board running"
+  if ! spin_locked_process_running "$RUN/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
+    start_daemon com.spin.wiki-watch "$ROOT/logs/wiki-watch.log" "$ROOT/scripts/wiki-watch.sh"
+    echo "  ${c_g}✓${c_o} wiki-watch daemon started"
+  else
+    echo "  ${c_g}✓${c_o} wiki-watch daemon already running"
+  fi
 fi
 
 if (( startup_failures > 0 )); then

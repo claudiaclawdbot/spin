@@ -416,8 +416,11 @@ for (const id of ids) if (id) console.log(id);
 
 spin_cmux_project_cwd() {
   local project_id="$1" cwd
-  cwd="$ROOT/projects/$project_id"
-  [[ -d "$cwd" ]] || cwd="$ROOT/org/projects/$project_id"
+  # Ghostty creates restored surfaces on the main thread. Starting one at a
+  # symlink into a protected folder can block the entire cmux UI; the floor
+  # launcher changes into the real project directory after the shell starts.
+  cwd="$ROOT/org/projects/$project_id"
+  [[ -d "$cwd" ]] || cwd="$ROOT"
   printf '%s\n' "$cwd"
 }
 

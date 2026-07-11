@@ -19,7 +19,7 @@ if [ -z "$OMP_VERSION" ] && command -v node >/dev/null 2>&1 && [ -f "$ROOT/agent
   OMP_VERSION="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.dependencies[process.argv[2]] || "")' \
     "$ROOT/agent/vendor/omp/package.json" "$OMP_PACKAGE" 2>/dev/null || true)"
 fi
-OMP_VERSION="${OMP_VERSION:-16.4.0}"
+OMP_VERSION="${OMP_VERSION:-16.4.3}"
 OMP_PACKAGE_SPEC="${SPIN_OMP_PACKAGE_SPEC:-$OMP_PACKAGE@$OMP_VERSION}"
 BUN_MIN_VERSION="${SPIN_BUN_MIN_VERSION:-1.3.14}"
 BUN_BIN="${SPIN_BUN_BIN:-$(command -v bun || true)}"
@@ -179,7 +179,7 @@ build_omp_vendor() {
     cp "$build_dir/bun.lock" "$vendor_dir/bun.lock"
   fi
 
-  local entry native_src out_bin out_native version_out check_home
+  local entry native_src out_bin out_native version_out check_home build_runtime
   entry="$(node - "$build_dir" "$OMP_PACKAGE" <<'NODE'
 const path = require('path');
 const fs = require('fs');
@@ -197,7 +197,28 @@ NODE
   out_bin="$ROOT/vendor/bin/omp"
   out_native="$ROOT/vendor/bin/$native_name"
   echo "compiling OMP/Pi $OMP_VERSION -> $out_bin"
-  "$BUN_BIN" build --compile "$entry" --outfile "$out_bin"
+  build_runtime="bun build --compile"
+  if grep -Fq 'omp-legacy-pi-modules' "$entry"; then
+    local source_root source_build_script source_output source_native
+    source_root="$ROOT/agent/upstream/oh-my-pi"
+    source_build_script="$source_root/packages/coding-agent/scripts/build-binary.ts"
+    source_output="$source_root/packages/coding-agent/dist/omp"
+    source_native="$source_root/packages/natives/native/$native_name"
+    [ -f "$source_build_script" ] || fail "OMP $OMP_VERSION requires its upstream compiler: $source_build_script"
+    (
+      trap 'rm -f "$source_native"' EXIT
+      cp "$native_src" "$source_native"
+      cd "$source_root"
+      "$BUN_BIN" install --frozen-lockfile
+      rm -f "$source_output"
+      "$BUN_BIN" packages/coding-agent/scripts/build-binary.ts
+      [ -x "$source_output" ] || fail "upstream OMP compiler did not create $source_output"
+      cp "$source_output" "$out_bin"
+    )
+    build_runtime="upstream packages/coding-agent/scripts/build-binary.ts"
+  else
+    "$BUN_BIN" build --compile "$entry" --outfile "$out_bin"
+  fi
   cp "$native_src" "$out_native"
   chmod +x "$out_bin"
 
@@ -216,13 +237,14 @@ NODE
 
   node - "$ROOT" "$vendor_dir/metadata.json" "$OMP_PACKAGE" "$OMP_VERSION" "$OMP_PACKAGE_SPEC" \
     "$OMP_REPO" "$source_commit" "$tag" "$native_name" "$tarball_url" "$tarball_shasum" "$tarball_integrity" \
-    "$npm_dir/$pack_file" "$vendor_dir/bun.lock" "$BUN_MIN_VERSION" "$bun_version" "$out_bin" "$out_native" <<'NODE'
+    "$npm_dir/$pack_file" "$vendor_dir/bun.lock" "$build_runtime" "$BUN_MIN_VERSION" "$bun_version" "$out_bin" "$out_native" <<'NODE'
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const [
   root, out, pkg, version, spec, repo, sourceCommit, platformTag, nativeName,
-  tarballUrl, tarballShasum, tarballIntegrity, packFile, lockFile, bunMinimumVersion, bunVersion, binFile, nativeFile,
+  tarballUrl, tarballShasum, tarballIntegrity, packFile, lockFile, buildRuntime,
+  bunMinimumVersion, bunVersion, binFile, nativeFile,
 ] = process.argv.slice(2);
 const rel = (file) => path.relative(root, file);
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -241,7 +263,7 @@ const meta = {
     localPackSha256: sha256(packFile),
   },
   build: {
-    runtime: "bun build --compile",
+    runtime: buildRuntime,
     bunMinimumVersion,
     bunVersion,
     lockfile: {

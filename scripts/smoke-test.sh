@@ -830,7 +830,7 @@ cat > "$ASYNCBIN/cmux" <<EOF
 printf '%s\n' "\$*" >> "$TMP/async-cmux.calls"
 if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
   if [[ -f "$TMP/async-workspace-created" ]]; then
-    printf '%s\n' '{"workspaces":[{"ref":"workspace:77","title":"async-app","current_directory":"$KIT/projects/async-app"}]}'
+    printf '%s\n' '{"workspaces":[{"ref":"workspace:77","title":"async-app","current_directory":"$KIT/org/projects/async-app"}]}'
   else
     printf '%s\n' '{"workspaces":[]}'
   fi
@@ -851,6 +851,7 @@ PATH="$ASYNCBIN:$PATH" SPIN_ROOT="$KIT" SPIN_CMUX_ASYNC_CREATE_RETRIES=2 \
 ' > "$TMP/async-floor.out"
 grep -q '^workspace:77$' "$TMP/async-floor.out"
 test "$(grep -c 'new-workspace --name async-app' "$TMP/async-cmux.calls")" -eq 1
+grep -q "new-workspace --name async-app --cwd $KIT/org/projects/async-app" "$TMP/async-cmux.calls"
 grep -q '"cmux_workspace": "workspace:77"' "$KIT/org/OMP_HARNESS.json"
 
 FAILEDUPBIN="$TMP/failed-up-bin"
@@ -1009,8 +1010,8 @@ printf '%s\n' "\$*" >> "$TMP/reconcile-cmux.calls"
 if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
   cat <<JSON
 {"workspaces":[
-  {"ref":"workspace:9","title":"example-app","current_directory":"$KIT/projects/example-app"},
-  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/org/projects/example-app"},
+  {"ref":"workspace:9","title":"example-app","current_directory":"$KIT/org/projects/example-app"},
+  {"ref":"workspace:3","title":"example-app","current_directory":"$KIT/projects/example-app"},
   {"ref":"workspace:7","title":"SPIN Coordinator","current_directory":"$SMOKE_HOME"},
   {"ref":"workspace:8","title":"SPIN Coordinator","current_directory":"$SMOKE_HOME"}
 ]}
@@ -1153,6 +1154,7 @@ cat > "$MCP_CODEX" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == "--version" ]]; then echo "codex fake signed lane"; exit 0; fi
 printf '%s\n' "\$@" > "$TMP/computer-use-codex.args"
+env | sort > "$TMP/computer-use-codex.env"
 out=""
 while [[ \$# -gt 0 ]]; do
   if [[ "\$1" == "--output-last-message" && \$# -ge 2 ]]; then out="\$2"; shift 2; continue; fi
@@ -1218,7 +1220,8 @@ SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
 node -e 'const r=require(process.argv[1]); if(r.status!=="configured"||r.route!=="codex-delegate"||r.changed) process.exit(1)' "$TMP/omp-disabled-result.json"
 SPIN_CODEX_BIN="$MCP_CODEX" SPIN_ALLOW_UNSIGNED_CODEX_COMPUTER_USE=1 \
   SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
-  SPIN_OMP_MCP_CONFIG="$TMP/omp-disabled-mcp.json" \
+  SPIN_OMP_MCP_CONFIG="$TMP/omp-disabled-mcp.json" OPENAI_API_KEY=must-not-leak \
+  CODEX_THREAD_ID=must-not-leak CMUX_SURFACE_ID=must-not-leak \
   bash scripts/codex-computer-use.sh probe > "$TMP/computer-use-probe.out"
 grep -q '^VISIBLE_CODEX_CUA_OK SPIN - SPIN Coordinator$' "$TMP/computer-use-probe.out"
 grep -qx 'exec' "$TMP/computer-use-codex.args"
@@ -1226,6 +1229,11 @@ grep -qx -- '--ephemeral' "$TMP/computer-use-codex.args"
 grep -qx -- '--sandbox' "$TMP/computer-use-codex.args"
 grep -q 'Read-only scope:' "$TMP/computer-use-codex.args"
 grep -q 'VISIBLE_CODEX_CUA_OK' "$TMP/computer-use-codex.args"
+grep -q '^CODEX_HOME=' "$TMP/computer-use-codex.env"
+if grep -Eq '^(OPENAI_API_KEY|CODEX_THREAD_ID|CMUX_SURFACE_ID)=' "$TMP/computer-use-codex.env"; then
+  echo "Computer Use Codex inherited parent credentials or session context" >&2
+  exit 1
+fi
 MCP_CUSTOM_CLIENT="$TMP/custom-computer-use"
 cat > "$MCP_CUSTOM_CLIENT" <<'EOF'
 #!/usr/bin/env bash

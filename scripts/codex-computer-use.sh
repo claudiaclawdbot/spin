@@ -95,16 +95,72 @@ Task:
 $TASK"
 
 TMP_RUN="$(mktemp -d "${TMPDIR:-/tmp}/spin-codex-cua.XXXXXX")"
-trap 'rm -rf "$TMP_RUN"' EXIT
 LAST_MESSAGE="$TMP_RUN/last-message.txt"
 RUN_LOG="$TMP_RUN/codex.log"
 args=(exec --ephemeral -C "$WORKDIR" --sandbox danger-full-access --output-last-message "$LAST_MESSAGE")
 [[ -d "$WORKDIR/.git" ]] || args+=(--skip-git-repo-check)
 [[ -n "$MODEL" ]] && args+=(--model "$MODEL")
 
+LAUNCH_LABEL=""
+cleanup() {
+  if [[ -n "$LAUNCH_LABEL" ]]; then
+    launchctl remove "$LAUNCH_LABEL" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMP_RUN"
+}
+trap cleanup EXIT INT TERM
+
+clean_path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+codex_env=(
+  /usr/bin/env -i
+  "HOME=$HOME"
+  "USER=${USER:-$(id -un)}"
+  "LOGNAME=${LOGNAME:-$(id -un)}"
+  "PATH=$clean_path"
+  "SHELL=${SHELL:-/bin/zsh}"
+  "TMPDIR=${TMPDIR:-/tmp}"
+  "CODEX_HOME=${CODEX_HOME:-$HOME/.codex}"
+  "$CODEX_BIN"
+)
+
 set +e
-"$CODEX_BIN" "${args[@]}" "$PROMPT" </dev/null >"$RUN_LOG" 2>&1
-rc=$?
+if [[ "$(uname -s)" == "Darwin" && "${SPIN_CODEX_COMPUTER_USE_DIRECT:-0}" != "1" ]] \
+  && command -v launchctl >/dev/null 2>&1; then
+  LAUNCH_LABEL="dev.spin.codex-computer-use.$$.${RANDOM}"
+  launchctl submit -l "$LAUNCH_LABEL" -o "$RUN_LOG" -e "$RUN_LOG" -- \
+    "${codex_env[@]}" "${args[@]}" "$PROMPT"
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    timeout="${SPIN_CODEX_COMPUTER_USE_TIMEOUT_SECONDS:-900}"
+    case "$timeout" in ''|*[!0-9]*) timeout=900 ;; esac
+    deadline=$(( $(date +%s) + timeout ))
+    while true; do
+      if [[ -s "$LAST_MESSAGE" ]]; then
+        rc=0
+        break
+      fi
+      status="$(launchctl print "gui/$(id -u)/$LAUNCH_LABEL" 2>/dev/null || true)"
+      if [[ -z "$status" ]]; then
+        rc=1
+        break
+      fi
+      exit_code="$(printf '%s\n' "$status" | sed -n 's/^[[:space:]]*last exit code = \([0-9][0-9]*\)$/\1/p' | tail -1)"
+      if [[ -n "$exit_code" && "$status" != *"active count = 1"* ]]; then
+        rc="$exit_code"
+        break
+      fi
+      if (( $(date +%s) >= deadline )); then
+        launchctl kill SIGTERM "gui/$(id -u)/$LAUNCH_LABEL" >/dev/null 2>&1 || true
+        rc=124
+        break
+      fi
+      sleep 1
+    done
+  fi
+else
+  "${codex_env[@]}" "${args[@]}" "$PROMPT" </dev/null >"$RUN_LOG" 2>&1
+  rc=$?
+fi
 set -e
 if [[ "$rc" -ne 0 ]]; then
   cat "$RUN_LOG" >&2

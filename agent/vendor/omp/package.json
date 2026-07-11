@@ -3,6 +3,6 @@
   "name": "@spin/omp-vendor",
   "description": "Pinned OMP/Pi release input for the SPIN app bundle.",
   "dependencies": {
-    "@oh-my-pi/pi-coding-agent": "16.4.0"
+    "@oh-my-pi/pi-coding-agent": "16.4.3"
   }
 }
