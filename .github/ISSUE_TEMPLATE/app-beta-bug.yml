@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: SPIN version or release
-      description: Example: v4.1.0-beta.1 or a commit hash.
-      placeholder: v4.1.0-beta.1
+      description: Example: v4.1.0-beta.2 or a commit hash.
+      placeholder: v4.1.0-beta.2
     validations:
       required: true
   - type: dropdown

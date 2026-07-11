@@ -15,7 +15,7 @@
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![runtime](https://img.shields.io/badge/runtime-omp%20%2B%20cmux-8a2be2)
 
-**[Download SPIN.app beta for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1)** ·
+**[Download SPIN.app beta for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.2)** ·
 **[Mac install guide](docs/MACOS_TESTER_INSTALL.md)** ·
 **[Public beta readiness](docs/PUBLIC_BETA_READINESS.md)** ·
 **[Website](https://claudiaclawdbot.github.io/spin/)**
@@ -100,7 +100,7 @@ public launch.
 
 The current public Mac build is the open-source beta DMG:
 
-1. Download the beta from [v4.1.0-beta.1](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.1).
+1. Download the beta from [v4.1.0-beta.2](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.2).
 2. Open the DMG and drag `SPIN.app` into Applications.
 3. Open SPIN and complete onboarding.
 

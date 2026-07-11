@@ -200,7 +200,7 @@ grep -q 'A local app for running a small AI software org' README.md
 grep -q 'SPIN.app is the main product' README.md
 grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
-grep -q 'v4.1.0-beta.1' README.md
+grep -q 'v4.1.0-beta.2' README.md
 grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
@@ -210,7 +210,7 @@ grep -q 'id="app"' docs/index.html
 grep -q 'SPIN.app for Mac' docs/index.html
 grep -q 'main Mac experience' docs/index.html
 grep -q 'Source / CLI install' docs/index.html
-grep -q 'v4.1.0-beta.1' docs/index.html
+grep -q 'v4.1.0-beta.2' docs/index.html
 grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
 grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
 grep -q 'Run a small AI software org from one local app' docs/index.html
