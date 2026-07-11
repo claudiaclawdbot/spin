@@ -869,7 +869,7 @@ JSON
   exit 0
 fi
 case "\${1:-}" in
-  tree) echo 'surface:15 [terminal] "π: example-app" [selected] tty=ttys015'; exit 0 ;;
+  tree) echo "surface:15 [terminal] \"\${STALE_TITLE:-π: example-app}\" [selected] tty=ttys015"; exit 0 ;;
   read-screen) echo 'OMP agent IDLE until you type'; exit 0 ;;
   send|send-key) exit 0 ;;
   new-workspace) echo 'workspace:99'; exit 0 ;;
@@ -895,6 +895,23 @@ if grep -q 'new-workspace' "$TMP/stale-cmux.calls"; then
   echo "stale matching floor was duplicated instead of restarted in place" >&2
   exit 1
 fi
+
+# A live target marker on the exact TTY remains authoritative even when cmux
+# renders a display-name alias instead of the registry id in the terminal title.
+PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" STALE_TITLE='π: Example Product' bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_floor_marker_running() { return 0; }
+  spin_cmux_floor_marker_value() {
+    [[ "$2" == tty ]] && printf "%s\n" /dev/ttys015
+  }
+  if spin_cmux_terminal_title_matches_target workspace:15 example-app; then
+    echo "display-name alias unexpectedly matched the registry id" >&2
+    exit 1
+  fi
+  spin_cmux_floor_active_in_workspace workspace:15 example-app
+'
 
 RECONCILEBIN="$TMP/reconcilebin"
 mkdir -p "$RECONCILEBIN"

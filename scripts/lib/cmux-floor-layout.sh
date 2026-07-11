@@ -270,8 +270,7 @@ spin_cmux_floor_active_in_workspace() {
   [[ -n "$surface" ]] || return 1
   tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
   if [[ -n "$tty_name" ]]; then
-    spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
-      spin_cmux_floor_running "$target" "$tty_name"
+    spin_cmux_floor_running "$target" "$tty_name"
     return
   fi
   spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
