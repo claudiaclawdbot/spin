@@ -106,8 +106,11 @@ fi
 
 SYS_CONTENT=""
 [[ -f "$SYS" ]] && SYS_CONTENT="$(cat "$SYS")"
+ACTION_POLICY_INSTR="$(cat "$ROOT/scripts/lib/action-policy-prompt.md" 2>/dev/null || true)"
 COMPUTER_USE_INSTR="$(spin_omp_computer_use_prompt)"
-SYS_CONTENT="${SYS_CONTENT}${BOARD_INSTR}"
+SYS_CONTENT="${SYS_CONTENT}
+
+${ACTION_POLICY_INSTR}${BOARD_INSTR}"
 [[ -n "$COMPUTER_USE_INSTR" ]] && SYS_CONTENT="${SYS_CONTENT}
 
 $COMPUTER_USE_INSTR"

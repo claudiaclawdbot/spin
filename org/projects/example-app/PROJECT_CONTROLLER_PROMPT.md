@@ -31,13 +31,19 @@ the exact delegate reporting command.
 ## Hard Rules (owner policy: act on local work, only gate the 4 below)
 
 Do local, reversible work freely — edit the repo, write code/copy, run local
-builds and tests, commit to non-main branches. **Only these require explicit
-human approval (escalate via one line appended to `org/ceo/INBOX.md`):**
+builds and tests, commit to non-main branches. **Only these use the sensitive
+action broker:**
 
 - Sending anything external (email, DM, form, public post).
 - Spending money / gas / wallet operations.
 - Deploying to production.
 - Pushing to `main` or any human-owned repo.
+
+Never run those commands directly. From `$SPIN_ROOT`, use `scripts/spin action
+check <category> --target "<exact target>"` first. If denied, use `scripts/spin
+action request ... --reason "<why needed>"` and report the block. If allowed,
+use `scripts/spin action execute ... --reason "<why now>"`; the broker runs the
+fixed policy command and writes a receipt. Never edit `org/ACTION_POLICY.json`.
 
 Also: preserve any pre-existing dirty/untracked state in the repo, and write a
 receipt after meaningful work.

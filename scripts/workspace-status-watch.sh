@@ -85,6 +85,81 @@ while true; do
     esac
   fi
 
+  # ── live work state: running/queued/failures + observed resource use ─────
+  JOB_STATE_F="$RUN_DIR/.job-status-state"
+  JOB_SUMMARY="$(node - "$ROOT" <<'NODE' 2>/dev/null || true
+const fs = require('fs');
+const path = require('path');
+const root = process.argv[2];
+let jobs = [];
+let dispatchStatus = '';
+try {
+  const queue = JSON.parse(fs.readFileSync(path.join(root, 'org', 'AGENT_QUEUE.json'), 'utf8'));
+  jobs = Array.isArray(queue) ? queue : (queue.jobs || []);
+  dispatchStatus = Array.isArray(queue) ? '' : String(queue.dispatch_state?.status || '');
+} catch {}
+const running = jobs.filter(job => job.status === 'running');
+const queued = jobs.filter(job => job.status === 'queued');
+const blocked = jobs.filter(job => job.status === 'blocked');
+const recentFailed = jobs.filter(job => {
+  if (job.status !== 'failed') return false;
+  const at = Date.parse(job.failed_at || job.updated_at || '');
+  return !Number.isFinite(at) || Date.now() - at < 86400000;
+});
+let stale = 0;
+let rss = 0;
+let rssLimit = 0;
+let processes = 0;
+let processLimit = 0;
+let sampled = 0;
+for (const job of running) {
+  const heartbeat = Date.parse(job.heartbeat_at || job.started_at || '');
+  if (Number.isFinite(heartbeat) && Date.now() - heartbeat > 90000) stale += 1;
+  rssLimit += Number(job.resource_limits?.max_rss_mb || 0);
+  processLimit += Number(job.resource_limits?.max_processes || 0);
+  const relative = job.resource_usage || `org/jobs/${job.id}.usage.json`;
+  try {
+    const file = path.resolve(root, relative);
+    if (file !== root && !file.startsWith(`${root}${path.sep}`)) continue;
+    const usage = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Number.isFinite(Number(usage.rss_mb)) && Number.isFinite(Number(usage.processes))) {
+      rss += Number(usage.rss_mb);
+      processes += Number(usage.processes);
+      sampled += 1;
+    }
+  } catch {}
+}
+process.stdout.write([running.length, queued.length, blocked.length + recentFailed.length, stale, rss, rssLimit, processes, processLimit, sampled, dispatchStatus].join('\t'));
+NODE
+)"
+  if [[ -n "$JOB_SUMMARY" ]]; then
+    IFS=$'\t' read -r JOB_RUNNING JOB_QUEUED JOB_ATTENTION JOB_STALE JOB_RSS JOB_RSS_LIMIT JOB_PROCESSES JOB_PROCESS_LIMIT JOB_SAMPLED JOB_DISPATCH <<< "$JOB_SUMMARY"
+    PREV_JOB_SUMMARY="$(cat "$JOB_STATE_F" 2>/dev/null || true)"
+    if [[ "$JOB_SUMMARY" != "$PREV_JOB_SUMMARY" ]]; then
+      echo "$JOB_SUMMARY" > "$JOB_STATE_F"
+      if (( JOB_ATTENTION > 0 )); then
+        spin_cmd cmux set-status work "$JOB_RUNNING running - $JOB_QUEUED queued - $JOB_ATTENTION need attention" \
+          --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#ef4444' --priority 91 >/dev/null 2>&1 || true
+      elif (( JOB_STALE > 0 )); then
+        spin_cmd cmux set-status work "$JOB_RUNNING running - $JOB_STALE stale heartbeat" \
+          --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#f97316' --priority 89 >/dev/null 2>&1 || true
+      elif [[ "$JOB_DISPATCH" == "memory-pressure" || "$JOB_DISPATCH" == "draining-for-heavy" ]]; then
+        spin_cmd cmux set-status work "$JOB_DISPATCH - $JOB_RUNNING running - $JOB_QUEUED queued" \
+          --workspace "$CEO_WS" --icon exclamationmark.triangle --color '#f97316' --priority 88 >/dev/null 2>&1 || true
+      elif (( JOB_RUNNING > 0 )); then
+        resource_text="resources sampling"
+        (( JOB_SAMPLED > 0 )) && resource_text="${JOB_RSS}/${JOB_RSS_LIMIT:-?}MB - ${JOB_PROCESSES}/${JOB_PROCESS_LIMIT:-?} proc"
+        spin_cmd cmux set-status work "$JOB_RUNNING running - $resource_text - $JOB_QUEUED queued" \
+          --workspace "$CEO_WS" --icon gearshape.2 --color '#22c55e' --priority 80 >/dev/null 2>&1 || true
+      elif (( JOB_QUEUED > 0 )); then
+        spin_cmd cmux set-status work "$JOB_QUEUED jobs queued" \
+          --workspace "$CEO_WS" --icon list.bullet --color '#38bdf8' --priority 70 >/dev/null 2>&1 || true
+      else
+        spin_cmd cmux clear-status work --workspace "$CEO_WS" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+
   # ── human-approval latency: chip + one-shot notification past threshold ──
   APPROVAL_STATE_F="$RUN_DIR/.approval-latency-state"
   if approval_env="$(node "$ROOT/scripts/lib/human-queue-summary.js" "$ROOT" --env 2>/dev/null)"; then

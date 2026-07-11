@@ -156,7 +156,7 @@ export SPIN_OMP_SMOL_FALLBACKS="openai-codex/gpt-5.1-codex-mini openrouter/~anth
 | agent exits 0 having done nothing | post-run content diff → one retry on claude |
 | driver/status/wiki service dies | launchd/systemd independently restarts all three; the board verifies PID plus expected command |
 | restored cmux session has stale/missing floors | status-watch periodically reconciles the Coordinator, active project floors, and boards |
-| agent or test runner consumes the machine | process-group RSS/count governor kills the job and records a durable failure reason |
+| agent or test runner consumes the machine | adaptive dispatch preserves a memory reserve; heavy jobs run alone; process-group RSS/count governor kills a breach and records the reason |
 | forgotten STOP file | status-watch remains alive and paints a paused/stale chip + notification |
 | owner pauses the org | `touch org/ceo/runs/STOP` (resume: `rm`) — explicit, visible state |
 | machine sleeps or reboots | supervised services resume on login/wake and regenerate visible process state |
@@ -175,8 +175,14 @@ the durable queue.
 ## Security model
 
 - Keys live outside the repo in `~/.config/omp.env` (chmod 600).
-- The four gates are *behavioral*: enforced by every controller prompt, with
-  HUMAN_QUEUE as the escalation path — not by an OS sandbox. An agent with
-  shell access can read anything your user can. Therefore: dedicated low-value
-  wallets only, private repos by default, no real-money keys on the machine.
-- Receipts make every decision and action reconstructable after the fact.
+- `spin action` is the executable gate for external sends, spending, production
+  deploys, and protected pushes. It denies by default, matches an exact enabled
+  target, runs a fixed argv vector without a shell, applies spend caps, and
+  writes append-only events plus a receipt.
+- Prompts forbid direct execution and tell agents to request denied targets in
+  HUMAN_QUEUE. Agents must not edit `org/ACTION_POLICY.json`.
+- This broker is machine-enforced for work routed through it, but it is not an
+  OS sandbox. A same-user shell can still bypass user-space controls. Put
+  high-value credentials behind a separate OS account, container, or scoped
+  wrapper if bypass resistance is required.
+- Receipts make brokered decisions and actions reconstructable after the fact.

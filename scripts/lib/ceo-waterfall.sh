@@ -265,7 +265,7 @@ run_agent() {
     codex)
       local codex_bin="" codex_cmd=()
       if codex_bin="$(spin_resolve_codex_cli 2>/dev/null)"; then
-        codex_cmd=("$codex_bin" exec --cd "$CEO_ROOT" --full-auto)
+        codex_cmd=("$codex_bin" exec --cd "$CEO_ROOT" --sandbox workspace-write)
         [[ -n "${CEO_CODEX_MODEL:-}" ]] && codex_cmd+=(--model "$CEO_CODEX_MODEL")
         for d in "$@"; do codex_cmd+=(--add-dir "$d"); done
         codex_cmd+=(-)
@@ -285,11 +285,11 @@ run_agent() {
       local add_args=(--add-dir "$CEO_ROOT")
       for d in "$@"; do add_args+=(--add-dir "$d"); done
       claude -p "$prompt" --model "${MODEL:-$CEO_CLAUDE_MODEL}" \
-        --dangerously-skip-permissions "${add_args[@]}" \
+        --permission-mode dontAsk "${add_args[@]}" \
         > "$log" 2>&1 || rc=$?
       ;;
     cursor)
-      echo "$prompt" | cursor-agent -p --force --trust \
+      echo "$prompt" | cursor-agent -p --trust --sandbox enabled \
         --workspace "$CEO_ROOT" --model "${MODEL:-$CEO_CURSOR_MODEL}" \
         > "$log" 2>&1 || rc=$?
       ;;

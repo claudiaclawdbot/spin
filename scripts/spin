@@ -21,6 +21,7 @@
 #   spin app-updates     user-facing SPIN.app update check/install surface
 #   spin app-release-notes prepare customer release notes for a macOS artifact
 #   spin computer-use ... delegate a bounded desktop task to signed Codex; `probe` verifies it
+#   spin action ...       check, request, or execute a policy-gated sensitive action
 #   spin omp-setup       hand off to OMP's built-in setup wizard
 #   spin update          safely update SPIN, back up state, run migrations
 #   spin version         show installed version + git checkout
@@ -151,6 +152,8 @@ case "$cmd" in
     export WORKSPACE_ROOT="$ROOT"
     SYS_CONTENT="$(cat "$PROMPT_FILE")
 
+$(cat "$ROOT/scripts/lib/action-policy-prompt.md" 2>/dev/null || true)
+
 ## spin chat runtime
 The absolute SPIN root is: $ROOT
 Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files."
@@ -171,7 +174,6 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     exec claude \
       --append-system-prompt "$SYS_CONTENT" \
       --add-dir "$ROOT" \
-      --dangerously-skip-permissions \
       --model "${CEO_CHAT_MODEL:-claude-sonnet-4-6}" \
       "Give me a quick status of the org."
     ;;
@@ -180,6 +182,7 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
   ask)              exec "$ROOT/scripts/approve.sh" "ASK: $*" ;;
   delegate)         exec bash "$ROOT/scripts/delegate.sh" "$@" ;;
   computer-use|desktop) exec bash "$ROOT/scripts/codex-computer-use.sh" "$@" ;;
+  action|broker)     exec env -u NODE_OPTIONS -u BASH_ENV -u ENV node "$ROOT/scripts/spin-action-broker.js" "$@" ;;
   log)              exec tail -f "$RUN_DIR/workspace-ceo-driver.log" ;;
   watch)
     trap 'tput cnorm 2>/dev/null; exit 0' INT TERM
@@ -357,14 +360,21 @@ let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () 
     [[ $found_running -eq 0 ]] && echo "  ${c_dim}none${c_off}"
     echo
     # Queue summary from AGENT_QUEUE.json
-    echo "${c_bold}Queue${c_off}"
+    echo "${c_bold}Scheduler and queue${c_off}"
     node -e '
-      const q=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+      const fs=require("fs");
+      const q=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       const jobs=q.jobs||[];
       const queued=jobs.filter(j=>j.status==="queued");
-      const completed=jobs.filter(j=>j.status==="completed").slice(-3);
+      const attention=jobs.filter(j=>j.status==="blocked"||j.status==="failed").slice(-5).reverse();
+      const completed=jobs.filter(j=>j.status==="completed").slice(-3).reverse();
+      if(q.dispatch_state) console.log("  dispatcher: "+q.dispatch_state.status+" — "+q.dispatch_state.note+" ("+(q.dispatch_state.available_memory_mb||"?")+"MB available)");
       if(queued.length===0) console.log("  (no queued jobs)");
-      for(const j of queued) console.log("  ⏳ "+j.id+"  "+j.type+"  — "+j.description.slice(0,60));
+      for(const j of queued) console.log("  ⏳ "+j.id+(j.resource_class==="heavy"?"  [heavy]":"")+"  "+j.type+"  — "+j.description.slice(0,60));
+      if(attention.length) {
+        console.log("\nNeeds attention:");
+        for(const j of attention) console.log("  ! "+j.id+"  "+j.status+"  — "+String(j.result||"no detail").slice(0,90));
+      }
       if(completed.length) {
         console.log("\nRecently completed:");
         for(const j of completed) console.log("  ✓ "+j.id);

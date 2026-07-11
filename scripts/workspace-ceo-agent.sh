@@ -89,6 +89,10 @@ PROMPT_BODY="$(cat "$PROMPT_FILE")
 
 ---
 
+$(cat "$ROOT/scripts/lib/action-policy-prompt.md")
+
+---
+
 $(cat "$CONTEXT")
 "
 

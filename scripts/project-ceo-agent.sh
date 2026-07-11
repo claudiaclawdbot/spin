@@ -37,6 +37,7 @@ if [[ -n "${OMP_JOB_ID:-}${OMP_JOB_DESCRIPTION:-}" ]]; then
   JOB_BLOCK="## Assigned worker job
 - Job ID: ${OMP_JOB_ID:-unknown}
 - Type: ${OMP_JOB_TYPE:-project-ceo-run}
+- Resource class: ${OMP_RESOURCE_CLASS:-normal}
 - Description: ${OMP_JOB_DESCRIPTION:-none}
 
 Execute this job within the project hard rules and write a receipt that includes the job ID.
@@ -44,6 +45,10 @@ Execute this job within the project hard rules and write a receipt that includes
 fi
 
 PROMPT_BODY="$(cat "$PROMPT_FILE")
+
+---
+
+$(cat "$ROOT/scripts/lib/action-policy-prompt.md")
 
 ---
 

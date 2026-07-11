@@ -33,8 +33,14 @@ Include:
   user.
 - Provider keys and accounts are owned by OMP/Pi or your normal CLI setup. Do
   not commit keys to this repo.
-- The four approval gates are behavioral and prompt-enforced: external sends,
-  spending money, production deploys, and protected pushes.
+- External sends, spending, production deploys, and protected pushes have a
+  second enforcement layer: `spin action` denies by default and only executes
+  exact enabled rules from the local `org/ACTION_POLICY.json`. It records
+  append-only events and a receipt for every execution attempt.
+- Controller prompts also forbid direct execution, but SPIN still is not an OS
+  security boundary. A same-user agent with arbitrary shell access can bypass a
+  user-space broker. Keep high-value credentials in a separate OS account,
+  container, or narrowly scoped wrapper that only the broker can invoke.
 - Use dedicated low-value accounts, test wallets, and non-production keys while
   evaluating agent behavior.
 - Review receipts and project state before trusting important results.

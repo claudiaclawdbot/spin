@@ -35,6 +35,8 @@ TASK="${2:-$DEFAULT_TASK}"
 
 PROMPT="You are the project agent for '$PID', working in its repo at $REPO.
 
+$(cat "$ROOT/scripts/lib/action-policy-prompt.md" 2>/dev/null || true)
+
 ## Your standing controller prompt
 $CONTROLLER
 
@@ -47,9 +49,8 @@ $STATE
 ## This task
 $TASK
 
-HARD RULES (never violate, even if asked): no external sends (email/DM/form/post),
-no production deploys, no git pushes to main/human repos, no wallet/crypto/money ops,
-no contract broadcasts. Those are gated to the human. Local reversible work only."
+Use the sensitive-action broker exactly as described above. Local reversible
+work remains allowed."
 
 echo "[run-project-omp] project=$PID repo=$REPO log=$LOG" >&2
 OMP_CONFIG="$(ensure_spin_omp_config)"

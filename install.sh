@@ -60,7 +60,7 @@ fi
 
 # ── 2. runtime org files (never overwrites existing state) ──────────────────
 echo; echo "Creating runtime files:"
-mkdir -p org/ceo/runs org/jobs org/projects org/wiki logs
+mkdir -p org/ceo/runs org/jobs org/projects org/wiki org/action-broker/receipts logs
 seed() { [[ -f "$1" ]] && echo "  · $1 (exists, kept)" || { printf '%s' "$2" > "$1"; echo "  ✓ $1"; }; }
 
 seed org/ceo/APPROVALS.md "# Approvals
@@ -91,6 +91,7 @@ seed org/state.json '{
 }
 '
 [[ -f org/OMP_HARNESS.json ]] || { cp org/OMP_HARNESS.example.json org/OMP_HARNESS.json; echo "  ✓ org/OMP_HARNESS.json (from example)"; }
+[[ -f org/ACTION_POLICY.json ]] || { cp org/ACTION_POLICY.example.json org/ACTION_POLICY.json; chmod 600 org/ACTION_POLICY.json; echo "  ✓ org/ACTION_POLICY.json (deny-all until exact rules are enabled)"; }
 [[ -f org/ceo/WORKSPACE_CONTROLLER_PROMPT.md ]] || { cp org/ceo/WORKSPACE_CONTROLLER_PROMPT.example.md org/ceo/WORKSPACE_CONTROLLER_PROMPT.md; echo "  ✓ org/ceo/WORKSPACE_CONTROLLER_PROMPT.md (from example — EDIT THIS)"; }
 [[ -f org/ceo/CEO_CHAT_PROMPT.md ]] || { cp org/ceo/CEO_CHAT_PROMPT.example.md org/ceo/CEO_CHAT_PROMPT.md; echo "  ✓ org/ceo/CEO_CHAT_PROMPT.md (from example — EDIT THIS)"; }
 
@@ -109,8 +110,10 @@ launcher scripts, and local maintenance tasks that support the Navigator.
 
 ## Working dir
 
-`$SPIN_ROOT` is the SPIN repo root. Prefer local, reversible changes. Preserve
-dirty user work and never push, deploy, delete, or publish without human approval.
+`$SPIN_ROOT` is the SPIN repo root. Prefer local, reversible changes and preserve
+dirty user work. Never delete or publish directly. External sends, spending,
+production deploys, and protected pushes must use `scripts/spin action`; request
+a denied exact target and continue safe work. Never edit `org/ACTION_POLICY.json`.
 
 ## Reporting
 

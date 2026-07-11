@@ -18,6 +18,13 @@
       "height": 220
     },
     {
+      "id": "spin-control",
+      "title": "Control",
+      "command": "scripts/spin web --open",
+      "cwd": ".",
+      "height": 180
+    },
+    {
       "id": "spin-health",
       "title": "Health",
       "command": "scripts/spin app-health",

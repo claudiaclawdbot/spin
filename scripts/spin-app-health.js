@@ -239,6 +239,34 @@ function checkOmp() {
   };
 }
 
+function checkActionBroker() {
+  const script = path.join(root, 'scripts', 'spin-action-broker.js');
+  if (!pathExists(script)) return { status: 'error', state: 'missing_code', message: 'sensitive action broker is missing' };
+  const probe = run(process.execPath, [script, 'status', '--json'], { timeoutMs: 3000 });
+  if (!probe.ok) {
+    return {
+      status: 'error',
+      state: 'invalid',
+      message: firstLine(probe.stderr || probe.stdout) || probe.error || 'action policy check failed',
+    };
+  }
+  try {
+    const report = JSON.parse(probe.stdout);
+    return {
+      status: report.status === 'missing' ? 'warn' : 'ok',
+      state: report.status,
+      secureDefault: report.secure_default === true,
+      enabledRules: Number(report.enabled_rules || 0),
+      policy: report.policy,
+      message: report.status === 'missing'
+        ? 'policy file missing; sensitive actions still fail closed'
+        : (report.status === 'deny_all' ? 'deny-all policy active' : 'exact action rules configured'),
+    };
+  } catch {
+    return { status: 'error', state: 'invalid', message: 'action broker returned invalid JSON' };
+  }
+}
+
 function summarize(health) {
   const checks = [];
   checks.push(health.app.runtimeWritable);
@@ -248,6 +276,7 @@ function summarize(health) {
   checks.push(health.tools.node);
   checks.push(health.tools.git);
   if (appResources) checks.push(health.binaries.spinAgent);
+  checks.push(health.security.actionBroker);
 
   const errors = checks.filter((item) => item && item.status === 'error').length;
   const warnings = checks.filter((item) => item && item.status === 'warn').length;
@@ -290,6 +319,9 @@ function collectHealth() {
       spinAgent: checkBinary('spin-agent', ['--version']),
     },
     omp: checkOmp(),
+    security: {
+      actionBroker: checkActionBroker(),
+    },
     system: {
       platform: process.platform,
       arch: process.arch,
@@ -340,6 +372,11 @@ function renderText(health) {
     lines.push('  provider env markers: none detected');
   }
   lines.push(`  note: ${health.omp.message}`);
+  lines.push('');
+  lines.push('Sensitive Actions');
+  lines.push(`  [${mark(health.security.actionBroker.status)}] broker: ${health.security.actionBroker.state}`);
+  lines.push(`  enabled exact rules: ${health.security.actionBroker.enabledRules || 0}`);
+  lines.push(`  note: ${health.security.actionBroker.message}`);
   return `${lines.join('\n')}\n`;
 }
 

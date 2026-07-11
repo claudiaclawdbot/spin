@@ -91,6 +91,25 @@ const normalize = value => value.replace(
   /_Rolled up from active project floor boards - refreshed [^_]*_/,
   '_Rolled up from active project floor boards - refreshed <dynamic>_',
 );
+const ageText = value => {
+  const timestamp = Date.parse(value || '');
+  if (!Number.isFinite(timestamp)) return 'unknown';
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+};
+const readUsage = job => {
+  const relative = job.resource_usage || `org/jobs/${job.id}.usage.json`;
+  try {
+    const file = path.resolve(root, relative);
+    if (file !== root && !file.startsWith(`${root}${path.sep}`)) return null;
+    const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!Number.isFinite(Number(value.rss_mb)) || !Number.isFinite(Number(value.processes))) return null;
+    return value;
+  } catch { return null; }
+};
 
 const boards = [];
 for (const id of activeProjectIds()) {
@@ -102,30 +121,60 @@ for (const id of activeProjectIds()) {
 }
 
 let jobs = [];
+let dispatchState = null;
 try {
   const queue = JSON.parse(fs.readFileSync(path.join(root, 'org', 'AGENT_QUEUE.json'), 'utf8'));
   jobs = Array.isArray(queue) ? queue : (queue.jobs || []);
+  dispatchState = Array.isArray(queue) ? null : (queue.dispatch_state || null);
 } catch {}
 const running = jobs.filter(job => job.status === 'running');
 const queued = jobs.filter(job => job.status === 'queued');
 const blocked = jobs.filter(job => job.status === 'blocked');
 const failed = jobs.filter(job => job.status === 'failed');
+const recentProblems = [...blocked, ...failed]
+  .sort((a, b) => Date.parse(b.failed_at || b.blocked_at || b.updated_at || 0) - Date.parse(a.failed_at || a.blocked_at || a.updated_at || 0))
+  .slice(0, 6);
+
+let actionPolicy = 'missing (deny-all)';
+try {
+  const policy = JSON.parse(fs.readFileSync(path.join(root, 'org', 'ACTION_POLICY.json'), 'utf8'));
+  const enabled = Array.isArray(policy.rules) ? policy.rules.filter(rule => rule.enabled === true).length : 0;
+  actionPolicy = policy.mode === 'deny-by-default'
+    ? (enabled ? `ready - ${enabled} exact rule${enabled === 1 ? '' : 's'} enabled` : 'deny-all - 0 rules enabled')
+    : 'INVALID - mode must be deny-by-default';
+} catch {}
 
 let output = '# Workspace - Live Status\n\n';
 output += `_Rolled up from active project floor boards - refreshed ${new Date().toISOString()}_\n\n`;
 output += '## Control plane\n';
 output += `- **Driver:** ${process.env.DRIVER || '(unknown)'}\n`;
 output += `- **Live status:** ${process.env.STATUS_WATCH || '(unknown)'}\n`;
-output += `- **Project index:** ${process.env.WIKI_WATCH || '(unknown)'}\n\n`;
+output += `- **Project index:** ${process.env.WIKI_WATCH || '(unknown)'}\n`;
+output += `- **Sensitive actions:** ${actionPolicy}\n\n`;
 output += '## Work\n';
 output += `- **Running:** ${running.length}\n`;
 output += `- **Queued:** ${queued.length}\n`;
 output += `- **Blocked:** ${blocked.length}\n`;
 output += `- **Failed history:** ${failed.length}\n`;
+if (dispatchState) {
+  output += `- **Dispatcher:** ${dispatchState.status || 'unknown'} - ${dispatchState.note || 'no detail'} (${dispatchState.available_memory_mb || '?'}MB available)\n`;
+}
 for (const job of running.slice(0, 8)) {
   const limits = job.resource_limits || {};
-  const budget = limits.max_rss_mb ? ` - limit ${limits.max_rss_mb}MB / ${limits.max_processes || '?'} processes` : '';
-  output += `  - \`${job.id}\` - ${job.project_id || 'unknown project'}${budget}\n`;
+  const usage = readUsage(job);
+  const resource = usage
+    ? ` - ${usage.rss_mb}MB / ${limits.max_rss_mb || '?'}MB; ${usage.processes} / ${limits.max_processes || '?'} processes`
+    : (limits.max_rss_mb ? ` - awaiting sample; limit ${limits.max_rss_mb}MB / ${limits.max_processes || '?'} processes` : '');
+  const heartbeat = job.heartbeat_at || job.started_at;
+  const stale = Number.isFinite(Date.parse(heartbeat || '')) && Date.now() - Date.parse(heartbeat) > 90000;
+  const resourceClass = job.resource_class === 'heavy' ? ' **HEAVY**' : '';
+  output += `  - \`${job.id}\`${resourceClass} - ${job.project_id || 'unknown project'} - age ${ageText(job.started_at)}, heartbeat ${ageText(heartbeat)}${stale ? ' **STALE**' : ''}${resource}\n`;
+}
+if (recentProblems.length) {
+  output += '- **Needs attention:**\n';
+  for (const job of recentProblems) {
+    output += `  - \`${job.id}\` (${job.status}) - ${String(job.result || 'No failure detail recorded.').replace(/\s+/g, ' ').slice(0, 180)}\n`;
+  }
 }
 output += '\n';
 if (!boards.length) output += '_(no active project floor boards found)_\n';

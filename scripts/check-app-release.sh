@@ -415,6 +415,7 @@ launch_out="$(app_launcher_dry_run)"
 grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not route fresh app home to onboarding"
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
 [ -x "$TMP/home/runtime/scripts/org" ] || fail "launcher did not seed writable org CLI"
+[ -f "$TMP/home/runtime/org/ACTION_POLICY.json" ] || fail "launcher did not seed the deny-all action policy"
 [ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
 grep -q '"hideAllDetails": true' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config does not hide sidebar details"
 grep -q '"showWorkspaceDescription": false' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config still shows workspace descriptions"
@@ -657,6 +658,7 @@ for (const [name, key] of [['cmux', 'cmux'], ['omp', 'omp'], ['spin-agent', 'spi
 }
 if (!health.omp || health.omp.owner !== 'OMP') fail('app health does not preserve OMP ownership');
 if (health.omp.setupCommand !== 'spin omp-setup') fail('app health missing OMP setup handoff command');
+if (!health.security || health.security.actionBroker.status === 'error') fail('app health did not validate the sensitive action broker');
 if (health.summary.status === 'error') fail('app health summary reports error');
 NODE
 ok "app health reports bundled runtime and OMP handoff"

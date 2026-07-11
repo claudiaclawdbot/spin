@@ -10,6 +10,8 @@ org/HUMAN_QUEUE.md
 org/AGENT_QUEUE.json
 org/state.json
 org/OMP_HARNESS.json
+org/ACTION_POLICY.json
+org/action-broker/
 org/ceo/WORKSPACE_CONTROLLER_PROMPT.md
 org/.spin-version
 org/.spin-migrations/

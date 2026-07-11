@@ -47,26 +47,30 @@ Use `scripts/org` for shared state. Do not hand-edit `org/state.json`,
 Useful verbs:
 
 ```bash
-scripts/org queue-job <project> <type> "<description>" [--max-runtime SEC]
+scripts/org queue-job <project> <type> "<description>" [--max-runtime SEC] [--resource-class normal|heavy]
 scripts/org set-handoff <project>
 scripts/org set-state <project> --status <s> --next "<next action>"
 scripts/org escalate "<thing the human must decide>"
 scripts/org inbox <project> "<message>"
 scripts/org show
 scripts/delegate.sh --wait --timeout 900 <project> "<visible project-floor task>"
+scripts/spin action check|request|execute ...
 ```
 
 ## Hard gates
 
-Act freely on local, reversible work. Stop and ask the human before:
+Act freely on local, reversible work. The following must go through
+`scripts/spin action`; never invoke their underlying command directly:
 
 - sending anything external,
 - spending money,
 - deploying to production,
 - pushing to `main` or a human-owned repo.
 
-Never send, deploy, purchase, or push on the human's behalf without explicit
-approval for that exact action.
+Use `spin action check` for an exact target. If it is denied, use `spin action
+request` and keep doing unrelated safe work. If allowed, use `spin action
+execute`, which runs the fixed policy command and writes a receipt. Never edit
+`org/ACTION_POLICY.json`; only the owner controls those rules.
 
 ## Response style
 

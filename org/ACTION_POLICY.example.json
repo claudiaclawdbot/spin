@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "mode": "deny-by-default",
+  "rules": []
+}

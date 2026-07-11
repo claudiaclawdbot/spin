@@ -12,8 +12,10 @@ launcher scripts, and local maintenance tasks that support the Navigator.
 
 ## Working dir
 
-`$SPIN_ROOT` is the SPIN repo root. Prefer local, reversible changes. Preserve
-dirty user work and never push, deploy, delete, or publish without human approval.
+`$SPIN_ROOT` is the SPIN repo root. Prefer local, reversible changes and preserve
+dirty user work. Never delete or publish directly. External sends, spending,
+production deploys, and protected pushes must use `scripts/spin action`; request
+a denied exact target and continue safe work. Never edit `org/ACTION_POLICY.json`.
 
 ## Live Delegation
 

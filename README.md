@@ -161,15 +161,18 @@ SPIN runs with the permissions of the current macOS or Linux account. It is not
 an operating-system sandbox. Provider credentials remain in OMP or the
 provider's normal CLI configuration and should never be committed to a project.
 
-The default approval policy pauses before four categories of action:
+The default action policy denies four categories of action:
 
 1. External communication, including email, messages, forms, and public posts.
 2. New spending, purchases, wallet transactions, or paid API usage.
 3. Production deployment or release actions.
 4. Protected branch pushes and protected repositories.
 
-Local, reversible work can continue without interrupting the operator. Approval
-requests, decisions, and receipts remain visible in the runtime state.
+Local, reversible work can continue without interrupting the operator. For the
+four categories above, `spin action` only runs exact commands and targets that
+the owner enabled in `org/ACTION_POLICY.json`; otherwise it records a structured
+request. Broker events and receipts remain in local runtime state. This is a
+user-space control, not a substitute for OS-level credential isolation.
 
 ## App Updates
 
@@ -250,6 +253,7 @@ spin approve "<x>"   approve a queued action
 spin decline "<x>"   decline or hold a queued action
 spin ask "<q>"       send an asynchronous request to the Navigator
 spin delegate --wait <project> "<task>"
+spin action status | check | request | execute
 spin start | stop    start or pause the Navigator loop
 spin up | down       launch or close project workspaces and services
 spin service status  verify driver, board, and workspace supervision
@@ -260,7 +264,7 @@ The `org` CLI is the validated state-change interface used by agents and
 automation:
 
 ```text
-org queue-job <project> <type> "<description>" [--max-runtime SEC]
+org queue-job <project> <type> "<description>" [--max-runtime SEC] [--resource-class normal|heavy]
 org set-handoff <project>
 org set-state <project> --status S --next "..."
 org escalate "<item>"

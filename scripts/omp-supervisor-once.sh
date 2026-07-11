@@ -30,6 +30,7 @@ mkdir -p "$ROOT/org/jobs"
 node - "$ROOT" "$HARNESS" "$QUEUE" <<'NODE'
 const fs   = require('fs');
 const cp   = require('child_process');
+const os   = require('os');
 const path = require('path');
 
 const root      = process.argv[2];
@@ -38,9 +39,13 @@ const runtime   = require(path.join(root, 'scripts', 'lib', 'spin-runtime.js'));
 const harness   = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const now       = new Date().toISOString();
 const jobsDir   = path.join(root, 'org', 'jobs');
-const MAX_PAR   = parseInt(process.env.OMP_MAX_PARALLEL || '3', 10);
-const DEFAULT_JOB_MAX_RSS_MB = parsePositiveInt(process.env.OMP_JOB_MAX_RSS_MB, 4096);
-const DEFAULT_JOB_MAX_PROCESSES = parsePositiveInt(process.env.OMP_JOB_MAX_PROCESSES, 32);
+const MAX_PAR   = parsePositiveInt(process.env.OMP_MAX_PARALLEL, 3);
+const DEFAULT_JOB_MAX_RSS_MB = parsePositiveInt(process.env.OMP_JOB_MAX_RSS_MB, 3072);
+const DEFAULT_JOB_MAX_PROCESSES = parsePositiveInt(process.env.OMP_JOB_MAX_PROCESSES, 16);
+const HEAVY_JOB_MAX_RSS_MB = parsePositiveInt(process.env.OMP_HEAVY_JOB_MAX_RSS_MB, 6144);
+const HEAVY_JOB_MAX_PROCESSES = parsePositiveInt(process.env.OMP_HEAVY_JOB_MAX_PROCESSES, 32);
+const DISPATCH_MEMORY_RESERVE_MB = parsePositiveInt(process.env.OMP_DISPATCH_MEMORY_RESERVE_MB, 2048);
+const DISPATCH_PLANNING_RSS_MB = parsePositiveInt(process.env.OMP_DISPATCH_PLANNING_RSS_MB, 2048);
 const RESOURCE_CHECK_INTERVAL = parsePositiveInt(process.env.OMP_RESOURCE_CHECK_INTERVAL, 5);
 const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
 const queueLock = path.join(root, 'org', 'ceo', 'runs', '.org-queue.lock');
@@ -49,6 +54,40 @@ let queueLockHeld = false;
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function jobIsHeavy(job) {
+  return job.resource_class === 'heavy';
+}
+
+function availableMemoryMb() {
+  if (process.env.OMP_AVAILABLE_MEMORY_MB) {
+    return parsePositiveInt(process.env.OMP_AVAILABLE_MEMORY_MB, 0);
+  }
+  if (process.platform === 'darwin' && fs.existsSync('/usr/bin/memory_pressure')) {
+    try {
+      const output = cp.execFileSync('/usr/bin/memory_pressure', ['-Q'], { encoding: 'utf8', timeout: 2000 });
+      const match = output.match(/memory free percentage:\s*(\d+)%/i);
+      if (match) return Math.floor((os.totalmem() / 1024 / 1024) * Number(match[1]) / 100);
+    } catch {}
+  }
+  if (process.platform === 'linux') {
+    try {
+      const match = fs.readFileSync('/proc/meminfo', 'utf8').match(/^MemAvailable:\s*(\d+)\s*kB/im);
+      if (match) return Math.floor(Number(match[1]) / 1024);
+    } catch {}
+  }
+  return Math.floor(os.freemem() / 1024 / 1024);
+}
+
+function adaptiveDispatchBudget(runningCount) {
+  const capacity = Math.max(0, MAX_PAR - runningCount);
+  const available = availableMemoryMb();
+  if (process.env.OMP_ADAPTIVE_PARALLELISM === '0') return { available, budget: capacity };
+  const headroom = available - DISPATCH_MEMORY_RESERVE_MB;
+  let memorySlots = Math.max(0, Math.floor(headroom / DISPATCH_PLANNING_RSS_MB));
+  if (memorySlots === 0 && headroom >= 1536) memorySlots = 1;
+  return { available, budget: Math.min(capacity, memorySlots) };
 }
 
 function acquireQueueLock() {
@@ -290,8 +329,56 @@ function dispatchQueuedJobs() {
     return { PROJECT_CEO_PROVIDER: 'omp' };
   }
 
-  for (const job of queue.jobs || []) {
-    if (job.status !== 'queued') continue;
+  const runningAtStart = (queue.jobs || []).filter(job => job.status === 'running');
+  const adaptive = adaptiveDispatchBudget(runningAtStart.length);
+  queue.dispatch_state = {
+    updated_at: now,
+    status: 'ready',
+    note: 'dispatch capacity available',
+    max_parallel: MAX_PAR,
+    available_memory_mb: adaptive.available,
+    reserve_memory_mb: DISPATCH_MEMORY_RESERVE_MB,
+    dispatch_slots: adaptive.budget,
+  };
+  if (runningAtStart.some(jobIsHeavy)) {
+    queue.dispatch_state.status = 'heavy-lease';
+    queue.dispatch_state.note = 'an exclusive heavy job is running';
+    queue.dispatch_state.dispatch_slots = 0;
+    console.log('  heavy-job lease active; no other jobs will start');
+    return dispatched;
+  }
+  const queuedJobs = (queue.jobs || []).filter(job => job.status === 'queued');
+  if (queuedJobs.length === 0) {
+    queue.dispatch_state.status = runningAtStart.length ? 'running' : 'idle';
+    queue.dispatch_state.note = runningAtStart.length ? 'no queued jobs waiting' : 'no work waiting';
+    queue.dispatch_state.dispatch_slots = 0;
+    return dispatched;
+  }
+  const dispatchBudget = adaptive.budget;
+  if (dispatchBudget < 1) {
+    queue.dispatch_state.status = 'memory-pressure';
+    queue.dispatch_state.note = `${adaptive.available}MB available; preserving ${DISPATCH_MEMORY_RESERVE_MB}MB reserve`;
+    console.log(`  adaptive dispatch paused: ${adaptive.available}MB available, ${DISPATCH_MEMORY_RESERVE_MB}MB reserve`);
+    return dispatched;
+  }
+  const dependencyComplete = job => job.depends_on === undefined || (
+    Array.isArray(job.depends_on) && job.depends_on.length > 0 &&
+    job.depends_on.every(id => (queue.jobs || []).find(candidate => candidate.id === id)?.status === 'completed')
+  );
+  const readyHeavy = queuedJobs.find(job => jobIsHeavy(job) && dependencyComplete(job));
+  if (readyHeavy && runningAtStart.length > 0) {
+    queue.dispatch_state.status = 'draining-for-heavy';
+    queue.dispatch_state.note = `waiting for ${runningAtStart.length} running job(s) before the heavy lease`;
+    queue.dispatch_state.dispatch_slots = 0;
+    console.log(`  heavy-job lease waiting for ${runningAtStart.length} running job(s) to drain`);
+    return dispatched;
+  }
+  const candidates = readyHeavy
+    ? [readyHeavy]
+    : [...queuedJobs].sort((a, b) => Number(jobIsHeavy(b)) - Number(jobIsHeavy(a)));
+
+  for (const job of candidates) {
+    if (dispatched.length >= dispatchBudget) break;
     if (!validJobId(job.id)) {
       job.status = 'blocked'; job.blocked_at = now;
       job.result = 'Invalid job id; only letters, numbers, dot, underscore, colon, and hyphen are allowed.';
@@ -318,6 +405,7 @@ function dispatchQueuedJobs() {
     // Global parallelism cap
     const totalRunning = (queue.jobs || []).filter(j => j.status === 'running').length;
     if (totalRunning >= MAX_PAR) break;
+    if (jobIsHeavy(job) && totalRunning > 0) continue;
 
     // ── Spawn ───────────────────────────────────────────────────────────────
     const logFile = path.join(jobsDir, `${job.id}.log`);
@@ -325,14 +413,16 @@ function dispatchQueuedJobs() {
     const rcFile = path.join(jobsDir, `${job.id}.exit`);
     const heartbeatFile = path.join(jobsDir, `${job.id}.heartbeat`);
     const resourceFile = path.join(jobsDir, `${job.id}.resource`);
-    const maxRssMb = parsePositiveInt(job.max_rss_mb, DEFAULT_JOB_MAX_RSS_MB);
-    const maxProcesses = parsePositiveInt(job.max_processes, DEFAULT_JOB_MAX_PROCESSES);
+    const resourceUsageFile = path.join(jobsDir, `${job.id}.usage.json`);
+    const maxRssMb = parsePositiveInt(job.max_rss_mb, jobIsHeavy(job) ? HEAVY_JOB_MAX_RSS_MB : DEFAULT_JOB_MAX_RSS_MB);
+    const maxProcesses = parsePositiveInt(job.max_processes, jobIsHeavy(job) ? HEAVY_JOB_MAX_PROCESSES : DEFAULT_JOB_MAX_PROCESSES);
 
     let outFd, spawnedPid;
     try {
       try { fs.unlinkSync(rcFile); } catch {}
       try { fs.unlinkSync(heartbeatFile); } catch {}
       try { fs.unlinkSync(resourceFile); } catch {}
+      try { fs.unlinkSync(resourceUsageFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
       const childEnv = Object.assign(
         {},
@@ -341,11 +431,13 @@ function dispatchQueuedJobs() {
           OMP_JOB_ID: String(job.id),
           OMP_JOB_TYPE: String(job.type),
           OMP_JOB_DESCRIPTION: String(job.description || ''),
+          OMP_RESOURCE_CLASS: jobIsHeavy(job) ? 'heavy' : 'normal',
           OMP_PROJECT_ID: String(job.project_id),
           OMP_RC_FILE: rcFile,
           OMP_HEARTBEAT_FILE: heartbeatFile,
           OMP_HEARTBEAT_INTERVAL: process.env.OMP_HEARTBEAT_INTERVAL || '30',
           OMP_RESOURCE_FILE: resourceFile,
+          OMP_RESOURCE_USAGE_FILE: resourceUsageFile,
           OMP_RESOURCE_CHECK_INTERVAL: String(RESOURCE_CHECK_INTERVAL),
           OMP_JOB_MAX_RSS_MB: String(maxRssMb),
           OMP_JOB_MAX_PROCESSES: String(maxProcesses),
@@ -368,6 +460,9 @@ function dispatchQueuedJobs() {
         '    kill -0 "$agent_pid" 2>/dev/null || break',
         "    stats=\"$(ps -axo pgid=,rss= 2>/dev/null | awk -v group=\"$$\" '$1 == group { rss += $2; count += 1 } END { print rss + 0, count + 0 }')\"",
         '    read -r rss_kb process_count <<< "$stats"',
+        '    usage_tmp="${OMP_RESOURCE_USAGE_FILE}.tmp.$$"',
+        '    printf \'{"observed_at":"%s","rss_mb":%s,"processes":%s}\\n\' "$(date -u "+%Y-%m-%dT%H:%M:%SZ")" "$((rss_kb / 1024))" "$process_count" > "$usage_tmp"',
+        '    mv "$usage_tmp" "$OMP_RESOURCE_USAGE_FILE"',
         '    reason=""',
         '    if (( rss_kb > max_rss_kb )); then',
         '      reason="RSS $((rss_kb / 1024))MB exceeded ${OMP_JOB_MAX_RSS_MB}MB"',
@@ -432,6 +527,8 @@ function dispatchQueuedJobs() {
     job.started_at = now;
     job.log        = `org/jobs/${job.id}.log`;
     job.heartbeat  = `org/jobs/${job.id}.heartbeat`;
+    job.resource_usage = `org/jobs/${job.id}.usage.json`;
+    job.resource_class = jobIsHeavy(job) ? 'heavy' : 'normal';
     job.resource_limits = { max_rss_mb: maxRssMb, max_processes: maxProcesses };
     // Persist before any display work so a crash cannot leave a live detached
     // process represented as queued and eligible for duplicate dispatch.
@@ -450,6 +547,12 @@ function dispatchQueuedJobs() {
 
     dispatched.push(job.id);
     console.log(`  dispatched ${job.id} (${job.type}) for ${job.project_id}  →  pid=${spawnedPid}`);
+    if (jobIsHeavy(job)) {
+      queue.dispatch_state.status = 'heavy-lease';
+      queue.dispatch_state.note = `exclusive heavy job ${job.id} started`;
+      queue.dispatch_state.dispatch_slots = 0;
+      break;
+    }
   }
   return dispatched;
 }

@@ -78,8 +78,10 @@ this floor, update FLOOR.md/RECEIPTS.md, verify claimed artifacts, and close the
 handshake with the exact reporting command for that delegate id.
 
 ## Hard Rules (only gate the 4 below)
-Escalate (\`scripts/org inbox $PID "…"\`) only for: external sends · spending money ·
-prod deploys · pushing to main/human repos.
+External sends, spending, production deploys, and protected pushes must use
+\`\$SPIN_ROOT/scripts/spin action\`. Check the exact target, request it when
+denied, and execute only an enabled fixed rule. Never call the underlying
+command directly or edit \`org/ACTION_POLICY.json\`.
 
 ## Reporting
 - Append a receipt (with the job ID or delegate ID) to RECEIPTS.md; update STATE.json next_action.

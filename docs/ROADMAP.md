@@ -67,6 +67,15 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
 
 ## Done (recently)
 
+- ~~**Machine-gated sensitive actions**~~ — `spin action` denies by default,
+  matches exact owner-enabled targets to fixed command vectors, enforces spend
+  caps, and writes append-only events plus a receipt. Shipped controller prompts
+  also prohibit direct execution; hard bypass resistance still requires OS or
+  credential isolation.
+- ~~**Visible execution and resource state**~~ — the Coordinator board and local
+  control panel show running, queued, blocked, failed, stale-heartbeat, and live
+  RSS/process data. The cmux dock includes a direct Control entry and the status
+  watcher keeps a work chip current without an LLM call.
 - ~~**Optional web control panel**~~ — `spin web` starts a local-only browser
   panel that renders projects, queued jobs, approvals, floor boards, and recent
   receipts from the plain files; approve/decline/ask buttons write back to the
@@ -87,10 +96,11 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
   and wiki watcher. The driver regenerates the board at startup, status checks
   verify PID plus command identity, and the status service reconciles restored
   cmux floors after login/reboot while still showing an intentional STOP.
-- ~~**Bounded detached jobs**~~ — every background project job has a process-tree
-  budget (default 4096 MB RSS / 32 processes). A breach kills the detached group,
-  writes a `.resource` artifact, and fails the queue item with an actionable
-  reason. Limits remain configurable for intentionally heavy jobs.
+- ~~**Bounded detached jobs**~~ — normal background jobs default to 3072 MB RSS /
+  16 processes, dispatch slows or pauses to preserve a 2048 MB system reserve,
+  and broad tests/native builds use an exclusive `heavy` lease (6144 MB / 32
+  processes). A breach kills the detached group, writes a `.resource` artifact,
+  and fails the queue item with an actionable reason.
 - ~~**cmux is the GUI**~~ — `spin up` opens the Coordinator floor + driver + boards;
   `spin new-project <id> "<goal>"` registers a project AND spawns its cmux floor
   (a sidebar tab) with its own omp orchestrator; the Coordinator creates projects

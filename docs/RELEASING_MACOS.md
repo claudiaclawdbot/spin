@@ -90,6 +90,10 @@ Confirm manually that:
 - public copy contains no local paths, credentials, private identifiers, or
   internal operator instructions.
 
+After artifact checks pass, run the plain-language
+[external beta test](EXTERNAL_BETA_PROTOCOL.md) before making product-market-fit
+or unattended-production claims.
+
 ## Distribution And Licensing
 
 SPIN runtime source is MIT. OMP/Pi-derived components retain their MIT notices.

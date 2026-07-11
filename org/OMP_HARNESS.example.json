@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "updated_at": null,
   "model": "two-tier: workspace CEO coordinates; project agents run as parallel detached background processes and report up",
   "channels": {
@@ -10,7 +10,9 @@
     "jobs_dir": "org/jobs/",
     "human_queue": "org/HUMAN_QUEUE.md",
     "approvals": "org/ceo/APPROVALS.md",
-    "receipts_dir": "org/ceo/runs/"
+    "receipts_dir": "org/ceo/runs/",
+    "action_policy": "org/ACTION_POLICY.json",
+    "action_receipts": "org/action-broker/receipts/"
   },
   "lib": "scripts/lib/ceo-waterfall.sh",
   "dispatch": {
@@ -18,6 +20,11 @@
     "note": "Queued jobs spawn as detached bash processes (PID files at org/jobs/<job-id>.pid, logs at org/jobs/<job-id>.log). cmux is display/status for queued work; explicit spin delegate handoffs are the separate live-floor path.",
     "completion_detection": "PID liveness check",
     "max_parallel": 3,
+    "adaptive_parallelism": "pause new dispatch when available memory would cross the reserve",
+    "resource_classes": {
+      "normal": "up to 3072MB RSS / 16 processes; parallel within the adaptive cap",
+      "heavy": "up to 6144MB RSS / 32 processes; exclusive lease"
+    },
     "model_tiering": {
       "read-only-worker": "omp smol role",
       "scout": "omp smol role",
@@ -69,10 +76,11 @@
   "cost_control": {
     "change_gated": true,
     "model_tiering": true,
-    "note": "The CEO brain fires only when watched inputs changed (content hash, not mtime). Max 3 parallel jobs. Scout/read-only jobs use OMP's smol/fast role."
+    "note": "The CEO brain fires only when watched inputs changed (content hash, not mtime). Dispatch adapts below the max of 3 to preserve memory; heavy jobs run alone. Scout/read-only jobs use OMP's smol/fast role."
   },
   "safety_gates": [
-    "No emails, DMs, forms, public posts, deploys, pushes, wallet actions, or transactions without explicit human approval.",
+    "External sends, spending, production deploys, and protected pushes must execute through `spin action`; direct execution is forbidden.",
+    "The action broker denies by default and only runs exact enabled rules from org/ACTION_POLICY.json. Agents must never edit that policy.",
     "Preserve dirty product-repo state unless the human explicitly asks to clean it.",
     "Prefer read-only worker jobs until a project-specific edit scope is approved.",
     "The CEO must draft (*.draft.md) + queue human approval before overwriting any PROJECT_CONTROLLER_PROMPT.md.",

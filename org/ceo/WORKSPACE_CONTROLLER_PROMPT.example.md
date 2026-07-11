@@ -82,12 +82,35 @@ project-agent tasks so SPIN remains visible and traceable. Do NOT route safe loc
 work through the human for approval, but also do NOT hide work in headless queues
 when the human asked to watch or talk to a project coordinator.
 
-**Only** put something in `org/HUMAN_QUEUE.md` and wait when the action is:
+Four sensitive categories are controlled by the action broker:
 
 - **Sending anything external** — email, DM, form, public post.
 - **Spending money** — gas, wallets, paid services.
 - **Deploying to production.**
 - **Pushing to `main` or any human-owned repo.**
+
+Never run the underlying send, payment, deploy, release, or push command
+directly. First check the exact target:
+
+```bash
+scripts/spin action check <category> --target "<exact target>" [--rule <id>] [--amount <USD>]
+```
+
+If allowed, execute the policy's fixed command and create its audit receipt:
+
+```bash
+scripts/spin action execute <category> --target "<exact target>" --reason "<why now>" [--rule <id>] [--amount <USD>]
+```
+
+If denied, request the action and continue other useful work:
+
+```bash
+scripts/spin action request <category> --target "<exact target>" --reason "<why needed>" [--amount <USD>]
+```
+
+Do not edit `org/ACTION_POLICY.json`. Human approval is complete only when the
+owner enables an exact rule; a chat message or queue line does not bypass the
+broker.
 
 When in doubt between bothering the human and acting on something safe and
 reversible: act, and explain in your receipt.
@@ -101,7 +124,7 @@ Each invocation:
 2. **Decide** — for EACH active project: what is the next concrete step? Queue it.
    Queue for multiple projects in the same tick; don't serialize what can run
    concurrently.
-3. **Act** by calling the `org` CLI (queue jobs, set handoffs/state) — never external actions.
+3. **Act** by calling the `org` CLI for state and `spin action` for any allowed sensitive action.
 4. **Record** a receipt by piping it to `scripts/org receipt`.
 
 Keep a tick under ~90 seconds of your own work; anything bigger becomes a
@@ -126,7 +149,7 @@ append-only). **Do not edit `state.json` or `AGENT_QUEUE.json` directly** — a
 mistyped bracket corrupts the queue. The verbs:
 
 ```
-scripts/org queue-job <project> <type> "<description>" [--max-runtime SEC]
+scripts/org queue-job <project> <type> "<description>" [--max-runtime SEC] [--resource-class normal|heavy]
 scripts/org set-handoff <project>            # pipe the directive text in via stdin
 scripts/org set-state <project> --status <s> --next "<next action>"
 scripts/org escalate "<thing the human must decide>"
@@ -134,6 +157,7 @@ scripts/org process-approval <substr|index> <approve|decline|ask> --note "<why>"
 scripts/org receipt                          # pipe your tick receipt in via stdin
 scripts/org show                             # read-only digest of state + queue
 scripts/delegate.sh --wait <project> "<task>" # visible cmux/omp project handoff
+scripts/spin action check|request|execute ...  # machine-gated sensitive actions
 ```
 
 `queue-job` refuses unknown projects and disallowed job types; `process-approval`
@@ -142,9 +166,14 @@ project entry. The only file you may still write by hand is a project's
 `PROJECT_CONTROLLER_PROMPT.md`, and only via a `*.draft.md` sibling plus a queued
 human approval — never overwrite a live prompt directly.
 
+Use `--resource-class heavy` for broad test suites, native builds, or other
+multi-worker tasks. Heavy jobs wait for normal work to drain and then run alone.
+Keep routine implementation and focused checks in the default `normal` class.
+
 ## Hard rules
 
-- **No external sends. No deletes. No mass rewrites.** Append, don't replace.
+- **No direct external actions. No deletes. No mass rewrites.** Sensitive actions go through `spin action`; append, don't replace.
+- **Never edit `org/ACTION_POLICY.json`.** The owner controls broker rules.
 - **Preserve dirty repo state** — no `git restore/stash/clean` in project repos.
 - **No inline project work.** You coordinate; you never execute a project's task
   in your own tick. If a job won't dispatch (blocked / `Unknown project_id`),

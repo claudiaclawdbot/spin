@@ -16,6 +16,7 @@ const APPROVALS = path.join(ORG, 'ceo', 'APPROVALS.md');
 const HUMAN_QUEUE = path.join(ORG, 'HUMAN_QUEUE.md');
 const QUEUE = path.join(ORG, 'AGENT_QUEUE.json');
 const STATE = path.join(ORG, 'state.json');
+const WORKSPACE_STATUS = path.join(ORG, 'ceo', 'WORKSPACE_STATUS.md');
 
 const args = process.argv.slice(2);
 const flagValue = (name, fallback) => {
@@ -102,11 +103,86 @@ function latestReceipts(limit = 6) {
   }
 }
 
+function dateValue(value) {
+  const parsed = Date.parse(value || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function ageText(value) {
+  const parsed = dateValue(value);
+  if (!parsed) return 'unknown';
+  const seconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
+
+function newest(items) {
+  return [...items].sort((a, b) => {
+    const aTime = dateValue(a.failed_at || a.blocked_at || a.completed_at || a.started_at || a.created_at);
+    const bTime = dateValue(b.failed_at || b.blocked_at || b.completed_at || b.started_at || b.created_at);
+    return bTime - aTime;
+  });
+}
+
+function resourceUsage(job) {
+  const relative = job.resource_usage || path.join('org', 'jobs', `${job.id}.usage.json`);
+  const file = path.resolve(ROOT, relative);
+  if (file !== ROOT && !file.startsWith(`${ROOT}${path.sep}`)) return null;
+  const usage = readJSON(file, null);
+  if (!usage || !Number.isFinite(Number(usage.rss_mb)) || !Number.isFinite(Number(usage.processes))) return null;
+  return { rssMb: Number(usage.rss_mb), processes: Number(usage.processes), observedAt: usage.observed_at || null };
+}
+
+function controlPlane() {
+  const markdown = read(WORKSPACE_STATUS);
+  const field = name => {
+    const match = markdown.match(new RegExp(`^- \\*\\*${name}:\\*\\*\\s*(.+)$`, 'mi'));
+    return match ? match[1].trim() : 'unknown';
+  };
+  let modified = 0;
+  try { modified = fs.statSync(WORKSPACE_STATUS).mtimeMs; } catch {}
+  const stale = !modified || Date.now() - modified > 45_000;
+  return {
+    driver: field('Driver'),
+    status: field('Live status'),
+    index: field('Project index'),
+    actions: field('Sensitive actions'),
+    age: modified ? ageText(new Date(modified).toISOString()) : 'missing',
+    stale,
+  };
+}
+
+function jobItem(job) {
+  const usage = resourceUsage(job);
+  const limits = job.resource_limits || {};
+  const heartbeat = job.heartbeat_at || job.started_at;
+  const stale = job.status === 'running' && dateValue(heartbeat) && Date.now() - dateValue(heartbeat) > 90_000;
+  const metadata = [job.project_id || 'unknown project', job.type || job.status || 'job'];
+  if (job.resource_class === 'heavy') metadata.push('heavy lease');
+  if (job.status === 'running') {
+    metadata.push(`age ${ageText(job.started_at)}`);
+    metadata.push(`heartbeat ${ageText(heartbeat)}${stale ? ' stale' : ''}`);
+  } else if (job.status === 'queued') metadata.push(`waiting ${ageText(job.created_at)}`);
+  else metadata.push(ageText(job.failed_at || job.blocked_at || job.completed_at));
+  if (usage) metadata.push(`${usage.rssMb}/${limits.max_rss_mb || '?'} MB · ${usage.processes}/${limits.max_processes || '?'} proc`);
+  else if (job.status === 'running' && limits.max_rss_mb) metadata.push(`limit ${limits.max_rss_mb} MB · ${limits.max_processes || '?'} proc`);
+  const detail = job.result || job.description || '';
+  const className = job.status === 'failed' || job.status === 'blocked' || stale ? 'job bad-job' : 'job';
+  return `<div class="${className}"><div><strong>${escapeHTML(job.id)}</strong> <span class="status ${escapeHTML(job.status || '')}">${escapeHTML(job.status || '')}</span></div><div class="muted">${escapeHTML(metadata.join(' · '))}</div>${detail ? `<div>${escapeHTML(truncate(detail, 180))}</div>` : ''}</div>`;
+}
+
+function jobList(items, empty) {
+  return items.length ? items.map(jobItem).join('') : `<p class="muted">${escapeHTML(empty)}</p>`;
+}
+
 function page(message = '') {
   const state = readJSON(STATE, {});
   const queue = readJSON(QUEUE, { jobs: [] });
   const projects = state.project_orchestrators || [];
   const jobs = queue.jobs || [];
+  const dispatchState = queue.dispatch_state || null;
   const waiting = humanQueueItems();
   const pending = pendingApprovals();
   const receipts = latestReceipts();
@@ -115,9 +191,22 @@ function page(message = '') {
     return value && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(value);
   };
   const active = projects.filter(p => isActive(p.status));
-  const running = jobs.filter(j => j.status === 'running');
-  const queued = jobs.filter(j => j.status === 'queued');
-  const completed = jobs.filter(j => j.status === 'completed').slice(-5).reverse();
+  const running = newest(jobs.filter(j => j.status === 'running'));
+  const queued = newest(jobs.filter(j => j.status === 'queued'));
+  const problems = newest(jobs.filter(j => j.status === 'blocked' || j.status === 'failed')).slice(0, 8);
+  const completed = newest(jobs.filter(j => j.status === 'completed')).slice(0, 5);
+  const control = controlPlane();
+  const sampled = running.map(resourceUsage).filter(Boolean);
+  const resourceUsed = sampled.reduce((sum, value) => sum + value.rssMb, 0);
+  const resourceLimit = running.reduce((sum, job) => sum + Number(job.resource_limits?.max_rss_mb || 0), 0);
+  const processUsed = sampled.reduce((sum, value) => sum + value.processes, 0);
+  const processLimit = running.reduce((sum, job) => sum + Number(job.resource_limits?.max_processes || 0), 0);
+  const resources = sampled.length
+    ? `${resourceUsed}/${resourceLimit || '?'} MB · ${processUsed}/${processLimit || '?'} proc`
+    : (running.length ? 'waiting for resource sample' : 'no active resource use');
+  const dispatch = dispatchState
+    ? `${dispatchState.status || 'unknown'} · ${dispatchState.note || 'no detail'} · ${dispatchState.available_memory_mb || '?'} MB available`
+    : 'waiting for dispatcher state';
 
   return `<!doctype html>
 <html lang="en">
@@ -128,33 +217,34 @@ function page(message = '') {
 <style>
 :root{color-scheme:dark;--bg:#101418;--panel:#171d22;--line:#29323a;--text:#edf2f7;--muted:#98a6b3;--cyan:#38bdf8;--green:#34d399;--yellow:#facc15;--red:#fb7185}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 24px;border-bottom:1px solid var(--line);background:#0c1115;position:sticky;top:0}
-h1{font-size:18px;margin:0}main{max-width:1180px;margin:0 auto;padding:20px;display:grid;gap:16px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 24px;border-bottom:1px solid var(--line);background:#0c1115;position:sticky;top:0;z-index:2}
+h1{font-size:18px;margin:0}main{max-width:1240px;margin:0 auto;padding:20px;display:grid;gap:16px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}h2{font-size:14px;margin:0 0 10px;color:#dbeafe}.muted{color:var(--muted)}.pill{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-right:6px;color:var(--muted)}
 ul{padding-left:18px;margin:8px 0}li{margin:6px 0}pre{white-space:pre-wrap;word-break:break-word;background:#0c1115;border:1px solid var(--line);border-radius:6px;padding:10px;max-height:360px;overflow:auto}
 button{border:1px solid var(--line);border-radius:6px;background:#0f1720;color:var(--text);padding:6px 9px;cursor:pointer}button:hover{border-color:var(--cyan)}input{width:100%;border:1px solid var(--line);border-radius:6px;background:#0c1115;color:var(--text);padding:7px}
-form.inline{display:inline-flex;gap:6px;margin:4px 4px 0 0;align-items:center}.decision{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.ok{color:var(--green)}.warn{color:var(--yellow)}.bad{color:var(--red)}a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
+form.inline{display:inline-flex;gap:6px;margin:4px 4px 0 0;align-items:center}.decision{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.ok{color:var(--green)}.warn{color:var(--yellow)}.bad,.pill.bad{color:var(--red);border-color:#7f1d2d}.job-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 18px}.lane h3{font-size:12px;text-transform:uppercase;color:var(--muted);margin:4px 0 8px}.job{border-top:1px solid var(--line);padding:9px 0;display:grid;gap:3px;overflow-wrap:anywhere}.bad-job{border-left:2px solid var(--red);padding-left:8px}.status{font-size:11px;color:var(--muted)}.status.running{color:var(--green)}.status.failed,.status.blocked{color:var(--red)}.project{border-top:1px solid var(--line);padding:10px 0}.project:first-child{border-top:0}.project h3{font-size:13px;margin:0}.resource-line{margin:0 0 12px}.completed-line{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
 @media(max-width:900px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
+@media(max-width:900px){.job-columns{grid-template-columns:1fr}.lane{border-top:1px solid var(--line);padding-top:8px}.lane:first-child{border-top:0}}
 </style>
 </head>
 <body>
-<header><div><h1>SPIN Control</h1><div class="muted">${escapeHTML(ROOT)}</div></div><div><span class="pill">${active.length} projects</span><span class="pill">${queued.length} queued</span><span class="pill">${waiting.length} waiting</span></div></header>
+<header><div><h1>SPIN Control</h1><div class="muted">${escapeHTML(ROOT)}</div></div><div><span class="pill ${control.stale ? 'bad' : ''}">${control.stale ? 'control stale' : 'control live'}</span><span class="pill">${running.length} running</span><span class="pill">${queued.length} queued</span><span class="pill ${problems.length ? 'bad' : ''}">${problems.length} attention</span><span class="pill">${waiting.length} waiting</span></div></header>
 <main>
 ${message ? `<section><strong class="ok">${escapeHTML(message)}</strong></section>` : ''}
 <div class="grid">
+<section><h2>Control Plane</h2><p><strong>Driver</strong><br><span class="${/DOWN|unknown/i.test(control.driver) ? 'bad' : 'ok'}">${escapeHTML(control.driver)}</span></p><p><strong>Live status</strong><br><span class="${control.stale ? 'bad' : 'muted'}">${escapeHTML(control.status)} · board ${escapeHTML(control.age)} old</span></p><p><strong>Sensitive actions</strong><br><span class="muted">${escapeHTML(control.actions)}</span></p></section>
 <section><h2>Waiting On You</h2>${waiting.length ? waiting.map(item => `
   <div class="decision">
     <div>${escapeHTML(item.text)}</div>
     ${['APPROVE','DECLINE','ASK'].map(action => `<form class="inline" method="post" action="/decision"><input type="hidden" name="item" value="${escapeHTML(item.text)}"><input type="hidden" name="action" value="${action}"><button>${action}</button></form>`).join('')}
   </div>`).join('') : '<p class="ok">Nothing waiting.</p>'}</section>
-<section><h2>Jobs</h2><p><span class="pill">${running.length} running</span><span class="pill">${queued.length} queued</span><span class="pill">${completed.length} recent done</span></p>
-<ul>${queued.slice(0, 8).map(j => `<li><strong>${escapeHTML(j.id)}</strong> <span class="muted">${escapeHTML(j.project_id)} · ${escapeHTML(j.type)}</span><br>${escapeHTML(truncate(j.description, 110))}</li>`).join('') || '<li class="muted">No queued jobs.</li>'}</ul></section>
 <section><h2>Pending Decisions</h2><ul>${pending.map(line => `<li>${escapeHTML(line)}</li>`).join('') || '<li class="muted">No pending approvals.</li>'}</ul>
 <form method="post" action="/decision"><input name="item" placeholder="Manual approval text"><div style="display:flex;gap:6px;margin-top:8px"><button name="action" value="APPROVE">Approve</button><button name="action" value="DECLINE">Decline</button><button name="action" value="ASK">Ask</button></div></form></section>
 </div>
+<section><h2>Jobs</h2><p class="resource-line"><strong>Dispatcher:</strong> <span class="muted">${escapeHTML(dispatch)}</span><br><strong>Current resources:</strong> <span class="muted">${escapeHTML(resources)}</span></p><div class="job-columns"><div class="lane"><h3>Running</h3>${jobList(running, 'No running jobs.')}</div><div class="lane"><h3>Queued</h3>${jobList(queued.slice(0, 8), 'No queued jobs.')}</div><div class="lane"><h3>Needs Attention</h3>${jobList(problems, 'No blocked or failed jobs.')}</div></div><div class="completed-line"><strong>Recently completed:</strong> <span class="muted">${completed.length ? completed.map(job => escapeHTML(job.id)).join(' · ') : 'none'}</span></div></section>
 <section><h2>Projects</h2><div class="grid">${active.map(p => {
     const id = p.project || p.id || '?';
-    return `<section><h2>${escapeHTML(id)}</h2><p class="muted">${escapeHTML(truncate(p.next_action || 'No next action.', 120))}</p><p><a href="/floor/${encodeURIComponent(id)}">Open floor board</a></p></section>`;
+    return `<div class="project"><h3>${escapeHTML(id)}</h3><p class="muted">${escapeHTML(truncate(p.next_action || 'No next action.', 120))}</p><p><a href="/floor/${encodeURIComponent(id)}">Open floor board</a></p></div>`;
   }).join('') || '<p class="muted">No active projects.</p>'}</div></section>
 <section><h2>Recent Receipts</h2>${receipts.map(r => `<details><summary>${escapeHTML(r.name)}</summary><pre>${escapeHTML(truncate(r.body, 1800))}</pre></details>`).join('') || '<p class="muted">No receipts yet.</p>'}</section>
 </main>

@@ -18,6 +18,7 @@ mkdir -p "$KIT"
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
       scripts/lib/cmux-floor-layout.sh \
       scripts/lib/human-queue-summary.js \
+      scripts/lib/action-policy-prompt.md scripts/spin-action-broker.js tests/action-broker.test.js tests/resource-dispatch.test.js tests/control-visibility.test.js \
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js scripts/codex-computer-use.sh \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
@@ -32,6 +33,7 @@ export SPIN_ROOT="$KIT"
 export SPIN_RUNTIME_ROOT="$KIT"
 export CMUX_SOCKET_PATH="$TMP/cmux-isolated.sock"
 export CMUX_ALLOW_SOCKET_OVERRIDE=1
+export OMP_ADAPTIVE_PARALLELISM=0
 unset SPIN_CMUX_BIN SPIN_APP_RESOURCES SPIN_INTERNAL_BIN_DIR CMUX_BUNDLED_CLI_PATH
 SPIN_NO_DEPS=1 \
 SPIN_INSTALL_SKIP_AGENT_CHECK=1 \
@@ -41,6 +43,7 @@ SPIN_BIN_DIR="$TMP/bin" \
 test -f org/ceo/CEO_CHAT_PROMPT.md
 test -f org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md
 test -f org/projects/workspace/STATE.json
+test -f org/ACTION_POLICY.json
 
 # One scheduled CEO brain must exclude overlapping manual ticks. The fake
 # holder's command line includes the exact script path expected by the lock
@@ -175,6 +178,10 @@ done
 node --check scripts/org >/dev/null
 node --check scripts/ceo-dashboard.js >/dev/null
 node --check scripts/spin-web.js >/dev/null
+node --check scripts/spin-action-broker.js >/dev/null
+node --test tests/action-broker.test.js >/dev/null
+node --test tests/resource-dispatch.test.js >/dev/null
+node --test tests/control-visibility.test.js >/dev/null
 node --check scripts/spin-app-health.js >/dev/null
 node --check scripts/app-compatibility.js >/dev/null
 node --check scripts/spin-app-update.js >/dev/null
@@ -225,7 +232,7 @@ if (cfg.sidebarAppearance.tintColor !== '#FF7ADF') process.exit(1);
 if (cfg.sidebarAppearance.darkModeTintColor !== '#FF7ADF') process.exit(1);
 if (cfg.sidebarAppearance.tintOpacity !== 0.24) process.exit(1);
 NODE
-node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1);'
+node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1); if(!dock.controls.some(c=>c.id==="spin-control"&&/spin web --open/.test(c.command))) process.exit(1);'
 grep -q 'prepare-open-source-release.sh --artifact' .github/workflows/macos-app.yml
 grep -q '\*-release-notes.md' .github/workflows/macos-app.yml
 grep -q 'matching cmux corresponding-source archive' docs/RELEASING_MACOS.md
@@ -459,6 +466,7 @@ http.get(url, res => {
   res.on('data', chunk => body += chunk);
   res.on('end', () => {
     if (!body.includes('SPIN Control') || !body.includes('smoke approval needed')) process.exit(1);
+    if (!body.includes('Control Plane') || !body.includes('Needs Attention') || !body.includes('Current resources')) process.exit(1);
   });
 }).on('error', () => process.exit(1));
 NODE
@@ -541,7 +549,7 @@ if scripts/org queue-job example-app scout "missing dependency" --id smoke-missi
 fi
 node -e '
   const q = JSON.parse(require("fs").readFileSync("org/AGENT_QUEUE.json", "utf8"));
-  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued" && j.description === "inspect updated smoke path" && j.max_runtime_seconds === 90)) process.exit(1);
+  if (!q.jobs.some(j => j.id === "smoke-scout" && j.status === "queued" && j.description === "inspect updated smoke path" && j.max_runtime_seconds === 90 && j.resource_class === "normal")) process.exit(1);
   if (!q.jobs.some(j => j.id === "smoke-dependent" && j.status === "queued" && JSON.stringify(j.depends_on) === JSON.stringify(["smoke-scout"]))) process.exit(1);
 '
 
@@ -678,7 +686,7 @@ for _ in 1 2 3 4 5; do
 const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
 const job = q.jobs.find(entry => entry.id === 'smoke-resource-limit');
 if (job?.status !== 'failed' || !/Resource limit exceeded/.test(job.result || '')) process.exit(1);
-if (job.resource_limits?.max_rss_mb !== 1 || job.resource_limits?.max_processes !== 32) process.exit(1);
+if (job.resource_limits?.max_rss_mb !== 1 || job.resource_limits?.max_processes !== 16) process.exit(1);
 NODE
   then
     break
@@ -1289,7 +1297,11 @@ PATH="$BROKEN_CODEX_BIN:$PATH" CODEX_CLI_PATH="$FAKEBIN/codex" HOME="$SMOKE_HOME
   run_agent codex 'hello' '$TMP/codex.log'
 "
 grep -q '^exec --cd ' "$TMP/codex.args"
-grep -q -- '--full-auto' "$TMP/codex.args"
+grep -q -- '--sandbox workspace-write' "$TMP/codex.args"
+if grep -q -- '--full-auto' "$TMP/codex.args"; then
+  echo "direct Codex fallback used the deprecated full-auto flag"
+  exit 1
+fi
 if grep -q 'gpt-4.5-preview' "$TMP/codex.args"; then
   echo "direct Codex fallback pinned the retired gpt-4.5-preview model"
   exit 1
