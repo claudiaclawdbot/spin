@@ -1566,7 +1566,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   grep -q '"preservedState"' "$ROLLBACK_FILE"
   node - "$ROLLBACK_FILE" <<'NODE'
 const receipt = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));
-if (!receipt.backupPath.endsWith('.spin-backup') || receipt.backupPath.endsWith('.app')) process.exit(1);
+if (!receipt.backupPath.endsWith('.spin-backup.zip') || receipt.backupPath.endsWith('.app')) process.exit(1);
 NODE
   PROD_APP="$TMP/production/SPIN.app"
   mkdir -p "$TMP/production"
@@ -1597,12 +1597,15 @@ NODE
   test ! -e "$INSTALL_APP/Contents/Resources/app/stale-update-marker"
   codesign --verify --deep --strict --verbose=2 "$INSTALL_APP" >/dev/null
   INSTALL_ROLLBACK_FILE="$(find "$TMP/install-home/updates" -type f -name 'rollback-*.json' | head -1)"
-  INSTALL_BACKUP_APP="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name 'SPIN-*.spin-backup' | head -1)"
+  INSTALL_BACKUP_ARCHIVE="$(find "$TMP/install-home/updates/backups" -maxdepth 1 -type f -name 'SPIN-*.spin-backup.zip' | head -1)"
   test -f "$INSTALL_ROLLBACK_FILE"
-  test -d "$INSTALL_BACKUP_APP"
-  test -f "$INSTALL_BACKUP_APP/Contents/Resources/app/stale-update-marker"
+  test -f "$INSTALL_BACKUP_ARCHIVE"
+  INSTALL_BACKUP_EXTRACT="$TMP/install-backup-extract"
+  mkdir -p "$INSTALL_BACKUP_EXTRACT"
+  ditto -x -k "$INSTALL_BACKUP_ARCHIVE" "$INSTALL_BACKUP_EXTRACT"
+  test -f "$INSTALL_BACKUP_EXTRACT/SPIN.app/Contents/Resources/app/stale-update-marker"
   grep -q '"backupPath"' "$INSTALL_ROLLBACK_FILE"
-  if find "$TMP/install-home/updates/backups" -maxdepth 1 -type d -name '*.app' | grep -q .; then
+  if find "$TMP/install-home/updates/backups" -name '*.app' | grep -q .; then
     echo "app updater created a LaunchServices-indexable rollback app"
     exit 1
   fi

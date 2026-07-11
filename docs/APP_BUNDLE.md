@@ -312,7 +312,7 @@ The install path:
 - requires `--allow-production` for production candidates and then verifies
   Developer ID identity, Apple team id, hardened runtime intent, notarization
   intent, code signature, and Gatekeeper assessment;
-- backs up the replaced app as a non-launchable `.spin-backup` directory under
+- backs up the replaced app as a verified `.spin-backup.zip` archive under
   `<app-home>/updates/backups/`, avoiding duplicate LaunchServices app entries;
 - writes rollback metadata under `<app-home>/updates/`;
 - stages the candidate app before replacing the installed app path;
@@ -326,6 +326,11 @@ Source builds also fail closed on dependency identity. The cmux commit is pinned
 in `app/spin-app.json`; `scripts/vendor-app-deps.sh` fetches and detaches to that
 exact commit before applying the SPIN overlay. `SPIN_CMUX_COMMIT` is an explicit
 release-engineering override, not a floating default.
+
+Update rollback copies are verified ZIP archives ending in
+`.spin-backup.zip`. Keeping both the outer launcher and its bundled cmux UI
+inside an archive prevents Spotlight, LaunchServices, and Computer Use from
+discovering rollback copies as additional installed SPIN applications.
 
 Checkpoint 20 adds the user-facing wrapper around that checked mechanical path:
 

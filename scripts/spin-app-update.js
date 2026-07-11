@@ -199,6 +199,33 @@ function copyApp(source, destination) {
   fs.cpSync(source, destination, { recursive: true, preserveTimestamps: true });
 }
 
+function archiveApp(source, destination) {
+  if (process.platform !== 'darwin') fail('SPIN.app rollback archives require macOS ditto');
+  fs.rmSync(destination, { recursive: true, force: true });
+  run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', source, destination]);
+
+  const verifyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spin-app-backup-check-'));
+  try {
+    run('ditto', ['-x', '-k', destination, verifyRoot]);
+    const archivedApp = path.join(verifyRoot, path.basename(source));
+    requireManifest(archivedApp, 'rollback backup');
+  } finally {
+    fs.rmSync(verifyRoot, { recursive: true, force: true });
+  }
+}
+
+function restoreAppArchive(archive, destination) {
+  const restoreRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spin-app-restore-'));
+  try {
+    run('ditto', ['-x', '-k', archive, restoreRoot]);
+    const restoredApp = path.join(restoreRoot, 'SPIN.app');
+    requireManifest(restoredApp, 'rollback restore');
+    copyApp(restoredApp, destination);
+  } finally {
+    fs.rmSync(restoreRoot, { recursive: true, force: true });
+  }
+}
+
 function extractCandidate(candidate) {
   const absolute = path.resolve(candidate);
   if (!fs.existsSync(absolute)) fail(`candidate not found: ${absolute}`);
@@ -309,9 +336,9 @@ function buildPlan(options, installedInfo, candidateInfo) {
       metadataPath: rollbackFile,
       willWrite: options.recordRollback || options.install,
       appHome: path.resolve(options.appHome),
-      // Do not use an .app suffix: Spotlight/LaunchServices would register every
-      // rollback copy as another installed SPIN application.
-      backupPath: path.join(path.resolve(options.appHome), 'updates', 'backups', `SPIN-${new Date().toISOString().replace(/[:.]/g, '-')}.spin-backup`),
+      // Keep every nested app bundle inside an archive so LaunchServices cannot
+      // register the launcher or bundled cmux UI as another installed SPIN app.
+      backupPath: path.join(path.resolve(options.appHome), 'updates', 'backups', `SPIN-${new Date().toISOString().replace(/[:.]/g, '-')}.spin-backup.zip`),
     },
     nextStep: options.install
       ? 'Installed app code replaced; rerun check-app-release or launch SPIN.app to validate runtime behavior.'
@@ -395,7 +422,7 @@ function installCandidate(plan, candidateApp) {
     fail('candidate app and installed app are the same path');
   }
   fs.mkdirSync(path.dirname(plan.rollback.backupPath), { recursive: true });
-  copyApp(installedApp, plan.rollback.backupPath);
+  archiveApp(installedApp, plan.rollback.backupPath);
   writeRollback(plan);
   let replacementStarted = false;
   try {
@@ -409,7 +436,7 @@ function installCandidate(plan, candidateApp) {
     fs.rmSync(stage, { recursive: true, force: true });
     if (replacementStarted && fs.existsSync(plan.rollback.backupPath)) {
       fs.rmSync(installedApp, { recursive: true, force: true });
-      copyApp(plan.rollback.backupPath, installedApp);
+      restoreAppArchive(plan.rollback.backupPath, installedApp);
     }
     throw error;
   }

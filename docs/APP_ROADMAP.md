@@ -183,8 +183,9 @@ into an app issue.
    compatibility manifest, enforces channel gates, requires `--allow-ad-hoc` or
    `--allow-local-dev` for non-production artifacts, requires
    `--allow-production` plus trust verification for production artifacts, backs
-   up the installed app as a non-launchable `.spin-backup` directory under
-   `<app-home>/updates/backups/` so LaunchServices does not register another app,
+   up the installed app as a verified `.spin-backup.zip` archive under
+   `<app-home>/updates/backups/` so LaunchServices does not register either app
+   bundle contained by the rollback copy,
    writes rollback metadata under
    `<app-home>/updates/`, stages the candidate app, replaces the installed app
    path, and verifies the installed compatibility manifest after replacement.
