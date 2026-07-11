@@ -35,7 +35,7 @@ jobs:
       - name: Build checked ad-hoc DMG release artifact
         run: SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh --source-cmux --skip-vendor
 
-      - name: Prepare open-source tester release notes
+      - name: Prepare public release package
         run: |
           set -euo pipefail
           artifact="$(ls -t dist/release/SPIN-*-macos-*.dmg | head -1)"
@@ -54,4 +54,4 @@ jobs:
             dist/release/*.manifest
             dist/release/*.tar.gz
             dist/release/*.tar.gz.sha256
-            dist/release/*-open-source-tester-notes.md
+            dist/release/*-release-notes.md

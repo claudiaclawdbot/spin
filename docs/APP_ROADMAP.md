@@ -147,7 +147,7 @@ into an app issue.
    manifest output. `.github/workflows/macos-app.yml` adds a manual macOS
    Actions workflow that vendors app dependencies, builds the source cmux fork,
    runs the same checked ad-hoc release command, and uploads the artifact,
-   checksum, manifest, and tester release notes together.
+   checksum, manifest, and customer release notes together.
 
 15. **Update-channel and release compatibility policy**
 
@@ -221,18 +221,18 @@ into an app issue.
    `--allow-test-builds`, opt-in ad-hoc install through the wrapper, and
    post-install release verification.
 
-21. **Open-source tester release packaging**
+21. **Public beta release packaging**
 
-   `scripts/prepare-open-source-release.sh` prepares a public tester release
+   `scripts/prepare-open-source-release.sh` prepares a public beta release
    from the checked ad-hoc macOS artifact without requiring Apple Developer ID.
    It can run the normal source-cmux release pipeline or consume an existing
    zip/DMG, verifies the `.sha256` and `.manifest`, refuses non-zip/DMG,
    non-ad-hoc-signed, or notarized artifacts, extracts the app to verify bundled
    third-party notices and compatibility metadata, and writes
-   `SPIN-<version>-macos-<arch>-open-source-tester-notes.md` beside the
+   `SPIN-<version>-macos-<arch>-release-notes.md` beside the
    artifact. `spin app-release-notes` exposes the same path for maintainers, and
    the manual macOS Actions workflow uploads the notes with the DMG, checksum,
-   and manifest. The tester notes explain checksum verification, install steps,
+   and manifest. The release notes explain checksum verification, install steps,
    Gatekeeper warnings, quarantine fallback, bundled cmux/OMP scope, and the
    GPL-compatible license posture for public binaries.
 
@@ -244,7 +244,7 @@ into an app issue.
    the CLI as a power-user/runtime surface. `docs/index.html` adds a dedicated
    SPIN.app beta section with the
    checked build/release-notes commands, links to the macOS app workflow, app
-   bundle docs, app roadmap, and open-source tester release instructions. This
+   bundle docs, app roadmap, and public beta release instructions. This
    makes the app track discoverable without implying the app is blocked on the
    Mac App Store or Apple Developer ID.
 
@@ -252,7 +252,7 @@ into an app issue.
 
    The app release lane now uses `4.1.0-beta.3` versioning for beta builds,
    stages DMGs with `SPIN.app`, an Applications shortcut, and `README.txt`, and
-   verifies that layout during installed-app checks. `docs/MACOS_TESTER_INSTALL.md`
+   verifies that layout during installed-app checks. `docs/INSTALL_MACOS.md`
    is the single user-facing install guide for download, checksum verification,
    first launch, provider setup expectations, update checks, Gatekeeper fallback,
    and uninstall. README and the GitHub Pages app lane link directly to the
@@ -322,9 +322,9 @@ Expected result:
   ad-hoc artifact through the same rollback/verification path;
 - `scripts/prepare-open-source-release.sh --artifact
   dist/release/SPIN-*-macos-*.dmg` verifies a checked ad-hoc DMG and writes
-  GitHub-ready open-source tester release notes;
+  GitHub-ready customer release notes;
 - `scripts/spin app-release-notes --artifact dist/release/SPIN-*-macos-*.dmg`
-  exposes the same tester release preparation path from the CLI;
+  exposes the same public release preparation path from the CLI;
 - `README.md` and `docs/index.html` expose SPIN.app as the Mac product path
   with clear ad-hoc/not-notarized boundaries and links to the app workflow/docs;
 - release checks pass with `SPIN_REQUIRE_BRANDED_CMUX_APP=1` and

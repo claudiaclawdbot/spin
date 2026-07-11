@@ -3,308 +3,224 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SPIN: Super Pi Interoperable Navigator</title>
-<meta name="description" content="A local Mac app for running a small AI software org: one Navigator above many isolated OMP project agents, with prompt refinement, file-backed receipts, and model/provider fallback.">
-<meta property="og:title" content="SPIN: Super Pi Interoperable Navigator">
-<meta property="og:description" content="Coordinate scoped project agents, keep contexts isolated, and use OMP model/provider fallback without turning the human into the router.">
+<title>SPIN for Mac | AI agent command center</title>
+<meta name="description" content="Coordinate AI coding agents across multiple software projects from one visual Mac workspace, with isolated contexts, model routing, approvals, and verifiable results.">
+<meta property="og:title" content="SPIN for Mac">
+<meta property="og:description" content="A visual command center for coordinating AI coding agents across multiple software projects.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://claudiaclawdbot.github.io/spin/">
+<meta property="og:image" content="https://claudiaclawdbot.github.io/spin/assets/spin-public-beta-demo-poster.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://claudiaclawdbot.github.io/spin/">
+<link rel="icon" type="image/svg+xml" href="assets/spin-icon.svg">
 <style>
   :root{
-    --bg:#0a0a12; --bg2:#0f0f1c; --panel:#15152a; --line:#262645;
-    --ink:#e8e8f4; --dim:#9a9ab8; --faint:#6a6a88;
-    --violet:#a855f7; --violet2:#7c3aed; --cyan:#22d3ee; --grn:#34d399; --amber:#fbbf24;
-    --mono:'SFMono-Regular',ui-monospace,'JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace;
+    --bg:#0b0b0d;--panel:#17171b;--panel2:#111114;--line:#303038;
+    --ink:#f4f4f6;--dim:#b4b4be;--faint:#777782;
+    --violet:#a855f7;--violet-dark:#7c3aed;--cyan:#22d3ee;
+    --green:#34d399;--amber:#fbbf24;
+    --mono:'SFMono-Regular',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,'Segoe UI',Inter,Roboto,sans-serif;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:radial-gradient(1200px 700px at 50% -10%,#1a1335 0%,var(--bg) 55%);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
-  a{color:var(--violet);text-decoration:none}
-  a:hover{color:var(--cyan)}
-  .wrap{max-width:980px;margin:0 auto;padding:0 24px}
-  section{padding:60px 0;border-top:1px solid var(--line)}
-  h2{font-size:1.7rem;margin:0 0 6px;letter-spacing:0}
-  h2 .n{color:var(--faint);font-family:var(--mono);font-size:1rem;margin-right:10px}
-  .lede{color:var(--dim);max-width:64ch;margin:.2rem 0 1.6rem}
-
-  /* hero */
-  .hero{text-align:center;padding:48px 0 44px;border:none}
-  .spinner{width:96px;height:96px;margin:0 auto 20px;animation:spin 4.5s cubic-bezier(.5,.1,.5,.9) infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .wordmark{font-size:4.2rem;font-weight:800;letter-spacing:0;margin:0;line-height:1;color:#ececfb}
-  /* PI is the backbone: cyan to violet gradient with a glow */
-  .wordmark .pi{
-    background:linear-gradient(120deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;
-    -webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 16px rgba(34,211,238,.55))}
-  .sub{font-family:var(--mono);color:var(--dim);letter-spacing:0;text-transform:uppercase;font-size:.78rem;margin:14px 0 0}
-  /* hover-to-explain each word of the name */
-  .def{position:relative;cursor:help;border-bottom:1px dashed var(--faint);padding-bottom:1px;transition:color .15s}
-  .def:hover{color:var(--cyan)}
-  .def .tip{visibility:hidden;opacity:0;position:absolute;bottom:150%;left:50%;transform:translateX(-50%) translateY(5px);
-    width:248px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;
-    font-family:var(--sans);font-size:.82rem;line-height:1.55;color:var(--dim);text-transform:none;letter-spacing:normal;
-    box-shadow:0 18px 46px -18px #000;z-index:20;transition:.18s;pointer-events:none}
-  .def .tip b{color:var(--ink)} .def .tip .h{color:var(--cyan);font-weight:700}
-  .def .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--line)}
-  .def:hover .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
-  @media(max-width:560px){
-    .sub{letter-spacing:.08em;line-height:2}
-    .def .tip{position:fixed;left:16px;right:16px;top:72px;bottom:auto;transform:none;width:auto;max-width:none}
-    .def:hover .tip{transform:none}
-    .def .tip::after{display:none}
-  }
-  .tag{font-size:1.28rem;color:var(--ink);max-width:38ch;margin:20px auto 24px}
-  .tag b{color:var(--violet)}
-  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:8px;font-weight:600;font-size:.96rem;border:1px solid var(--line);transition:.18s}
-  .btn.primary{background:linear-gradient(120deg,var(--violet2),var(--violet));color:#fff;border-color:transparent;box-shadow:0 8px 30px -8px var(--violet2)}
-  .btn.primary:hover{transform:translateY(-2px);color:#fff}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  section{padding:58px 0;border-top:1px solid var(--line)}
+  h2{font-size:1.75rem;margin:0 0 8px;letter-spacing:0}
+  h2 .n{color:var(--faint);font-family:var(--mono);font-size:.9rem;margin-right:10px}
+  .lede{color:var(--dim);max-width:68ch;margin:.2rem 0 1.6rem}
+  .hero{text-align:center;padding:28px 24px}
+  .wordmark{font-size:3.5rem;font-weight:800;letter-spacing:0;margin:0;line-height:1;color:var(--ink)}
+  .wordmark .pi{color:var(--cyan);text-shadow:0 0 22px rgba(34,211,238,.34)}
+  .sub{font-family:var(--mono);color:var(--dim);font-size:.78rem;margin:8px 0 0;text-transform:uppercase;letter-spacing:0}
+  .tag{font-size:1.18rem;color:var(--ink);max-width:42ch;margin:12px auto 16px}
+  .tag strong{color:var(--violet)}
+  .cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;min-height:44px;padding:10px 20px;border-radius:8px;font-weight:650;font-size:.95rem;border:1px solid var(--line);transition:background .15s,border-color .15s,transform .15s}
+  .btn:hover{text-decoration:none;transform:translateY(-1px)}
+  .btn.primary{background:var(--violet-dark);color:#fff;border-color:var(--violet-dark)}
+  .btn.primary:hover{background:var(--violet);border-color:var(--violet)}
   .btn.ghost{background:var(--panel);color:var(--ink)}
-  .btn.ghost:hover{border-color:var(--violet);color:var(--ink)}
-  .badges{margin-top:26px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--faint)}
-  .badge{border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#11111f}
-  .hero-demo{max-width:860px;margin:24px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
-  .hero-demo img{display:block;width:100%;height:auto}
-  .hero-demo figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.84rem}
-  .demo-shot{margin:24px 0 4px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#080810;box-shadow:0 24px 70px -34px #000}
-  .demo-shot img{display:block;width:100%;height:auto}
-  .demo-shot figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.86rem}
-
-  /* terminal install box */
-  .term{background:#0c0c16;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0;box-shadow:0 20px 60px -30px #000}
-  .term .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;background:#13132400;border-bottom:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--cyan)}
+  .hero-demo,.demo-shot{max-width:900px;margin:16px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel2);box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  .hero-demo{max-width:640px}
+  .hero-demo img,.demo-shot img{display:block;width:100%;height:auto}
+  .hero-demo figcaption,.demo-shot figcaption{padding:9px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:.84rem}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+  .card h3{margin:0 0 6px;font-size:1rem;letter-spacing:0}
+  .card p{margin:0;color:var(--dim);font-size:.92rem}
+  a.card{color:var(--ink)}
+  a.card:hover{border-color:var(--cyan);text-decoration:none}
+  .term{background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0}
+  .term .bar{display:flex;align-items:center;gap:7px;padding:10px 14px;border-bottom:1px solid var(--line)}
   .dot{width:11px;height:11px;border-radius:50%}
   .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
   .term .title{margin-left:8px;color:var(--faint);font-family:var(--mono);font-size:.74rem}
-  .term pre{margin:0;padding:18px 18px;font-family:var(--mono);font-size:.86rem;color:var(--ink);overflow-x:auto;line-height:1.7}
-  .term .c{color:var(--grn)} .term .p{color:var(--faint)} .term .o{color:var(--dim)}
-  .copy{float:right;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--dim);
-    font-family:var(--mono);font-size:.7rem;border-radius:6px;padding:3px 9px;transition:.15s}
-  .copy:hover{border-color:var(--violet);color:var(--ink)}
-
-  /* generic grid + cards */
-  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
-  .card h3{margin:0 0 6px;font-size:1.02rem}
-  .card .ic{font-size:1.3rem;margin-bottom:6px;display:block}
-  .card p{margin:0;color:var(--dim);font-size:.92rem}
-
-  /* flow diagram */
-  .flow{font-family:var(--mono);font-size:.82rem;background:#0c0c16;border:1px solid var(--line);border-radius:8px;padding:22px;overflow-x:auto}
+  .term pre{margin:0;padding:17px 18px;font-family:var(--mono);font-size:.84rem;color:var(--ink);overflow-x:auto;line-height:1.7}
+  .term .c{color:var(--green)}.term .p{color:var(--faint)}.term .o{color:var(--dim)}
+  .copy{margin-left:auto;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--dim);font-family:var(--mono);font-size:.7rem;border-radius:6px;padding:4px 9px}
+  .copy:hover{border-color:var(--cyan);color:var(--ink)}
+  .flow{font-family:var(--mono);font-size:.8rem;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:20px;overflow-x:auto}
   .flow .lane{display:flex;align-items:center;gap:10px;white-space:nowrap;padding:5px 0}
-  .flow .box{border:1px solid var(--violet);color:var(--violet);border-radius:8px;padding:6px 12px;background:#160f28}
-  .flow .arrow{color:var(--faint)}
-  .flow .you{color:var(--cyan)} .flow .file{color:var(--amber)}
-
-  /* table */
-  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
-  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  .flow .box{border:1px solid var(--violet);color:var(--violet);border-radius:7px;padding:5px 11px;background:#18121f}
+  .flow .arrow{color:var(--faint)}.flow .operator{color:var(--cyan)}.flow .file{color:var(--amber)}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:10px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
   th{color:var(--faint);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:0}
-  td code{font-family:var(--mono);color:var(--violet);font-size:.86em}
-  .dimcell{color:var(--dim)}
-
-  /* gates */
-  .gates{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
-  .gate{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:8px;padding:14px 16px}
-  .gate .g{font-size:1.4rem}
-  .gate b{display:block;margin-bottom:2px}
-  .gate span{color:var(--dim);font-size:.86rem}
-
-  footer{border-top:1px solid var(--line);padding:34px 0 60px;text-align:center;color:var(--faint);font-size:.85rem}
+  td code{font-family:var(--mono);color:var(--violet);font-size:.86em}.dimcell{color:var(--dim)}
+  .gates{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+  .gate{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:8px;padding:14px 16px}
+  .gate b{display:block;margin-bottom:2px}.gate span{color:var(--dim);font-size:.86rem}
+  .status{margin-top:16px;padding:14px 16px;border:1px solid #66551e;border-left:3px solid var(--amber);border-radius:8px;background:#19170f;color:var(--dim);font-size:.9rem}
+  footer{border-top:1px solid var(--line);padding:34px 0 52px;text-align:center;color:var(--faint);font-size:.85rem}
   footer a{color:var(--dim)}
-  .pill{display:inline-block;font-family:var(--mono);font-size:.7rem;color:var(--cyan);border:1px solid var(--line);border-radius:20px;padding:3px 12px;margin-bottom:18px;background:#0d1620}
   @media(max-width:600px){
-    .hero{padding-top:42px}
-    .spinner{width:82px;height:82px;margin-bottom:18px}
-    .wordmark{font-size:3rem}
-    .tag{font-size:1.1rem}
-    .hero-demo{margin-top:18px}
+    .hero{padding-top:24px}.wordmark{font-size:3rem}.tag{font-size:1.08rem}
+    section{padding:46px 0}.flow{font-size:.74rem}.btn{width:100%;justify-content:center}
   }
 </style>
 </head>
 <body>
 
 <header class="hero wrap">
-  <!-- fidget-spinner motif: three lobes around a hub -->
-  <svg class="spinner" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#22d3ee"/>
-      </linearGradient>
-    </defs>
-    <g stroke="url(#g)" stroke-width="3">
-      <circle cx="50" cy="22" r="15" fill="#160f28"/>
-      <circle cx="74" cy="64" r="15" fill="#160f28"/>
-      <circle cx="26" cy="64" r="15" fill="#160f28"/>
-      <circle cx="50" cy="50" r="11" fill="#0a0a12"/>
-    </g>
-    <circle cx="50" cy="50" r="4" fill="url(#g)"/>
-  </svg>
   <h1 class="wordmark">S<span class="pi">PI</span>N</h1>
-  <p class="sub">
-    <span class="def">Super<span class="tip"><span class="h">Super</span>: the lightweight harness around agent CLIs that you can track, audit, and interrupt.</span></span>&nbsp;·&nbsp;<span class="def">Pi<span class="tip"><span class="h">Pi</span>: the agentic backbone. Specifically <b>oh-my-pi (omp)</b>: every floor agent and interactive session runs on it.</span></span>&nbsp;·&nbsp;<span class="def">Interoperable<span class="tip"><span class="h">Interoperable</span>: project agents cooperate through SPIN files, and OMP can fall through across configured models/providers.</span></span>&nbsp;·&nbsp;<span class="def">Navigator<span class="tip"><span class="h">Navigator</span>: the routing system for projects, approvals, receipts, and human attention.</span></span>
-  </p>
-  <p class="tag">Run a small AI software org from one local app. <b>One Navigator</b> coordinates many isolated OMP project agents, refines handoffs, and keeps receipts on disk.</p>
+  <p class="sub">Super | Pi | Interoperable | Navigator</p>
+  <p class="tag">Run multiple AI coding projects from <strong>one visual command center</strong>.</p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3">Download SPIN.app beta</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md">Beta readiness</a>
-    <a class="btn ghost" href="#install">Source / CLI</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin">GitHub</a>
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3">Download for Mac</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/INSTALL_MACOS.md">Install guide</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin">View source</a>
   </div>
   <figure class="hero-demo">
-    <img src="assets/spin-public-beta-demo.gif" alt="SPIN app showing the Navigator rail, project floor, and live project board">
-    <figcaption>SPIN.app keeps the Navigator above visible project floors while each project keeps its own OMP context.</figcaption>
+    <img src="assets/spin-public-beta-demo.gif" alt="SPIN for Mac showing the Navigator, an isolated project workspace, and a live project board">
   </figure>
-  <div class="badges">
-    <span class="badge">MIT</span><span class="badge">bash + node</span>
-    <span class="badge">macOS · Linux</span><span class="badge">omp + cmux</span><span class="badge">prompt refinement</span><span class="badge">model fallback</span>
-    <span class="badge">SPIN.app beta DMG</span>
-  </div>
 </header>
 
-<section id="what" class="wrap" style="border-top:none">
-  <h2><span class="n">01</span>The human router problem</h2>
-  <p class="lede">One coding agent in one repository is manageable. The hard part starts when several agents are running across several projects, each with its own terminal, context, queue, receipts, and blockers. Without a layer above them, the solo builder becomes the scheduler.</p>
+<section id="what" class="wrap">
+  <h2><span class="n">01</span>One workspace for every project</h2>
+  <p class="lede">SPIN brings project agents, execution state, model routing, and approval controls into one Mac app without mixing unrelated repository contexts.</p>
   <div class="grid">
-    <div class="card"><span class="ic">🧭</span><h3>Too many terminals</h3><p>Multiple project agents quickly turn into tabs, status checks, handoffs, and half-remembered context.</p></div>
-    <div class="card"><span class="ic">🧠</span><h3>Context overload</h3><p>One huge shared prompt is not the answer. Project agents should stay focused on their own repositories.</p></div>
-    <div class="card"><span class="ic">🗂️</span><h3>Scattered state</h3><p>Queues, receipts, blockers, approvals, and progress reports need one place to come together.</p></div>
-    <div class="card"><span class="ic">🚦</span><h3>Only real decisions</h3><p>The human should see approvals that matter, not babysit every local edit, test run, or status update.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Model portability</h3><p>Model, provider, quota, and retry behavior should be handled inside the harness, not by tab juggling.</p></div>
-    <div class="card"><span class="ic">🧾</span><h3>Audit trail</h3><p>Every meaningful run needs receipts so the org can be inspected after the fact.</p></div>
+    <div class="card"><h3>Portfolio view</h3><p>See priorities, active work, blockers, and approvals across every registered project.</p></div>
+    <div class="card"><h3>Isolated workspaces</h3><p>Each project keeps its own repository, agent context, queue, board, and receipt history.</p></div>
+    <div class="card"><h3>Persistent execution</h3><p>Supervised background jobs continue independently of a visible terminal pane.</p></div>
+    <div class="card"><h3>Consistent delegation</h3><p>Every handoff includes the objective, paths, constraints, checks, and reporting requirements.</p></div>
+    <div class="card"><h3>Flexible model routing</h3><p>OMP manages authenticated providers, model roles, retries, and fallback chains.</p></div>
+    <div class="card"><h3>Verifiable results</h3><p>Queues, handoffs, decisions, and receipts remain inspectable in local files.</p></div>
   </div>
 </section>
 
 <section id="interoperability" class="wrap">
-  <h2><span class="n">02</span>Two meanings of interoperable</h2>
-  <p class="lede">SPIN uses both meanings deliberately. It coordinates isolated project agents, and it uses OMP so those agents are not pinned to one model, provider, vendor CLI, or subscription window.</p>
+  <h2><span class="n">02</span>Project isolation comes first</h2>
+  <p class="lede">SPIN coordinates separate project agents instead of forcing an entire portfolio into one shared prompt. Model and provider portability sits underneath that project layer.</p>
   <div class="grid">
-    <div class="card"><span class="ic">🧩</span><h3>Project interoperability</h3><p>Each project keeps its own repository, context, queue, memory, and receipts. SPIN lets those agents cooperate through plain files and Navigator decisions.</p></div>
-    <div class="card"><span class="ic">🔀</span><h3>Model interoperability</h3><p>OMP owns provider auth, roles, order, and fallback chains. If one lane is unavailable, work can fall through to another configured model or provider.</p></div>
-    <div class="card"><span class="ic">✍️</span><h3>Refined handoffs</h3><p>Before SPIN sends work to a project floor, the Navigator turns your raw request into a concrete directive with paths, constraints, checks, and reporting instructions.</p></div>
+    <div class="card"><h3>Across projects</h3><p>Agents cooperate through durable queues, handoffs, receipts, and Navigator decisions while retaining focused repository context.</p></div>
+    <div class="card"><h3>Across models</h3><p>OMP can route work through configured OpenAI, Anthropic, OpenRouter, Gemini, or local provider lanes.</p></div>
+    <div class="card"><h3>Across sessions</h3><p>File-backed state and supervised processes preserve work through terminal changes and app relaunches.</p></div>
   </div>
 </section>
 
-<section id="interface" class="wrap">
-  <h2><span class="n">03</span>One coordinator, many project agents</h2>
-  <p class="lede">SPIN opens one controlled workspace above your project agents. First launch routes to SPIN Onboarding, then normal launches open the Coordinator and project floors. The Coordinator owns routing, org state, approvals, prompt refinement, and cross-project awareness while each OMP-backed project agent stays scoped to its own repository and context.</p>
+<section id="workflow" class="wrap">
+  <h2><span class="n">03</span>A clear operating model</h2>
+  <p class="lede">The Navigator owns cross-project priorities and routing. Project agents own implementation inside their registered repositories. The background driver keeps queued work moving.</p>
   <div class="term">
-    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">your first minute</span>
-      <button class="copy" data-copy="spin init &amp;&amp; spin up">copy</button></div>
-    <pre><span class="p">$</span> <span class="c">spin</span> init            <span class="o"># wizard: providers, OpenRouter, your first project</span>
-<span class="p">$</span> <span class="c">spin</span> up              <span class="o"># opens the SPIN workspace</span>
-<span class="o">  ✓ Coordinator floor open: talk to it like a person</span>
-<span class="o">  ✓ driver supervised · live boards up</span></pre>
-  </div>
-  <p class="lede" style="margin:16px 0 10px">From there, you talk to the Coordinator instead of juggling terminal tabs:</p>
-  <div class="flow">
-    <div class="lane"><span class="you">you</span> &nbsp;<span class="o">"start a project for my fidget-spinner shop"</span></div>
-    <div class="lane"><span class="arrow">└▶</span> <span class="box">spin new-project fidget-shop</span> <span class="arrow">▶</span> a new <span class="file">fidget-shop</span> tab appears with its own agent, already briefed</div>
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">workspace status</span></div>
+    <pre><span class="p">$</span> <span class="c">spin</span> up
+<span class="o">  [ok] Navigator online</span>
+<span class="o">  [ok] Project workspaces restored</span>
+<span class="o">  [ok] Background driver supervised</span></pre>
   </div>
   <div class="grid" style="margin-top:16px">
-    <div class="card"><span class="ic">🎛️</span><h3>Coordinator</h3><p>The high-level agent you talk to. It creates projects, rewrites handoff prompts, routes work, tracks blockers, and decides what needs attention.</p></div>
-    <div class="card"><span class="ic">🗂️</span><h3>Project agents</h3><p>Each project gets its own OMP-backed lane with its own repository context, state, queue, board, and receipts.</p></div>
-    <div class="card"><span class="ic">♾️</span><h3>Background driver</h3><p>Queued work runs through a supervised dispatcher, so durable jobs do not depend on a visible terminal pane staying open.</p></div>
+    <div class="card"><h3>Navigator</h3><p>Creates projects, routes work, refines handoffs, tracks blockers, and surfaces approvals.</p></div>
+    <div class="card"><h3>Project agents</h3><p>Execute scoped work with the repository context, tools, model policy, and checks for one project.</p></div>
+    <div class="card"><h3>Background driver</h3><p>Dispatches durable jobs, monitors state changes, records outcomes, and prevents duplicate cycles.</p></div>
   </div>
 </section>
 
 <section id="app" class="wrap">
-  <h2><span class="n">04</span>SPIN.app for Mac</h2>
-  <p class="lede"><code>SPIN.app</code> is the main Mac experience: a self-contained app with a SPIN-branded workspace UI, bundled OMP/Pi as the agent engine, and the same auditable plain-file SPIN runtime inside the app. Download the beta DMG from GitHub, drag the app into Applications, then open SPIN to enter the onboarding workspace instead of a generic terminal.</p>
-  <figure class="demo-shot">
-    <img src="assets/spin-public-beta-demo.gif" alt="SPIN public beta demo showing a visible OMP project floor beside a live project board">
-    <figcaption>Visible OMP project floor, project tabs, and live <code>FLOOR.md</code> board in the SPIN Navigator.</figcaption>
-  </figure>
+  <h2><span class="n">04</span>SPIN for Mac</h2>
+  <p class="lede">The Mac app packages the SPIN-branded workspace, OMP/Pi agent runtime, project orchestration, health checks, and update controls in one installation.</p>
   <div class="grid">
-    <div class="card"><span class="ic">🖥️</span><h3>One app bundle</h3><p><code>SPIN.app</code> carries the cmux-compatible UI app, <code>cmux</code>, <code>omp</code>, <code>spin-agent</code>, runtime scripts, icon, dock controls, and notices.</p></div>
-    <div class="card"><span class="ic">🔁</span><h3>Provider fallback</h3><p>OMP owns account setup and model fallback. SPIN writes the runtime roles, provider order, and fallback chains for coordinator and project work.</p></div>
-    <div class="card"><span class="ic">✍️</span><h3>Prompt refinement</h3><p>The Navigator turns a raw ask into a project-ready directive with concrete goal, paths, constraints, checks, and reporting shape.</p></div>
-    <div class="card"><span class="ic">🧪</span><h3>Public beta DMG</h3><p>The current GitHub beta is Apple Silicon, ad-hoc signed, and not notarized. Use right-click Open if macOS shows a warning; optional checksum steps are in the install guide.</p></div>
+    <div class="card"><h3>Self-contained app</h3><p>Includes the workspace engine, <code>omp</code>, <code>spin-agent</code>, runtime scripts, health checks, and product assets.</p></div>
+    <div class="card"><h3>Provider setup through OMP</h3><p>Provider credentials remain in OMP or the provider's standard CLI configuration.</p></div>
+    <div class="card"><h3>Local runtime state</h3><p>Project metadata, queues, approvals, and receipts stay under Application Support on the Mac.</p></div>
+    <div class="card"><h3>Checked updates</h3><p>Downloaded releases are verified before app code is replaced, with backup and rollback metadata.</p></div>
   </div>
-  <div class="cta" style="justify-content:flex-start;margin-top:12px">
-    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3">Download beta DMG</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md">Install guide</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md">Public beta checklist</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_BUNDLE.md">App bundle docs</a>
-    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/APP_ROADMAP.md">App roadmap</a>
+  <div class="status"><strong>Release status:</strong> Version 4.1.0 Beta 3 supports Apple silicon. The DMG is ad-hoc signed and not Apple-notarized, so macOS may require Control-click and Open on first launch.</div>
+  <div class="cta" style="justify-content:flex-start;margin-top:16px">
+    <a class="btn primary" href="https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.3">Download SPIN</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/INSTALL_MACOS.md">Installation</a>
+    <a class="btn ghost" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/releases/SPIN-4.1.0-beta.3.md">Release notes</a>
   </div>
 </section>
 
 <section id="install" class="wrap">
-  <h2><span class="n">05</span>Source / CLI install</h2>
-  <p class="lede">The source install is the power-user path for Linux, automation, debugging, headless operation, and app development. It clones SPIN, seeds the org files, and installs any missing dependencies for you. Review the script first, like any <code>curl | bash</code>. <span style="color:var(--faint)">(Prefer a single offline file? Grab <code>spin-offline.sh</code>; it embeds the whole kit.)</span></p>
+  <h2><span class="n">05</span>Source and CLI</h2>
+  <p class="lede">The source install supports Linux, headless operation, automation, debugging, and app development. The standard Mac install does not require it.</p>
   <div class="term">
-    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">one-liner</span>
-      <button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh | bash">copy</button></div>
-    <pre><span class="p">$</span> <span class="c">curl</span> -fsSL https://raw.githubusercontent.com/claudiaclawdbot/spin/main/spin-bootstrap.sh <span class="p">|</span> <span class="c">bash</span></pre>
-  </div>
-  <div class="term">
-    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">or clone</span>
-      <button class="copy" data-copy="git clone https://github.com/claudiaclawdbot/spin.git ~/spin &amp;&amp; cd ~/spin &amp;&amp; ./install.sh">copy</button></div>
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="title">clone and install</span><button class="copy" data-copy="git clone https://github.com/claudiaclawdbot/spin.git ~/spin &amp;&amp; cd ~/spin &amp;&amp; ./install.sh">copy</button></div>
     <pre><span class="p">$</span> <span class="c">git</span> clone https://github.com/claudiaclawdbot/spin.git ~/spin
 <span class="p">$</span> <span class="c">cd</span> ~/spin <span class="p">&amp;&amp;</span> <span class="c">./install.sh</span>
-<span class="o">  ✓ linked: spin, org → ~/.local/bin/</span>
-<span class="p">$</span> <span class="c">spin</span> init            <span class="o"># onboarding wizard → opens the SPIN workspace</span></pre>
+<span class="p">$</span> <span class="c">spin</span> init
+<span class="p">$</span> <span class="c">spin</span></pre>
   </div>
-  <p class="lede" style="margin-top:14px">Needs <code>bash</code>, <code>node</code>, and one agent CLI to run headless. <a href="https://omp.sh"><b>omp</b></a> (oh-my-pi) is the interactive backbone SPIN is built on: every floor agent is an OMP session, and it is the <b>Pi</b> in SPIN. The cmux-derived UI is the workspace surface; SPIN owns onboarding, routing, queues, receipts, and project state.</p>
+  <p class="lede">The source lane requires <code>bash</code>, <code>node</code>, and OMP or a supported fallback agent CLI. Add <code>cmux</code> for the visual workspace outside the packaged app.</p>
 </section>
 
-<section id="how" class="wrap">
-  <h2><span class="n">06</span>It's just files</h2>
-  <p class="lede">No database, no message broker, no daemon you can't read. The whole org talks through plain files you can grep and audit.</p>
+<section id="state" class="wrap">
+  <h2><span class="n">06</span>Local and inspectable</h2>
+  <p class="lede">SPIN uses checked file operations instead of a hidden cloud control plane. Runtime state can be inspected, backed up, diffed, and recovered with standard tools.</p>
   <div class="flow">
-    <div class="lane"><span class="you">you</span> <span class="arrow">──spin approve──▶</span> <span class="file">APPROVALS.md</span> <span class="arrow">──▶</span> <span class="box">SPIN Navigator</span> <span class="arrow">──▶</span> <span class="file">AGENT_QUEUE.json</span> <span class="arrow">──▶</span> detached agent jobs</div>
-    <div class="lane"><span class="you">you</span> <span class="arrow">◀──spin status──</span> <span class="file">HUMAN_QUEUE.md</span> <span class="arrow">◀──</span> <span class="box">tick loop</span> <span class="arrow">◀──</span> <span class="file">INBOX.md</span> <span class="arrow">◀──</span> project receipts</div>
+    <div class="lane"><span class="operator">operator</span><span class="arrow">-- approve --&gt;</span><span class="file">APPROVALS.md</span><span class="arrow">--&gt;</span><span class="box">Navigator</span><span class="arrow">--&gt;</span><span class="file">AGENT_QUEUE.json</span></div>
+    <div class="lane"><span class="operator">operator</span><span class="arrow">&lt;-- status --</span><span class="file">HUMAN_QUEUE.md</span><span class="arrow">&lt;--</span><span class="box">driver</span><span class="arrow">&lt;--</span><span class="file">project receipts</span></div>
   </div>
-  <h3 style="margin:26px 0 0;font-size:1.05rem">The cast: names that overlap, pinned down</h3>
   <table>
-    <tr><th>Name</th><th>What it is</th><th>Role</th></tr>
-    <tr><td><b>SPIN</b></td><td class="dimcell">a lightweight bash+node harness above project agents</td><td class="dimcell">schedules, routes, gates, refines handoffs, audits, and preserves context isolation</td></tr>
-    <tr><td><code>omp</code></td><td class="dimcell">agent harness + model gateway (oh-my-pi)</td><td class="dimcell">runs Coordinator, project floors, and jobs first; handles model/provider fallback across signed-in services</td></tr>
-    <tr><td><code>claude</code> <code>codex</code> <code>gemini</code></td><td class="dimcell">direct vendor CLIs</td><td class="dimcell">outer fallback if OMP is missing or hard-fails</td></tr>
-    <tr><td><code>ollama</code></td><td class="dimcell">local model runtime</td><td class="dimcell">last-resort outer fallback</td></tr>
-    <tr><td>cmux-derived UI</td><td class="dimcell">bundled workspace surface</td><td class="dimcell">shows Coordinator and project floors while SPIN controls launch routing, state, and handoffs</td></tr>
+    <tr><th>Layer</th><th>Responsibility</th></tr>
+    <tr><td><strong>SPIN</strong></td><td class="dimcell">Project registry, routing, approvals, queues, receipts, and supervision</td></tr>
+    <tr><td><code>omp</code></td><td class="dimcell">Agent sessions, provider authentication, model selection, retry, and fallback</td></tr>
+    <tr><td>cmux-derived workspace</td><td class="dimcell">Visual tabs, terminals, boards, and workspace control</td></tr>
+    <tr><td>Vendor CLIs</td><td class="dimcell">Outer fallback when the primary OMP path is unavailable</td></tr>
   </table>
 </section>
 
-<section id="gates" class="wrap">
-  <h2><span class="n">07</span>The four gates</h2>
-  <p class="lede">SPIN does local, reversible work without asking. It stops and waits for exactly four things, enforced behaviorally by every prompt and surfaced as an approval queue.</p>
+<section id="approvals" class="wrap">
+  <h2><span class="n">07</span>Approval controls</h2>
+  <p class="lede">Local, reversible work can continue without interruption. SPIN pauses before actions that cross external, financial, production, or protected-source boundaries.</p>
   <div class="gates">
-    <div class="gate"><span class="g">📤</span><div><b>External sends</b><span>email, DM, form, public post</span></div></div>
-    <div class="gate"><span class="g">💸</span><div><b>Spending money</b><span>gas, wallets, paid APIs</span></div></div>
-    <div class="gate"><span class="g">🚀</span><div><b>Production deploys</b><span>anything that ships to prod</span></div></div>
-    <div class="gate"><span class="g">🔒</span><div><b>Protected pushes</b><span><code>main</code> or any human-owned repo</span></div></div>
+    <div class="gate"><b>External communication</b><span>Email, messages, forms, and public posts</span></div>
+    <div class="gate"><b>New spending</b><span>Purchases, wallets, paid APIs, and account upgrades</span></div>
+    <div class="gate"><b>Production changes</b><span>Deployments, releases, and live configuration</span></div>
+    <div class="gate"><b>Protected source</b><span>Protected branches and configured repositories</span></div>
   </div>
 </section>
 
 <section id="docs" class="wrap">
-  <h2><span class="n">08</span>Go deeper</h2>
+  <h2><span class="n">08</span>Documentation</h2>
   <div class="grid">
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><span class="ic">🏛️</span><h3>Architecture →</h3><p>The five layers, one tick in detail, the job lifecycle, the org CLI.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/LESSONS.md"><span class="ic">🔥</span><h3>Lessons →</h3><p>v1→v4: every failure mode that shaped the design, paid for in burned quota.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><span class="ic">🗺️</span><h3>Roadmap →</h3><p>Known weaknesses, honestly ranked. What's solid, what still leans on luck.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/MACOS_TESTER_INSTALL.md"><span class="ic">📦</span><h3>SPIN.app install →</h3><p>Download, install, first launch, health checks, updates, and uninstall.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/PUBLIC_BETA_READINESS.md"><span class="ic">🚦</span><h3>Public beta →</h3><p>Positioning, demo script, launch checklist, beta boundaries, and feedback loop.</p></a>
-    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/SECURITY.md"><span class="ic">🔒</span><h3>Security →</h3><p>Local automation boundaries, reporting path, provider-key posture, and beta trust notes.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/INSTALL_MACOS.md"><h3>Install SPIN for Mac</h3><p>Requirements, download verification, onboarding, updates, and uninstall.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ARCHITECTURE.md"><h3>Architecture</h3><p>Runtime layers, project isolation, job lifecycle, and state contracts.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/SECURITY.md"><h3>Security</h3><p>Local permissions, approval boundaries, credentials, and vulnerability reporting.</p></a>
+    <a class="card" href="https://github.com/claudiaclawdbot/spin/blob/main/docs/ROADMAP.md"><h3>Roadmap</h3><p>Current limitations, reliability work, distribution goals, and planned capabilities.</p></a>
   </div>
 </section>
 
 <footer class="wrap">
-  <div class="pill">spin · super pi interoperable navigator</div><br>
-  Built in the open · MIT · <a href="https://github.com/claudiaclawdbot/spin">github.com/claudiaclawdbot/spin</a>
-  <div style="margin-top:14px;color:var(--faint);font-size:.8rem">
-    Stands on the shoulders of <a href="https://omp.sh">oh-my-pi</a> · <a href="https://github.com/manaflow-ai/cmux">cmux</a> ·
-    <a href="https://ghostty.org">Ghostty</a> · <a href="https://claude.com/claude-code">Claude&nbsp;Code</a> ·
-    <a href="https://github.com/openai/codex">Codex</a> · <a href="https://github.com/google-gemini/gemini-cli">Gemini&nbsp;CLI</a> ·
-    <a href="https://ollama.com">Ollama</a> · <a href="https://openrouter.ai">OpenRouter</a>. Thank you.
-  </div>
+  <strong>SPIN</strong> | Super Pi Interoperable Navigator<br>
+  Built in the open under the MIT license | <a href="https://github.com/claudiaclawdbot/spin">github.com/claudiaclawdbot/spin</a>
 </footer>
 
 <script>
-  document.querySelectorAll('.copy').forEach(b=>{
-    b.addEventListener('click',async()=>{
-      try{await navigator.clipboard.writeText(b.dataset.copy);const t=b.textContent;b.textContent='copied ✓';setTimeout(()=>b.textContent=t,1400);}catch(e){}
+  document.querySelectorAll('.copy').forEach(button => {
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy);
+        const previous = button.textContent;
+        button.textContent = 'copied';
+        setTimeout(() => { button.textContent = previous; }, 1400);
+      } catch (error) {}
     });
   });
 </script>

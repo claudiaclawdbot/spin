@@ -403,7 +403,7 @@ The release script:
 - extracts the artifact and reruns the app release contract against the extracted
   signed app.
 
-## Open-Source Tester Release
+## Public Beta Release
 
 SPIN can publish checked open-source beta builds without Apple Developer ID.
 These are ad-hoc signed, not notarized, and may show Gatekeeper warnings, but
@@ -430,16 +430,16 @@ That writes:
 dist/release/SPIN-<version>-macos-<arch>.dmg
 dist/release/SPIN-<version>-macos-<arch>.dmg.sha256
 dist/release/SPIN-<version>-macos-<arch>.manifest
-dist/release/SPIN-<version>-macos-<arch>-open-source-tester-notes.md
+dist/release/SPIN-<version>-macos-<arch>-release-notes.md
 dist/release/SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz
 dist/release/SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz.sha256
 ```
 
-The tester release notes include checksum verification, install steps, the
+The customer release notes include checksum verification, install steps, the
 Gatekeeper/quarantine fallback, bundled cmux/OMP explanation, and GPL-compatible
 license posture. The matching cmux source asset contains the exact source and
 SPIN overlay used by the bundled GPL component, without generated build caches.
-See [OPEN_SOURCE_TESTER_RELEASE](OPEN_SOURCE_TESTER_RELEASE.md).
+See [RELEASING_MACOS](RELEASING_MACOS.md).
 
 After creating the artifact, prove installed-app launch behavior with:
 

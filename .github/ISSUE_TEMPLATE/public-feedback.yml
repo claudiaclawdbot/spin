@@ -1,21 +1,21 @@
-name: Public beta feedback
-description: Share product, copy, onboarding, usability, or demo feedback.
+name: Product feedback
+description: Share feedback about SPIN's workflow, usability, documentation, or reliability.
 title: "[feedback] "
 labels: ["feedback", "beta"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for feedback on understandability, usability, positioning, docs, demos, and public beta readiness.
+        Share what worked, what was unclear, and what would make SPIN more useful. Do not include credentials or private project content.
   - type: dropdown
     id: perspective
     attributes:
       label: Your perspective
       options:
-        - I tried the app
-        - I read the README or website
-        - I watched a demo
-        - I reviewed the code/docs
+        - Used SPIN for Mac
+        - Used the source / CLI install
+        - Reviewed the website or docs
+        - Reviewed the source code
         - Other
     validations:
       required: true
@@ -25,14 +25,14 @@ body:
       label: Feedback area
       options:
         - First impression
-        - Product positioning
-        - README
-        - GitHub Pages site
-        - Install guide
         - Onboarding
-        - Navigator versus project floors
-        - OMP/provider setup
-        - Safety and approvals
+        - Navigator and project workspaces
+        - Delegation and progress tracking
+        - OMP / model routing
+        - Approvals and safety controls
+        - Installation and updates
+        - Documentation
+        - Reliability and performance
         - Other
     validations:
       required: true
@@ -49,9 +49,9 @@ body:
   - type: textarea
     id: suggestion
     attributes:
-      label: What would make it more useful or easier to trust?
+      label: What would improve SPIN?
   - type: textarea
     id: audience
     attributes:
-      label: Who do you think this is for?
-      description: This helps test whether the positioning is landing.
+      label: What kind of work were you trying to run?
+      description: Include the number and type of projects, but omit private repository details.

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="SPIN icon">
+  <defs>
+    <linearGradient id="spin-gradient" x1="152" y1="132" x2="872" y2="896" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff2bd6"/>
+      <stop offset="1" stop-color="#00e5ff"/>
+    </linearGradient>
+    <linearGradient id="spin-surface" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a0035"/>
+      <stop offset="1" stop-color="#07000d"/>
+    </linearGradient>
+  </defs>
+  <rect x="96" y="96" width="832" height="832" rx="236" fill="url(#spin-surface)" stroke="url(#spin-gradient)" stroke-width="22"/>
+  <g fill="#18102b" stroke="url(#spin-gradient)" stroke-width="44">
+    <circle cx="512" cy="320" r="112"/>
+    <circle cx="672" cy="656" r="112"/>
+    <circle cx="352" cy="656" r="112"/>
+  </g>
+  <circle cx="512" cy="512" r="70" fill="#18102b" stroke="url(#spin-gradient)" stroke-width="48"/>
+  <circle cx="512" cy="512" r="30" fill="url(#spin-gradient)"/>
+</svg>

@@ -19,7 +19,7 @@
 #   spin app-health      app/runtime health report; use --json for machine output
 #   spin app-update      plan a SPIN.app artifact update from compatibility manifests
 #   spin app-updates     user-facing SPIN.app update check/install surface
-#   spin app-release-notes prepare open-source tester release notes for a macOS artifact
+#   spin app-release-notes prepare customer release notes for a macOS artifact
 #   spin computer-use ... delegate a bounded desktop task to signed Codex; `probe` verifies it
 #   spin omp-setup       hand off to OMP's built-in setup wizard
 #   spin update          safely update SPIN, back up state, run migrations
@@ -30,7 +30,7 @@
 #   spin doctor          health check: deps, driver, floors, watchers
 #   spin help            this help
 #
-# `spin chat` is the live interface — talk to it like a person, it reads state and acts.
+# `spin chat` is the live operator interface for state-aware requests and actions.
 # approve/decline/ask are the quick async path (the loop picks them up next tick).
 
 set -uo pipefail

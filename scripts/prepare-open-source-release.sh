@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare an open-source macOS tester release from a checked ad-hoc artifact.
+# Prepare a public macOS beta release from a checked ad-hoc artifact.
 set -euo pipefail
 
 ROOT="${SPIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -28,7 +28,7 @@ Options:
   --release-dir PATH    output directory; default: dist/release
   -h, --help            show this help
 
-This prepares a public tester release, not a production notarized release. The
+This prepares a public beta release, not a production-notarized release. The
 artifact must be ad-hoc signed, not notarized, and accompanied by .sha256 and
 .manifest files.
 EOF
@@ -136,15 +136,15 @@ compat_sha="$(manifest_get compatibility_manifest_sha256)"
 [ "$manifest_artifact" = "$(basename "$ARTIFACT")" ] || fail "manifest artifact does not match artifact name"
 case "$format" in
   zip|dmg) ;;
-  *) fail "tester release must be a zip or dmg artifact, got: ${format:-missing}" ;;
+  *) fail "public beta release must be a zip or dmg artifact, got: ${format:-missing}" ;;
 esac
 [ "$format" = "${ARTIFACT##*.}" ] || fail "manifest format does not match artifact extension: manifest=$format artifact=${ARTIFACT##*.}"
-[ "$codesign_identity" = "-" ] || fail "tester release must be ad-hoc signed, got identity: ${codesign_identity:-missing}"
-[ "$notarized" = "false" ] || fail "tester release must not be marked notarized"
+[ "$codesign_identity" = "-" ] || fail "public beta release must be ad-hoc signed, got identity: ${codesign_identity:-missing}"
+[ "$notarized" = "false" ] || fail "public beta release must not be marked notarized"
 [ -n "$version" ] || fail "manifest missing version"
 [ -n "$archs" ] || fail "manifest missing archs"
 [ -n "$compat_sha" ] || fail "manifest missing compatibility manifest hash"
-ok "tester manifest policy"
+ok "public beta manifest policy"
 
 TMP="$(mktemp -d)"
 MOUNT=""
@@ -239,7 +239,7 @@ the bundled GPL component, identified by upstream commit \`$cmux_source_commit\`
   ok "matching cmux corresponding source ($source_short)"
 fi
 
-NOTES="$RELEASE_DIR/$BASE-open-source-tester-notes.md"
+NOTES="$RELEASE_DIR/$BASE-release-notes.md"
 if [ "$format" = "dmg" ]; then
   install_steps="shasum -a 256 -c $(basename "$SOURCE_SHA")
 hdiutil attach $(basename "$ARTIFACT")
@@ -255,16 +255,65 @@ open /Applications/SPIN.app"
   finder_install="The zip contains SPIN.app directly. Extract it, then move SPIN.app into Applications."
 fi
 cat > "$NOTES" <<EOF
-# SPIN $version macOS Open-Source Tester Release
+# SPIN for Mac $version
 
-This is an open-source tester build of SPIN.app for macOS. It is ad-hoc signed
-and not notarized. That means the source and release artifacts are public and
-inspectable, but macOS Gatekeeper may show extra warnings compared with a future
-Developer ID notarized production build.
+SPIN is a visual command center for coordinating AI coding agents across
+multiple software projects. Each project keeps its own repository context,
+while the Navigator manages portfolio priorities, delegation, approvals, and
+progress from one Mac workspace.
 
-## Assets
+## Highlights
 
-Attach these files to the GitHub release:
+- Navigator-level coordination across isolated project workspaces.
+- OMP-backed agent sessions with configurable model and provider routing.
+- Refined project handoffs with objectives, paths, constraints, and checks.
+- Persistent queues, boards, approvals, handoffs, and receipts.
+- Bundled workspace engine and OMP/Pi runtime in one Mac app.
+
+## Requirements
+
+- macOS architecture: \`$archs\`
+- At least one model/provider account supported by OMP
+- Git and the normal development tools used by managed projects
+
+## Install
+
+$finder_install
+
+Optional checksum verification and terminal installation:
+
+\`\`\`bash
+$install_steps
+\`\`\`
+
+On first launch, SPIN creates its writable runtime under
+\`~/Library/Application Support/SPIN/runtime\` and opens onboarding. Provider
+accounts, GitHub authentication, source repositories, and project-specific
+tools remain under the operator's control.
+
+## macOS First Launch
+
+This public beta is ad-hoc signed and not Apple-notarized. macOS may require a
+Control-click on \`SPIN.app\` followed by **Open** on first launch.
+
+If macOS still blocks a DMG downloaded from this repository, verify the
+checksum before removing quarantine from that app only:
+
+\`\`\`bash
+xattr -dr com.apple.quarantine /Applications/SPIN.app
+open /Applications/SPIN.app
+\`\`\`
+
+## Download Integrity
+
+- Version: \`$version\`
+- Format: \`$format\`
+- Signing: ad-hoc
+- Notarized: no
+- App SHA-256: \`$sha_actual\`
+- Compatibility manifest SHA-256: \`$compat_sha\`
+
+Release files:
 
 - \`$(basename "$ARTIFACT")\`
 - \`$(basename "$SOURCE_SHA")\`
@@ -272,79 +321,25 @@ Attach these files to the GitHub release:
 - \`$(basename "$NOTES")\`
 $SOURCE_ASSET_LINES
 
-Release metadata:
+## Open-Source Components
 
-- Version: \`$version\`
-- Format: \`$format\`
-- macOS archs: \`$archs\`
-- Signing: ad-hoc (\`-\`)
-- Notarized: \`false\`
-- SHA-256: \`$sha_actual\`
-- Compatibility manifest SHA-256: \`$compat_sha\`
-
-## Install
-
-Download the app artifact and checksum into the same directory, then verify:
-
-\`\`\`bash
-$install_steps
-\`\`\`
-
-$finder_install
-
-On first launch, SPIN seeds its writable runtime under
-\`~/Library/Application Support/SPIN/runtime\` and opens the onboarding
-workspace. SPIN bundles its cmux UI engine and OMP/Pi agent engine; users still
-need their own model/provider accounts and normal developer tools.
-
-## macOS Warning
-
-Because this tester build is not Apple-notarized, macOS may block the first
-launch or say it cannot verify the developer. After verifying the checksum, try
-Finder right-click or Control-click on \`SPIN.app\`, then choose Open.
-
-If macOS still blocks a trusted local tester build, remove quarantine explicitly:
-
-\`\`\`bash
-xattr -dr com.apple.quarantine /Applications/SPIN.app
-open /Applications/SPIN.app
-\`\`\`
-
-Do not use the quarantine command for random downloads. Use it only after
-checking the SHA-256 above and confirming the artifact came from this project.
-
-## Source And License
-
-This tester release is intended to be distributed with matching source code from
-the same GitHub tag or commit. The app bundle includes
-\`SPIN.app/Contents/Resources/licenses/THIRD_PARTY_NOTICES.md\`.
-
-- SPIN runtime code is MIT.
-- OMP/Pi-derived components preserve MIT notices.
-- The cmux-derived UI engine is GPL-3.0-or-later unless a commercial cmux
-  license is negotiated, so public SPIN.app binaries must be distributed in a
-  GPL-compatible way.
+The app includes \`SPIN.app/Contents/Resources/licenses/THIRD_PARTY_NOTICES.md\`.
+SPIN runtime source is MIT, OMP/Pi-derived components preserve their MIT
+notices, and the bundled cmux-derived UI is distributed under its applicable
+GPL-3.0-or-later terms unless a commercial cmux license applies.
 
 $SOURCE_RELEASE_SECTION
 
-## Maintainer Checks
+## Release Verification
 
-This release was prepared by the checked ad-hoc app pipeline:
-
-\`\`\`bash
-scripts/release-macos.sh --source-cmux
-scripts/prepare-open-source-release.sh --artifact dist/release/$(basename "$ARTIFACT")
-\`\`\`
-
-The release pipeline verifies bundled cmux/OMP resolution without global
-dependencies, app identity, license notices, runtime seeding, restart/session
-restore, compatibility metadata, ad-hoc code signatures, artifact extraction,
-and installed-app first launch.
+The checked release pipeline verifies bundled runtime resolution, app identity,
+license notices, runtime seeding, restart and session restore, compatibility
+metadata, code signatures, artifact extraction, and installed-app first launch.
 EOF
 
-ok "wrote tester release notes"
+ok "wrote customer release notes"
 echo
-echo "SPIN open-source tester release prepared:"
+echo "SPIN release package prepared:"
 echo "  artifact: $ARTIFACT"
 echo "  checksum: $SOURCE_SHA"
 echo "  manifest: $SOURCE_MANIFEST"

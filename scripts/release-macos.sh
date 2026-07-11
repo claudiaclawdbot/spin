@@ -29,7 +29,7 @@ Default local releases are ad-hoc signed and do not require Apple credentials.
 Production releases require SPIN_CODESIGN_IDENTITY, SPIN_APPLE_TEAM_ID or an
 inferable team id, SPIN_CMUX_ENTITLEMENTS, SPIN_NOTARIZE=1, and
 SPIN_NOTARY_PROFILE.
-Set SPIN_RELEASE_FORMAT=dmg to produce a DMG tester artifact instead of a zip.
+Set SPIN_RELEASE_FORMAT=dmg to produce a public beta DMG instead of a zip.
 EOF
 }
 

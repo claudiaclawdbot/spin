@@ -21,7 +21,8 @@ mkdir -p "$KIT"
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js scripts/codex-computer-use.sh \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
-      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/assets \
+      docs/INSTALL_MACOS.md docs/RELEASING_MACOS.md docs/releases \
+      docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/OPEN_SOURCE_TESTER_RELEASE.md docs/assets \
       .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/app-beta-bug.yml .github/ISSUE_TEMPLATE/public-feedback.yml \
       'org/ceo/*.example.md'
   } | tar --null -czf - --files-from - ) | tar -xzf - -C "$KIT"
@@ -226,38 +227,41 @@ if (cfg.sidebarAppearance.tintOpacity !== 0.24) process.exit(1);
 NODE
 node -e 'const dock=JSON.parse(require("fs").readFileSync("app/cmux/config/dock.json","utf8")); if(!dock.controls.some(c=>c.id==="spin-updates"&&/app-updates/.test(c.command))) process.exit(1);'
 grep -q 'prepare-open-source-release.sh --artifact' .github/workflows/macos-app.yml
-grep -q 'open-source-tester-notes.md' .github/workflows/macos-app.yml
-grep -q 'cmux-corresponding-source' docs/OPEN_SOURCE_TESTER_RELEASE.md
-grep -q 'matching cmux corresponding-source archive' docs/PUBLIC_BETA_READINESS.md
+grep -q '\*-release-notes.md' .github/workflows/macos-app.yml
+grep -q 'matching cmux corresponding-source archive' docs/RELEASING_MACOS.md
 grep -q 'SPIN_RELEASE_FORMAT=dmg scripts/release-macos.sh' .github/workflows/macos-app.yml
 grep -q 'dist/release/\*.dmg' .github/workflows/macos-app.yml
 grep -q 'actions/workflows/macos-app.yml/badge.svg' README.md
-grep -q 'A local app for running a small AI software org' README.md
-grep -q 'SPIN.app is the main product' README.md
-grep -q 'Download SPIN.app for Mac' README.md
-grep -q 'Source / CLI Setup' README.md
+grep -q 'AI agent command center for Mac' README.md
+grep -q 'SPIN for Mac packages' README.md
+grep -q 'Download SPIN For Mac' README.md
+grep -q 'Source And CLI Setup' README.md
 grep -q 'v4.1.0-beta.3' README.md
-grep -q 'PUBLIC_BETA_READINESS.md' README.md
 grep -q 'signed Codex CLI' README.md
 grep -q 'spin computer-use probe' README.md
-grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
+grep -q 'docs/INSTALL_MACOS.md' README.md
 grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
+! grep -qi 'small AI software org\|talk to it like a person\|public beta readiness' README.md
 test -s docs/assets/spin-public-beta-demo.gif
 test -s docs/assets/spin-public-beta-demo.mp4
+test -s docs/assets/spin-public-beta-demo-poster.png
+test -s docs/assets/spin-icon.svg
 grep -q 'id="app"' docs/index.html
-grep -q 'SPIN.app for Mac' docs/index.html
-grep -q 'main Mac experience' docs/index.html
-grep -q 'Source / CLI install' docs/index.html
+grep -q 'SPIN for Mac' docs/index.html
+grep -q 'visual command center' docs/index.html
+grep -q 'Source and CLI' docs/index.html
 grep -q 'v4.1.0-beta.3' docs/index.html
-grep -q 'MACOS_TESTER_INSTALL.md' docs/index.html
-grep -q 'PUBLIC_BETA_READINESS.md' docs/index.html
-grep -q 'Run a small AI software org from one local app' docs/index.html
+grep -q 'INSTALL_MACOS.md' docs/index.html
+grep -q 'Project isolation comes first' docs/index.html
 grep -q 'assets/spin-public-beta-demo.gif' docs/index.html
-grep -q 'SPIN.app macOS Beta Install Guide' docs/MACOS_TESTER_INSTALL.md
-grep -q 'DMG opens and shows `SPIN.app`, `Applications`, and `README.txt`' docs/MACOS_TESTER_INSTALL.md
-test -f docs/PUBLIC_BETA_READINESS.md
-grep -q 'Five-Minute Demo Script' docs/PUBLIC_BETA_READINESS.md
-grep -q 'What Is Still Beta' docs/PUBLIC_BETA_READINESS.md
+grep -q 'assets/spin-public-beta-demo-poster.png' docs/index.html
+grep -q 'assets/spin-icon.svg' docs/index.html
+! grep -qi 'small AI software org\|talk to it like a person\|beta readiness' docs/index.html
+grep -q 'Install SPIN for Mac' docs/INSTALL_MACOS.md
+grep -q 'Control-click `SPIN.app`' docs/INSTALL_MACOS.md
+grep -q 'DMG opens and includes `SPIN.app`, `Applications`, and `README.txt`' docs/RELEASING_MACOS.md
+grep -q 'SPIN for Mac 4.1.0 Beta 3' docs/releases/SPIN-4.1.0-beta.3.md
+! grep -qi 'attach these files\|maintainer checks\|open-source tester' docs/releases/SPIN-4.1.0-beta.3.md
 test -f SECURITY.md
 grep -q 'Security Policy' SECURITY.md
 test -f .github/ISSUE_TEMPLATE/config.yml
@@ -1674,55 +1678,55 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ls "$TMP/release-command"/SPIN-*-macos-*.zip.sha256 >/dev/null
   ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
   RELEASE_COMMAND_ZIP="$(ls "$TMP/release-command"/SPIN-*-macos-*.zip | head -1)"
-  TESTER_RELEASE_DIR="$TMP/open-source-tester-release"
-  if SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" >/dev/null 2>&1; then
+  PUBLIC_RELEASE_DIR="$TMP/public-beta-release"
+  if SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$PUBLIC_RELEASE_DIR" >/dev/null 2>&1; then
     echo "open-source release accepted an artifact outside the tracked cmux pin" >&2
     exit 1
   fi
   SPIN_CMUX_COMMIT="$FAKE_CMUX_COMMIT" SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" \
-    scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
-  TESTER_NOTES="$(ls "$TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
-  test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
-  test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"
-  test -f "$TESTER_RELEASE_DIR/$(basename "${RELEASE_COMMAND_ZIP%.zip}.manifest")"
-  test -f "$TESTER_NOTES"
-  TESTER_SOURCE_ARCHIVE="$(ls "$TESTER_RELEASE_DIR"/*-cmux-corresponding-source-*.tar.gz | head -1)"
-  test -f "$TESTER_SOURCE_ARCHIVE.sha256"
-  tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-OVERLAY.txt$'
-  tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-CORRESPONDING-SOURCE.txt$'
-  if tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -Eq '/(build-spin|\.spm-cache)/'; then
+    scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$PUBLIC_RELEASE_DIR" > "$TMP/open-source-release.out"
+  RELEASE_NOTES="$(ls "$PUBLIC_RELEASE_DIR"/*-release-notes.md | head -1)"
+  test -f "$PUBLIC_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
+  test -f "$PUBLIC_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"
+  test -f "$PUBLIC_RELEASE_DIR/$(basename "${RELEASE_COMMAND_ZIP%.zip}.manifest")"
+  test -f "$RELEASE_NOTES"
+  RELEASE_SOURCE_ARCHIVE="$(ls "$PUBLIC_RELEASE_DIR"/*-cmux-corresponding-source-*.tar.gz | head -1)"
+  test -f "$RELEASE_SOURCE_ARCHIVE.sha256"
+  tar -tzf "$RELEASE_SOURCE_ARCHIVE" | grep -q '/SPIN-OVERLAY.txt$'
+  tar -tzf "$RELEASE_SOURCE_ARCHIVE" | grep -q '/SPIN-CORRESPONDING-SOURCE.txt$'
+  if tar -tzf "$RELEASE_SOURCE_ARCHIVE" | grep -Eq '/(build-spin|\.spm-cache)/'; then
     echo "corresponding-source archive included generated build/cache output" >&2
     exit 1
   fi
   (
-    cd "$TESTER_RELEASE_DIR"
-    shasum -a 256 -c "$(basename "$TESTER_SOURCE_ARCHIVE").sha256"
+    cd "$PUBLIC_RELEASE_DIR"
+    shasum -a 256 -c "$(basename "$RELEASE_SOURCE_ARCHIVE").sha256"
   ) >/dev/null
-  grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
-  grep -q 'ad-hoc signed' "$TESTER_NOTES"
-  grep -q 'not notarized' "$TESTER_NOTES"
-  grep -q -- '--artifact dist/release/SPIN-' "$TESTER_NOTES"
-  if grep -Fq "$TMP" "$TESTER_NOTES"; then
-    echo "tester release notes included an absolute build path" >&2
+  grep -q 'SPIN for Mac' "$RELEASE_NOTES"
+  grep -q 'visual command center' "$RELEASE_NOTES"
+  grep -q 'ad-hoc signed' "$RELEASE_NOTES"
+  grep -q 'not Apple-notarized' "$RELEASE_NOTES"
+  ! grep -qi 'attach these files\|maintainer checks\|open-source tester' "$RELEASE_NOTES"
+  if grep -Fq "$TMP" "$RELEASE_NOTES"; then
+    echo "release notes included an absolute build path" >&2
     exit 1
   fi
-  grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$TESTER_NOTES"
-  grep -q 'GPL-compatible' "$TESTER_NOTES"
-  grep -q 'cmux-derived UI engine is GPL-3.0-or-later' "$TESTER_NOTES"
-  grep -q "$(basename "$TESTER_SOURCE_ARCHIVE")" "$TESTER_NOTES"
-  grep -q "$(basename "$RELEASE_COMMAND_ZIP")" "$TESTER_NOTES"
-  grep -q "$(awk '{print $1}' "$RELEASE_COMMAND_ZIP.sha256")" "$TESTER_NOTES"
-  SPIN_SKIP_CORRESPONDING_SOURCE=1 scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/open-source-tester-release-cli" > "$TMP/app-release-notes.out"
-  ls "$TMP/open-source-tester-release-cli"/*-open-source-tester-notes.md >/dev/null
-  DMG_TESTER_RELEASE_DIR="$TMP/open-source-tester-release-dmg"
-  scripts/prepare-open-source-release.sh --skip-corresponding-source --artifact "$RELEASE_DMG" --release-dir "$DMG_TESTER_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
-  DMG_TESTER_NOTES="$(ls "$DMG_TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
-  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG")"
-  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG").sha256"
-  test -f "$DMG_TESTER_RELEASE_DIR/$(basename "${RELEASE_DMG%.dmg}.manifest")"
-  grep -q 'Format: `dmg`' "$DMG_TESTER_NOTES"
-  grep -q 'hdiutil attach' "$DMG_TESTER_NOTES"
-  grep -q 'Applications shortcut and README.txt' "$DMG_TESTER_NOTES"
+  grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$RELEASE_NOTES"
+  grep -q 'GPL-3.0-or-later' "$RELEASE_NOTES"
+  grep -q "$(basename "$RELEASE_SOURCE_ARCHIVE")" "$RELEASE_NOTES"
+  grep -q "$(basename "$RELEASE_COMMAND_ZIP")" "$RELEASE_NOTES"
+  grep -q "$(awk '{print $1}' "$RELEASE_COMMAND_ZIP.sha256")" "$RELEASE_NOTES"
+  SPIN_SKIP_CORRESPONDING_SOURCE=1 scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/public-beta-release-cli" > "$TMP/app-release-notes.out"
+  ls "$TMP/public-beta-release-cli"/*-release-notes.md >/dev/null
+  DMG_PUBLIC_RELEASE_DIR="$TMP/public-beta-release-dmg"
+  scripts/prepare-open-source-release.sh --skip-corresponding-source --artifact "$RELEASE_DMG" --release-dir "$DMG_PUBLIC_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
+  DMG_RELEASE_NOTES="$(ls "$DMG_PUBLIC_RELEASE_DIR"/*-release-notes.md | head -1)"
+  test -f "$DMG_PUBLIC_RELEASE_DIR/$(basename "$RELEASE_DMG")"
+  test -f "$DMG_PUBLIC_RELEASE_DIR/$(basename "$RELEASE_DMG").sha256"
+  test -f "$DMG_PUBLIC_RELEASE_DIR/$(basename "${RELEASE_DMG%.dmg}.manifest")"
+  grep -q 'Format: `dmg`' "$DMG_RELEASE_NOTES"
+  grep -q 'hdiutil attach' "$DMG_RELEASE_NOTES"
+  grep -q 'Applications shortcut and README.txt' "$DMG_RELEASE_NOTES"
   scripts/spin app-updates --check --candidate "$RELEASE_DMG" --installed-app "$TMP/SPIN.app" > "$TMP/app-updates-check-dmg.out"
   grep -q 'SPIN app updates' "$TMP/app-updates-check-dmg.out"
   grep -q 'SPIN app update plan' "$TMP/app-updates-check-dmg.out"
