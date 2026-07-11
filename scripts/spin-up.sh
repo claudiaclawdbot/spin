@@ -98,7 +98,17 @@ fi
 lock="$RUN/.workspace-ceo-tick.lock"
 if [[ "${SPIN_DISABLE_BACKGROUND_DAEMONS:-0}" == "1" ]]; then
   echo "  ${c_d}· background driver disabled for this run${c_o}"
-elif [ -f "$lock" ] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
+elif [[ -f "$RUN/STOP" ]]; then
+  echo "  ${c_d}· driver intentionally paused ${c_o}(resume: spin start)"
+elif bash "$ROOT/scripts/spin-service.sh" installed >/dev/null 2>&1 \
+  && ! bash "$ROOT/scripts/spin-service.sh" status >/dev/null 2>&1; then
+  echo "  ${c_d}· repairing partial SPIN service installation…${c_o}"
+  if bash "$ROOT/scripts/spin-service.sh" repair >/dev/null 2>&1; then
+    echo "  ${c_g}✓${c_o} driver and live-state services supervised"
+  else
+    echo "  ${c_d}· service repair failed; continuing with foreground-compatible startup${c_o}"
+  fi
+elif spin_locked_process_running "$lock" "$ROOT/scripts/workspace-ceo-tick.sh"; then
   echo "  ${c_g}✓${c_o} driver already running"
 else
   bash "$ROOT/scripts/spin" start >/dev/null 2>&1 && echo "  ${c_g}✓${c_o} driver started ${c_d}(tip: 'spin service install' keeps it up across reboots)${c_o}"

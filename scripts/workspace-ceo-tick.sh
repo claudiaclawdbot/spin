@@ -48,6 +48,11 @@ done
 trap 'rm -f "$LOCKFILE"' EXIT
 trap 'rm -f "$LOCKFILE"; exit 0' INT TERM
 
+# Reconcile the visible board immediately after acquiring the driver lock. This
+# prevents a restored cmux session from displaying pre-reboot process state while
+# the lightweight status watcher is still starting.
+bash "$ROOT/scripts/workspace-status.sh" >/dev/null 2>&1 || true
+
 STATE="$ROOT/org/state.json"
 QUEUE="$ROOT/org/AGENT_QUEUE.json"
 INBOX="$ROOT/org/ceo/INBOX.md"
@@ -72,6 +77,7 @@ watched_inputs() {
 
 while true; do
   stop_if_requested
+  bash "$ROOT/scripts/workspace-status.sh" >/dev/null 2>&1 || true
   if [[ -t 1 && -n "${TERM:-}" ]]; then
     clear
   fi

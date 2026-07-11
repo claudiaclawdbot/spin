@@ -86,6 +86,74 @@ for transient_path in "cmux-cli-shims" "/.codex/tmp/" "/.cache/codex-runtimes/";
     exit 1
   fi
 done
+
+# A durable service installation owns every process required to keep the visible
+# control plane truthful after login/reboot, not only the driver loop.
+SERVICE_RENDER_HOME="$TMP/service-render-home"
+HOME="$SERVICE_RENDER_HOME" SPIN_ROOT="$PWD" SPIN_SERVICE_DRY_RUN=1 SPIN_SERVICE_OS=Darwin \
+  scripts/spin-service.sh install >/dev/null
+for label in com.spin.driver com.spin.status-watch com.spin.wiki-watch; do
+  plist="$SERVICE_RENDER_HOME/Library/LaunchAgents/$label.plist"
+  test -f "$plist"
+  grep -q '<key>RunAtLoad</key><true/>' "$plist"
+done
+grep -q 'workspace-ceo-tick.sh' "$SERVICE_RENDER_HOME/Library/LaunchAgents/com.spin.driver.plist"
+grep -q 'workspace-status-watch.sh' "$SERVICE_RENDER_HOME/Library/LaunchAgents/com.spin.status-watch.plist"
+grep -q 'wiki-watch.sh' "$SERVICE_RENDER_HOME/Library/LaunchAgents/com.spin.wiki-watch.plist"
+
+SERVICE_SYSTEMD_HOME="$TMP/service-systemd-home"
+XDG_CONFIG_HOME="$SERVICE_SYSTEMD_HOME" HOME="$SERVICE_RENDER_HOME" SPIN_ROOT="$PWD" \
+  SPIN_SERVICE_DRY_RUN=1 SPIN_SERVICE_OS=Linux scripts/spin-service.sh install >/dev/null
+for name in driver status-watch wiki-watch; do
+  unit="$SERVICE_SYSTEMD_HOME/systemd/user/spin-$name.service"
+  test -f "$unit"
+  grep -q '^Restart=always$' "$unit"
+done
+
+# Status must reject an unrelated live process in a stale lock and expose the
+# liveness of all three control-plane components.
+STATUS_ROOT="$TMP/status-root"
+mkdir -p "$STATUS_ROOT/scripts/lib" "$STATUS_ROOT/org/ceo/runs" \
+  "$STATUS_ROOT/org/projects/example" "$STATUS_ROOT/logs"
+cp scripts/workspace-status.sh "$STATUS_ROOT/scripts/workspace-status.sh"
+cp scripts/lib/spin-runtime.sh "$STATUS_ROOT/scripts/lib/spin-runtime.sh"
+cat > "$STATUS_ROOT/org/projects/example/FLOOR.md" <<'EOF'
+# Example floor
+## In progress
+- Smoke test
+## Next
+- Verify
+## Waiting
+- Nothing
+EOF
+for script in workspace-ceo-tick.sh workspace-status-watch.sh wiki-watch.sh; do
+  cat > "$STATUS_ROOT/scripts/$script" <<'EOF'
+#!/usr/bin/env bash
+trap 'exit 0' TERM INT
+while true; do sleep 1; done
+EOF
+  chmod +x "$STATUS_ROOT/scripts/$script"
+done
+(
+  set -e
+  unrelated_pid=""
+  bash "$STATUS_ROOT/scripts/workspace-ceo-tick.sh" & driver_pid=$!
+  bash "$STATUS_ROOT/scripts/workspace-status-watch.sh" & status_pid=$!
+  bash "$STATUS_ROOT/scripts/wiki-watch.sh" & wiki_pid=$!
+  trap 'kill "$driver_pid" "$status_pid" "$wiki_pid" "$unrelated_pid" 2>/dev/null || true' EXIT
+  echo "$driver_pid" > "$STATUS_ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
+  echo "$status_pid" > "$STATUS_ROOT/org/ceo/runs/.status-watch.lock"
+  echo "$wiki_pid" > "$STATUS_ROOT/org/ceo/runs/.wiki-watch.lock"
+  SPIN_ROOT="$STATUS_ROOT" bash "$STATUS_ROOT/scripts/workspace-status.sh"
+  grep -q '\*\*Driver:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
+  grep -q '\*\*Live status:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
+  grep -q '\*\*Project index:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
+
+  sleep 30 & unrelated_pid=$!
+  echo "$unrelated_pid" > "$STATUS_ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
+  SPIN_ROOT="$STATUS_ROOT" bash "$STATUS_ROOT/scripts/workspace-status.sh"
+  grep -q '\*\*Driver:\*\*.*DOWN' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
+)
 node --check scripts/org >/dev/null
 node --check scripts/ceo-dashboard.js >/dev/null
 node --check scripts/spin-web.js >/dev/null
@@ -539,6 +607,46 @@ node -e '
   if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
 '
 
+# A runaway agent/test process tree must be killed inside its detached process
+# group and leave a durable resource-limit result for the next reconciliation.
+cat > scripts/project-ceo-agent.sh <<'EOF'
+#!/usr/bin/env bash
+trap 'exit 0' TERM INT
+while true; do sleep 1; done
+EOF
+chmod +x scripts/project-ceo-agent.sh
+scripts/org queue-job example-app scout "resource governor fixture" --id smoke-resource-limit >/dev/null
+OMP_JOB_MAX_RSS_MB=1 OMP_RESOURCE_CHECK_INTERVAL=1 scripts/omp-supervisor-once.sh >/dev/null
+resource_job_pid="$(cat org/jobs/smoke-resource-limit.pid)"
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [[ -s org/jobs/smoke-resource-limit.resource ]] && ! kill -0 "$resource_job_pid" 2>/dev/null && break
+  sleep 0.5
+done
+if kill -0 "$resource_job_pid" 2>/dev/null; then
+  kill -KILL -- "-$resource_job_pid" 2>/dev/null || kill -KILL "$resource_job_pid" 2>/dev/null || true
+  echo "resource governor did not stop the over-limit process group" >&2
+  exit 1
+fi
+grep -q 'Resource limit exceeded: RSS' org/jobs/smoke-resource-limit.resource
+for _ in 1 2 3 4 5; do
+  scripts/omp-supervisor-once.sh >/dev/null
+  if node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-resource-limit');
+if (job?.status !== 'failed' || !/Resource limit exceeded/.test(job.result || '')) process.exit(1);
+if (job.resource_limits?.max_rss_mb !== 1 || job.resource_limits?.max_processes !== 32) process.exit(1);
+NODE
+  then
+    break
+  fi
+  sleep 0.2
+done
+node - <<'NODE'
+const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
+const job = q.jobs.find(entry => entry.id === 'smoke-resource-limit');
+if (job?.status !== 'failed' || !/Resource limit exceeded/.test(job.result || '')) process.exit(1);
+NODE
+
 cat > scripts/project-ceo-agent.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -675,6 +783,17 @@ PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
+: > "$TMP/cmux.calls"
+PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  bash scripts/workspace-status.sh
+  spin_cmux_reconcile_managed_floors
+'
+grep -q 'new-workspace --name SPIN Coordinator' "$TMP/cmux.calls"
+grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
+grep -q 'markdown open .*/org/ceo/WORKSPACE_STATUS.md' "$TMP/cmux.calls"
 
 DRIFTBIN="$TMP/driftbin"
 mkdir -p "$DRIFTBIN"
@@ -947,12 +1066,20 @@ cat > "$FAKE_CMUX_APP/Contents/MacOS/SPIN" <<'EOF'
 exit 0
 EOF
 chmod +x "$FAKE_CMUX_APP/Contents/MacOS/SPIN"
+FAKE_CMUX_SOURCE="$TMP/fake-cmux-source"
+git init -q "$FAKE_CMUX_SOURCE"
+printf '# Fake cmux source\n' > "$FAKE_CMUX_SOURCE/README.md"
+git -C "$FAKE_CMUX_SOURCE" add README.md
+git -C "$FAKE_CMUX_SOURCE" -c user.name=SPIN -c user.email=spin@example.invalid \
+  commit -q -m "fake source fixture"
+FAKE_CMUX_COMMIT="$(git -C "$FAKE_CMUX_SOURCE" rev-parse HEAD)"
+printf 'modified overlay fixture\n' > "$FAKE_CMUX_SOURCE/SPIN-OVERLAY.txt"
 mkdir -p "$TMP/fake-cmux-app/app"
-cat > "$TMP/fake-cmux-app/app/release-compat.json" <<'EOF'
+cat > "$TMP/fake-cmux-app/app/release-compat.json" <<EOF
 {
   "cmux": {
     "source": {
-      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "commit": "$FAKE_CMUX_COMMIT"
     }
   }
 }
@@ -964,15 +1091,21 @@ SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
 SPIN_CMUX_BIN_SOURCE="$TMP/internal-cmux" \
 SPIN_OMP_BIN_SOURCE="$TMP/internal-omp" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
+node - "$TMP/SPIN.app/Contents/Info.plist" <<'NODE'
+const fs = require('fs');
+const xml = fs.readFileSync(process.argv[2], 'utf8');
+const value = key => (xml.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`)) || [])[1];
+if (value('CFBundleShortVersionString') !== '4.1.0' || value('CFBundleVersion') !== '2') process.exit(1);
+NODE
 if [[ "$(uname -s)" == "Darwin" ]]; then
   codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null
   codesign --verify --strict --verbose=2 "$TMP/SPIN.app/Contents/Resources/SPIN.app" >/dev/null
-  node - "$TMP/SPIN.app/Contents/Resources/app/release-compat.json" <<'NODE'
+  node - "$TMP/SPIN.app/Contents/Resources/app/release-compat.json" "$FAKE_CMUX_COMMIT" <<'NODE'
 const fs = require('fs');
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (manifest.release.channel !== 'local-dev') process.exit(1);
 if (manifest.release.signing.identity !== '-') process.exit(1);
-if (manifest.cmux.source.commit !== 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') process.exit(1);
+if (manifest.cmux.source.commit !== process.argv[3]) process.exit(1);
 NODE
 fi
 printf 'smoke native addon\n' > "$TMP/SPIN.app/Contents/Resources/bin/pi_natives.smoke.node"
@@ -1050,24 +1183,29 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ls "$TMP/release-command"/SPIN-*-macos-*.manifest >/dev/null
   RELEASE_COMMAND_ZIP="$(ls "$TMP/release-command"/SPIN-*-macos-*.zip | head -1)"
   TESTER_RELEASE_DIR="$TMP/open-source-tester-release"
-  scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
+  SPIN_CMUX_SOURCE_DIR="$FAKE_CMUX_SOURCE" scripts/prepare-open-source-release.sh --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TESTER_RELEASE_DIR" > "$TMP/open-source-release.out"
   TESTER_NOTES="$(ls "$TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
   test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP")"
   test -f "$TESTER_RELEASE_DIR/$(basename "$RELEASE_COMMAND_ZIP").sha256"
   test -f "$TESTER_RELEASE_DIR/$(basename "${RELEASE_COMMAND_ZIP%.zip}.manifest")"
   test -f "$TESTER_NOTES"
+  TESTER_SOURCE_ARCHIVE="$(ls "$TESTER_RELEASE_DIR"/*-cmux-corresponding-source-*.tar.gz | head -1)"
+  test -f "$TESTER_SOURCE_ARCHIVE.sha256"
+  tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-OVERLAY.txt$'
+  tar -tzf "$TESTER_SOURCE_ARCHIVE" | grep -q '/SPIN-CORRESPONDING-SOURCE.txt$'
   grep -q 'Open-Source Tester Release' "$TESTER_NOTES"
   grep -q 'ad-hoc signed' "$TESTER_NOTES"
   grep -q 'not notarized' "$TESTER_NOTES"
   grep -q 'xattr -dr com.apple.quarantine /Applications/SPIN.app' "$TESTER_NOTES"
   grep -q 'GPL-compatible' "$TESTER_NOTES"
   grep -q 'cmux-derived UI engine is GPL-3.0-or-later' "$TESTER_NOTES"
+  grep -q "$(basename "$TESTER_SOURCE_ARCHIVE")" "$TESTER_NOTES"
   grep -q "$(basename "$RELEASE_COMMAND_ZIP")" "$TESTER_NOTES"
   grep -q "$(awk '{print $1}' "$RELEASE_COMMAND_ZIP.sha256")" "$TESTER_NOTES"
-  scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/open-source-tester-release-cli" > "$TMP/app-release-notes.out"
+  SPIN_SKIP_CORRESPONDING_SOURCE=1 scripts/spin app-release-notes --artifact "$RELEASE_COMMAND_ZIP" --release-dir "$TMP/open-source-tester-release-cli" > "$TMP/app-release-notes.out"
   ls "$TMP/open-source-tester-release-cli"/*-open-source-tester-notes.md >/dev/null
   DMG_TESTER_RELEASE_DIR="$TMP/open-source-tester-release-dmg"
-  scripts/prepare-open-source-release.sh --artifact "$RELEASE_DMG" --release-dir "$DMG_TESTER_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
+  scripts/prepare-open-source-release.sh --skip-corresponding-source --artifact "$RELEASE_DMG" --release-dir "$DMG_TESTER_RELEASE_DIR" > "$TMP/open-source-release-dmg.out"
   DMG_TESTER_NOTES="$(ls "$DMG_TESTER_RELEASE_DIR"/*-open-source-tester-notes.md | head -1)"
   test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG")"
   test -f "$DMG_TESTER_RELEASE_DIR/$(basename "$RELEASE_DMG").sha256"

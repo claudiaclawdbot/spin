@@ -9,6 +9,7 @@ APP="$ROOT/dist/SPIN.app"
 MODE="source"
 SKIP_VENDOR=0
 SKIP_BUILD=0
+SKIP_CORRESPONDING_SOURCE="${SPIN_SKIP_CORRESPONDING_SOURCE:-0}"
 ARTIFACT=""
 
 usage() {
@@ -21,6 +22,8 @@ Options:
   --binary-cmux         use existing binary cmux inputs if building
   --skip-build          use --app as an already-built SPIN.app
   --skip-vendor         do not refresh vendored OMP/Pi inputs before building
+  --skip-corresponding-source
+                        test-only: do not package the exact modified cmux source
   --app PATH            app bundle path when building or using --skip-build
   --release-dir PATH    output directory; default: dist/release
   -h, --help            show this help
@@ -55,6 +58,7 @@ while [ "$#" -gt 0 ]; do
     --binary-cmux) MODE="binary"; shift ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --skip-vendor) SKIP_VENDOR=1; shift ;;
+    --skip-corresponding-source) SKIP_CORRESPONDING_SOURCE=1; shift ;;
     --app)
       [ $# -ge 2 ] || fail "--app requires a path"
       APP="$2"; shift 2 ;;
@@ -174,6 +178,57 @@ grep -q 'oh-my-pi' "$TMP/SPIN.app/Contents/Resources/licenses/THIRD_PARTY_NOTICE
 node "$ROOT/scripts/app-compatibility.js" verify "$TMP/SPIN.app" >/dev/null
 ok "artifact notices and compatibility manifest"
 
+SOURCE_ARCHIVE=""
+SOURCE_ARCHIVE_SHA=""
+SOURCE_ASSET_LINES=""
+SOURCE_RELEASE_SECTION=""
+if [ "$SKIP_CORRESPONDING_SOURCE" != "1" ]; then
+  CMUX_SOURCE_DIR="${SPIN_CMUX_SOURCE_DIR:-$ROOT/app/upstream/cmux}"
+  [ -e "$CMUX_SOURCE_DIR/.git" ] || fail "matching cmux source checkout missing: $CMUX_SOURCE_DIR"
+  cmux_source_commit="$(node - "$TMP/SPIN.app/Contents/Resources/app/release-compat.json" <<'NODE'
+const manifest = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));
+const commit = manifest.cmux && manifest.cmux.source && manifest.cmux.source.commit;
+if (!commit) process.exit(1);
+process.stdout.write(commit);
+NODE
+)" || fail "artifact compatibility manifest is missing the cmux source commit"
+  checkout_commit="$(git -C "$CMUX_SOURCE_DIR" rev-parse HEAD 2>/dev/null || true)"
+  [ "$checkout_commit" = "$cmux_source_commit" ] || fail "cmux source checkout $checkout_commit does not match artifact $cmux_source_commit"
+
+  source_short="$(printf '%s' "$cmux_source_commit" | cut -c1-12)"
+  source_name="SPIN-$version-cmux-corresponding-source-$source_short"
+  source_parent="$TMP/corresponding-source"
+  source_stage="$source_parent/$source_name"
+  mkdir -p "$source_stage"
+  (
+    cd "$CMUX_SOURCE_DIR"
+    {
+      git ls-files -z
+      git ls-files -z --others --exclude-standard
+    } | tar --null -cf - --files-from -
+  ) | (cd "$source_stage" && tar -xf -)
+  cat > "$source_stage/SPIN-CORRESPONDING-SOURCE.txt" <<EOF
+SPIN cmux corresponding source
+
+Upstream: https://github.com/manaflow-ai/cmux.git
+Upstream commit: $cmux_source_commit
+SPIN version: $version
+
+This archive captures tracked source plus SPIN's modified and added overlay files
+from the exact checkout used by the release pipeline. Build instructions live in
+the SPIN repository under scripts/build-cmux-spin.sh and docs/APP_BUNDLE.md.
+EOF
+  SOURCE_ARCHIVE="$RELEASE_DIR/$source_name.tar.gz"
+  COPYFILE_DISABLE=1 tar -czf "$SOURCE_ARCHIVE" -C "$source_parent" "$source_name"
+  SOURCE_ARCHIVE_SHA="$SOURCE_ARCHIVE.sha256"
+  shasum -a 256 "$SOURCE_ARCHIVE" > "$SOURCE_ARCHIVE_SHA"
+  SOURCE_ASSET_LINES="- \`$(basename "$SOURCE_ARCHIVE")\`
+- \`$(basename "$SOURCE_ARCHIVE_SHA")\`"
+  SOURCE_RELEASE_SECTION="The release also includes the exact modified cmux source tree used to build
+the bundled GPL component, identified by upstream commit \`$cmux_source_commit\`."
+  ok "matching cmux corresponding source ($source_short)"
+fi
+
 NOTES="$RELEASE_DIR/$BASE-open-source-tester-notes.md"
 if [ "$format" = "dmg" ]; then
   install_steps="shasum -a 256 -c $(basename "$SOURCE_SHA")
@@ -205,6 +260,7 @@ Attach these files to the GitHub release:
 - \`$(basename "$SOURCE_SHA")\`
 - \`$(basename "$SOURCE_MANIFEST")\`
 - \`$(basename "$NOTES")\`
+$SOURCE_ASSET_LINES
 
 Release metadata:
 
@@ -259,6 +315,8 @@ the same GitHub tag or commit. The app bundle includes
   license is negotiated, so public SPIN.app binaries must be distributed in a
   GPL-compatible way.
 
+$SOURCE_RELEASE_SECTION
+
 ## Maintainer Checks
 
 This release was prepared by the checked ad-hoc app pipeline:
@@ -281,3 +339,6 @@ echo "  artifact: $ARTIFACT"
 echo "  checksum: $SOURCE_SHA"
 echo "  manifest: $SOURCE_MANIFEST"
 echo "  notes:    $NOTES"
+if [ -n "$SOURCE_ARCHIVE" ]; then
+  echo "  cmux source: $SOURCE_ARCHIVE"
+fi

@@ -562,3 +562,22 @@ spin_cmux_open_project_board() {
       --workspace "$workspace" --direction right --focus false >/dev/null 2>&1
   fi
 }
+
+spin_cmux_reconcile_managed_floors() {
+  local coordinator id workspace surface
+  coordinator="$(spin_cmux_ensure_coordinator_floor false 2>/dev/null || true)"
+  if [[ -n "$coordinator" ]]; then
+    spin_cmux_open_coordinator_board "$coordinator" >/dev/null 2>&1 || true
+  fi
+
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    workspace="$(spin_cmux_ensure_project_floor "$id" false 2>/dev/null || true)"
+    [[ -n "$workspace" ]] || continue
+    surface="$(spin_cmux_terminal_surface "$workspace")"
+    spin_cmux_open_project_board "$workspace" "$id" "$surface" >/dev/null 2>&1 || true
+  done < <(spin_cmux_project_floor_ids)
+
+  spin_cmux_prune_stale_managed_workspaces >/dev/null 2>&1 || true
+  [[ -n "$coordinator" ]]
+}

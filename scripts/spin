@@ -296,7 +296,7 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"
     echo; echo "${c_bold}Driver${c_off}"
     if [[ -f "$RUN_DIR/STOP" ]]; then echo "  ${c_yel}⏸ paused (STOP flag) — spin start to resume${c_off}"
-    elif [[ -f "$RUN_DIR/.workspace-ceo-tick.lock" ]] && kill -0 "$(cat "$RUN_DIR/.workspace-ceo-tick.lock" 2>/dev/null)" 2>/dev/null; then
+    elif spin_locked_process_running "$RUN_DIR/.workspace-ceo-tick.lock" "$ROOT/scripts/workspace-ceo-tick.sh"; then
       echo "  ${c_grn}● running${c_off} (PID $(cat "$RUN_DIR/.workspace-ceo-tick.lock"))"
     else echo "  ${c_red}○ down${c_off} — spin start"; fi
     echo

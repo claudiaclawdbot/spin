@@ -52,4 +52,6 @@ jobs:
             dist/release/*.dmg
             dist/release/*.dmg.sha256
             dist/release/*.manifest
+            dist/release/*.tar.gz
+            dist/release/*.tar.gz.sha256
             dist/release/*-open-source-tester-notes.md

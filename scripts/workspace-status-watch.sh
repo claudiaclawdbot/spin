@@ -9,10 +9,16 @@
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/spin-runtime.sh"
+source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 RUN_DIR="$ROOT/org/ceo/runs"
 LOCK="$RUN_DIR/.status-watch.lock"
 STOP="$RUN_DIR/STATUS_WATCH_STOP"
 INTERVAL="${1:-6}"
+FLOOR_RECONCILE_SECONDS="${SPIN_FLOOR_RECONCILE_SECONDS:-60}"
+FLOOR_RECONCILE_GRACE_SECONDS="${SPIN_FLOOR_RECONCILE_GRACE_SECONDS:-15}"
+case "$FLOOR_RECONCILE_SECONDS" in ''|*[!0-9]*) FLOOR_RECONCILE_SECONDS=60 ;; esac
+case "$FLOOR_RECONCILE_GRACE_SECONDS" in ''|*[!0-9]*) FLOOR_RECONCILE_GRACE_SECONDS=15 ;; esac
+NEXT_FLOOR_RECONCILE=$(( $(date +%s) + FLOOR_RECONCILE_GRACE_SECONDS ))
 mkdir -p "$RUN_DIR"
 rm -f "$STOP"
 CEO_WS="$(node -e 'const fs=require("fs"),f=process.argv[1];try{const h=JSON.parse(fs.readFileSync(f,"utf8"));process.stdout.write(h.workspace_ceo?.cmux_workspace||"workspace:1")}catch{process.stdout.write("workspace:1")}' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null)"
@@ -30,6 +36,16 @@ trap 'rm -f "$LOCK"; exit 0' INT TERM
 
 while true; do
   [[ -f "$STOP" ]] && { echo "[status-watch] STOP flag — exiting." >&2; rm -f "$STOP"; exit 0; }
+
+  now_epoch="$(date +%s)"
+  if (( FLOOR_RECONCILE_SECONDS > 0 && now_epoch >= NEXT_FLOOR_RECONCILE )); then
+    NEXT_FLOOR_RECONCILE=$(( now_epoch + FLOOR_RECONCILE_SECONDS ))
+    spin_prepare_cmux_environment
+    if CMUX_QUIET=1 spin_cmd cmux ping >/dev/null 2>&1; then
+      spin_cmux_reconcile_managed_floors >/dev/null 2>&1 || true
+    fi
+  fi
+
   bash "$ROOT/scripts/workspace-status.sh" 2>/dev/null || true
   bash "$ROOT/scripts/wiki-update.sh"       2>/dev/null || true   # keep wiki fresh alongside WORKSPACE_STATUS
 
@@ -46,7 +62,7 @@ while true; do
     # deliberate pause (this once left the driver down ~20h silently). Escalate.
     age_s=$(( $(date +%s) - $(stat -f %m "$RUN_DIR/STOP" 2>/dev/null || stat -c %Y "$RUN_DIR/STOP" 2>/dev/null || echo "$(date +%s)") ))
     (( age_s > STALE_STOP_HRS * 3600 )) && DSTATE="paused-stale"
-  elif dpid="$(cat "$DRIVER_LOCK" 2>/dev/null)" && [[ -n "$dpid" ]] && kill -0 "$dpid" 2>/dev/null; then DSTATE="up"
+  elif spin_locked_process_running "$DRIVER_LOCK" "$ROOT/scripts/workspace-ceo-tick.sh"; then DSTATE="up"
   else DSTATE="down"; fi
   PREV_DSTATE="$(cat "$DRIVER_STATE_F" 2>/dev/null || echo unknown)"
   if [[ "$DSTATE" != "$PREV_DSTATE" ]]; then

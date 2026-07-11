@@ -150,6 +150,39 @@ copy_app_icon_if_present() {
   echo "  bundled app icon from $icon"
 }
 
+stamp_outer_app_version() {
+  local version short_version build_number
+  version="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+  short_version="${version%%-*}"
+  build_number="${SPIN_BUILD_NUMBER:-}"
+  if [ -z "$build_number" ]; then
+    build_number="$(printf '%s' "$version" | sed -n 's/.*\.\([0-9][0-9]*\)$/\1/p')"
+  fi
+  [ -n "$build_number" ] || build_number=1
+  [[ "$short_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "  error: VERSION must start with a three-part numeric app version: $version" >&2
+    return 1
+  }
+  [[ "$build_number" =~ ^[0-9]+$ ]] || {
+    echo "  error: SPIN_BUILD_NUMBER must be numeric: $build_number" >&2
+    return 1
+  }
+  node - "$CONTENTS/Info.plist" "$short_version" "$build_number" <<'NODE'
+const fs = require('fs');
+const [plist, shortVersion, buildNumber] = process.argv.slice(2);
+let xml = fs.readFileSync(plist, 'utf8');
+function setString(key, value) {
+  const pattern = new RegExp(`(<key>${key}</key>\\s*<string>)[\\s\\S]*?(</string>)`);
+  if (!pattern.test(xml)) throw new Error(`missing ${key} in ${plist}`);
+  xml = xml.replace(pattern, `$1${value}$2`);
+}
+setString('CFBundleShortVersionString', shortVersion);
+setString('CFBundleVersion', buildNumber);
+fs.writeFileSync(plist, xml);
+NODE
+  echo "  stamped app version $short_version ($build_number) from runtime $version"
+}
+
 cmux_source_commit_from_manifest() {
   local manifest="$1"
   [ -f "$manifest" ] || return 1
@@ -242,6 +275,7 @@ rm -rf "$OUT"
 mkdir -p "$MACOS" "$RES/bin" "$RES/app/cmux" "$RES/assets" "$RES/licenses"
 
 cp "$ROOT/app/macos/Info.plist" "$CONTENTS/Info.plist"
+stamp_outer_app_version
 cp "$ROOT/app/macos/SPIN" "$MACOS/SPIN"
 chmod +x "$MACOS/SPIN"
 

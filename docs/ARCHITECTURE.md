@@ -43,6 +43,8 @@ hard-fails, not the main product identity.
    - spawn each `queued` job in `org/AGENT_QUEUE.json` as a **detached background
      process** with its own PID file and log under `org/jobs/`;
    - enforce one-job-per-project and a global parallelism cap (default 3);
+   - enforce a per-job process-tree budget (default 4096 MB RSS and 32
+     processes), killing the detached group and recording the exact violation;
    - block jobs whose `project_id` isn't registered in `org/OMP_HARNESS.json`
      or whose type isn't in that project's `allowed_job_types`;
    - update cmux status chips (display only — never executes through cmux).
@@ -133,9 +135,12 @@ export SPIN_OMP_SMOL_FALLBACKS="openai-codex/gpt-5.1-codex-mini openrouter/~anth
 | duplicate driver loops (quota burn) | lock file claimed atomically at startup; a second copy sees it and exits |
 | hung brain | per-run `timeout`, loop continues |
 | agent exits 0 having done nothing | post-run content diff → one retry on claude |
-| driver dies / forgotten STOP file | status-watch daemon paints a red chip + notification; `spin` shows ● / ○ |
+| driver/status/wiki service dies | launchd/systemd independently restarts all three; the board verifies PID plus expected command |
+| restored cmux session has stale/missing floors | status-watch periodically reconciles the Coordinator, active project floors, and boards |
+| agent or test runner consumes the machine | process-group RSS/count governor kills the job and records a durable failure reason |
+| forgotten STOP file | status-watch remains alive and paints a paused/stale chip + notification |
 | owner pauses the org | `touch org/ceo/runs/STOP` (resume: `rm`) — explicit, visible state |
-| machine sleeps | ticks simply don't run; loop resumes on wake (use `caffeinate`/a server for 24/7) |
+| machine sleeps or reboots | supervised services resume on login/wake and regenerate visible process state |
 
 ## cmux and live delegation
 

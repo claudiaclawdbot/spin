@@ -82,10 +82,15 @@ close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
   hours is forgotten (it once silently paused the driver ~20h). The watchdog now
   escalates a STOP older than 2h (`SPIN_STALE_STOP_HOURS`) with an orange chip +
   notification, instead of a quiet "paused" forever.
-- ~~**Durability: the driver stays up**~~ — `spin service` installs a supervisor
-  (launchd on macOS, systemd-user on Linux) that respawns the driver on
-  crash/pane-close/wake and pauses cleanly on the STOP file. (Largely closes the
-  old "machine-sleep awareness" item — it resumes on wake.)
+- ~~**Durability: the control plane stays truthful**~~ — `spin service` installs
+  independent launchd/systemd supervision for the driver, live status roll-up,
+  and wiki watcher. The driver regenerates the board at startup, status checks
+  verify PID plus command identity, and the status service reconciles restored
+  cmux floors after login/reboot while still showing an intentional STOP.
+- ~~**Bounded detached jobs**~~ — every background project job has a process-tree
+  budget (default 4096 MB RSS / 32 processes). A breach kills the detached group,
+  writes a `.resource` artifact, and fails the queue item with an actionable
+  reason. Limits remain configurable for intentionally heavy jobs.
 - ~~**cmux is the GUI**~~ — `spin up` opens the Coordinator floor + driver + boards;
   `spin new-project <id> "<goal>"` registers a project AND spawns its cmux floor
   (a sidebar tab) with its own omp orchestrator; the Coordinator creates projects

@@ -84,7 +84,10 @@ source and license posture are public.
 
 Public SPIN.app binaries derived from cmux must therefore be distributed in a
 GPL-compatible way. Keep `licenses/THIRD_PARTY_NOTICES.md` in source and binary
-releases.
+releases. The checked public workflow also packages the exact modified cmux
+checkout as `SPIN-<version>-cmux-corresponding-source-<commit>.tar.gz`; do not
+publish the app artifact without that source asset unless a commercial cmux
+license has replaced the GPL distribution path.
 
 ## Distribution Posture
 

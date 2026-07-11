@@ -112,3 +112,16 @@ is **append-only** where history matters. The brain's prompt now forbids direct
 JSON edits; its only freeform writes are receipts and project-prompt drafts. The
 LLM still decides *what* to do — it just can no longer corrupt the ledger doing
 it. Bonus: every mutation is now a shell command you can test, log, and replay.
+
+## 11. Supervise the whole visible truth, not only the expensive loop
+
+A reboot restored cmux windows while only the driver LaunchAgent returned. The
+status document still showed the pre-reboot PID as green because the process that
+would refresh it was down. A running backend with a stale cockpit is not healthy.
+
+**v4 hardening:** `spin service` owns the driver, status roll-up, and wiki watcher
+as separate supervised services. Health requires a live PID with the expected
+command, the driver refreshes the board immediately on startup, and the status
+service reconciles missing cmux floors. Detached jobs also carry RSS/process
+budgets so a test runner cannot consume the workstation without leaving a clear
+failure receipt.

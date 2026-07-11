@@ -253,6 +253,7 @@ spin ask "<q>"       ask the Navigator an async question
 spin delegate --wait <project> "<task>"
 spin start | stop    run or pause the Navigator loop
 spin up | down       launch or tear down cmux floors and daemons
+spin service status  verify driver, live status, and wiki supervision
 spin doctor          health check
 ```
 

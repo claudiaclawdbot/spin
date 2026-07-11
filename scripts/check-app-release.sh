@@ -234,6 +234,12 @@ grep -q '"showPullRequests": false' "$RES/app/cmux/config/cmux.json" || fail "bu
 grep -q '<string>SPIN</string>' "$APP/Contents/Info.plist" || fail "app identity is not SPIN"
 outer_bundle_id="$(plist_string "$APP/Contents/Info.plist" CFBundleIdentifier || true)"
 [ "$outer_bundle_id" = "dev.spin.launcher" ] || fail "outer launcher bundle id is not dev.spin.launcher: ${outer_bundle_id:-missing}"
+runtime_version="$(tr -d '[:space:]' < "$RUNTIME/VERSION")"
+runtime_short_version="${runtime_version%%-*}"
+outer_short_version="$(plist_string "$APP/Contents/Info.plist" CFBundleShortVersionString || true)"
+outer_build_number="$(plist_string "$APP/Contents/Info.plist" CFBundleVersion || true)"
+[ "$outer_short_version" = "$runtime_short_version" ] || fail "outer app version $outer_short_version does not match runtime $runtime_version"
+case "$outer_build_number" in ''|*[!0-9]*) fail "outer app build number is not numeric: ${outer_build_number:-missing}" ;; esac
 ok "app identity"
 
 [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] || fail "node not found for release check; set SPIN_RELEASE_CHECK_NODE"

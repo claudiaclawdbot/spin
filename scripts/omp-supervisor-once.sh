@@ -39,9 +39,17 @@ const harness   = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const now       = new Date().toISOString();
 const jobsDir   = path.join(root, 'org', 'jobs');
 const MAX_PAR   = parseInt(process.env.OMP_MAX_PARALLEL || '3', 10);
+const DEFAULT_JOB_MAX_RSS_MB = parsePositiveInt(process.env.OMP_JOB_MAX_RSS_MB, 4096);
+const DEFAULT_JOB_MAX_PROCESSES = parsePositiveInt(process.env.OMP_JOB_MAX_PROCESSES, 32);
+const RESOURCE_CHECK_INTERVAL = parsePositiveInt(process.env.OMP_RESOURCE_CHECK_INTERVAL, 5);
 const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
 const queueLock = path.join(root, 'org', 'ceo', 'runs', '.org-queue.lock');
 let queueLockHeld = false;
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function acquireQueueLock() {
   fs.mkdirSync(path.dirname(queueLock), { recursive: true });
@@ -134,6 +142,13 @@ function readExitCode(job) {
   return Number.isNaN(rc) ? null : rc;
 }
 
+function readResourceViolation(job) {
+  const file = path.join(jobsDir, `${job.id}.resource`);
+  if (!fs.existsSync(file)) return null;
+  const detail = fs.readFileSync(file, 'utf8').trim();
+  return detail || 'Resource limit exceeded; inspect the job log.';
+}
+
 function readHeartbeat(job) {
   const relative = job.heartbeat || `org/jobs/${job.id}.heartbeat`;
   const file = path.join(root, relative);
@@ -167,7 +182,7 @@ function markRunningJobs() {
         // Legacy job or PID file was never written → preserve old behavior.
         finishJob(job, 0, job.result || 'PID file not found; inspect project receipts.');
       } else {
-        finishJob(job, rc);
+        finishJob(job, rc, readResourceViolation(job));
       }
       continue;
     }
@@ -193,7 +208,7 @@ function markRunningJobs() {
 
     // Process dead → done; trust the wrapper's recorded exit code when present.
     const rc = readExitCode(job);
-    finishJob(job, rc === null ? 0 : rc);
+    finishJob(job, rc === null ? 0 : rc, readResourceViolation(job));
     try { fs.unlinkSync(pidFile); } catch {}
   }
 }
@@ -309,11 +324,15 @@ function dispatchQueuedJobs() {
     const pidFile = path.join(jobsDir, `${job.id}.pid`);
     const rcFile = path.join(jobsDir, `${job.id}.exit`);
     const heartbeatFile = path.join(jobsDir, `${job.id}.heartbeat`);
+    const resourceFile = path.join(jobsDir, `${job.id}.resource`);
+    const maxRssMb = parsePositiveInt(job.max_rss_mb, DEFAULT_JOB_MAX_RSS_MB);
+    const maxProcesses = parsePositiveInt(job.max_processes, DEFAULT_JOB_MAX_PROCESSES);
 
     let outFd, spawnedPid;
     try {
       try { fs.unlinkSync(rcFile); } catch {}
       try { fs.unlinkSync(heartbeatFile); } catch {}
+      try { fs.unlinkSync(resourceFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
       const childEnv = Object.assign(
         {},
@@ -326,6 +345,10 @@ function dispatchQueuedJobs() {
           OMP_RC_FILE: rcFile,
           OMP_HEARTBEAT_FILE: heartbeatFile,
           OMP_HEARTBEAT_INTERVAL: process.env.OMP_HEARTBEAT_INTERVAL || '30',
+          OMP_RESOURCE_FILE: resourceFile,
+          OMP_RESOURCE_CHECK_INTERVAL: String(RESOURCE_CHECK_INTERVAL),
+          OMP_JOB_MAX_RSS_MB: String(maxRssMb),
+          OMP_JOB_MAX_PROCESSES: String(maxProcesses),
           SPIN_PROJECT_AGENT: path.join(root, 'scripts', 'project-ceo-agent.sh'),
         },
         modelEnvFor(job.type),
@@ -338,6 +361,34 @@ function dispatchQueuedJobs() {
         '  date -u "+%Y-%m-%dT%H:%M:%SZ" > "$heartbeat_tmp"',
         '  mv "$heartbeat_tmp" "$OMP_HEARTBEAT_FILE"',
         '}',
+        'resource_monitor() {',
+        '  max_rss_kb=$((OMP_JOB_MAX_RSS_MB * 1024))',
+        '  while kill -0 "$agent_pid" 2>/dev/null; do',
+        '    sleep "$OMP_RESOURCE_CHECK_INTERVAL"',
+        '    kill -0 "$agent_pid" 2>/dev/null || break',
+        "    stats=\"$(ps -axo pgid=,rss= 2>/dev/null | awk -v group=\"$$\" '$1 == group { rss += $2; count += 1 } END { print rss + 0, count + 0 }')\"",
+        '    read -r rss_kb process_count <<< "$stats"',
+        '    reason=""',
+        '    if (( rss_kb > max_rss_kb )); then',
+        '      reason="RSS $((rss_kb / 1024))MB exceeded ${OMP_JOB_MAX_RSS_MB}MB"',
+        '    fi',
+        '    if (( process_count > OMP_JOB_MAX_PROCESSES )); then',
+        '      reason="${reason:+$reason; }process count $process_count exceeded $OMP_JOB_MAX_PROCESSES"',
+        '    fi',
+        '    if [[ -n "$reason" ]]; then',
+        '      detail="Resource limit exceeded: $reason. Process group killed; lower test workers or raise the explicit job limit."',
+        '      resource_tmp="${OMP_RESOURCE_FILE}.tmp.$$"',
+        '      rc_tmp="${OMP_RC_FILE}.tmp.$$"',
+        '      printf "%s\\n" "$detail" > "$resource_tmp"',
+        '      mv "$resource_tmp" "$OMP_RESOURCE_FILE"',
+        '      printf "137\\n" > "$rc_tmp"',
+        '      mv "$rc_tmp" "$OMP_RC_FILE"',
+        '      printf "[resource] %s\\n" "$detail" >&2',
+        '      kill -KILL -- "-$$" 2>/dev/null || kill -KILL "$agent_pid" 2>/dev/null || true',
+        '      exit 137',
+        '    fi',
+        '  done',
+        '}',
         '"$SPIN_PROJECT_AGENT" "$OMP_PROJECT_ID" &',
         'agent_pid=$!',
         'heartbeat_once',
@@ -349,10 +400,13 @@ function dispatchQueuedJobs() {
         '  done',
         ') &',
         'heartbeat_pid=$!',
+        'resource_monitor &',
+        'resource_pid=$!',
         'wait "$agent_pid"',
         'rc=$?',
-        'kill "$heartbeat_pid" 2>/dev/null || true',
+        'kill "$heartbeat_pid" "$resource_pid" 2>/dev/null || true',
         'wait "$heartbeat_pid" 2>/dev/null || true',
+        'wait "$resource_pid" 2>/dev/null || true',
         'heartbeat_once',
         'printf "%s\\n" "$rc" > "$OMP_RC_FILE"',
         'exit "$rc"',
@@ -378,6 +432,7 @@ function dispatchQueuedJobs() {
     job.started_at = now;
     job.log        = `org/jobs/${job.id}.log`;
     job.heartbeat  = `org/jobs/${job.id}.heartbeat`;
+    job.resource_limits = { max_rss_mb: maxRssMb, max_processes: maxProcesses };
     // Persist before any display work so a crash cannot leave a live detached
     // process represented as queued and eligible for duplicate dispatch.
     persistQueue();

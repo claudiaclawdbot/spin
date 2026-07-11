@@ -194,6 +194,8 @@ function buildManifest(previous = {}) {
     product: {
       name: 'SPIN',
       bundleIdentifier: plistString(appInfo, 'CFBundleIdentifier'),
+      version: plistString(appInfo, 'CFBundleShortVersionString'),
+      build: plistString(appInfo, 'CFBundleVersion'),
       appManifestPath: 'Resources/app/spin-app.json',
       appManifestSha256: exists(appManifestPath) ? sha256(appManifestPath) : null,
       entrypoint: appManifest.firstLaunch && appManifest.firstLaunch.entrypoint ? appManifest.firstLaunch.entrypoint : null,
