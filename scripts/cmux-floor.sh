@@ -88,7 +88,11 @@ it's the human's at-a-glance view of this floor."
 
 SYS_CONTENT=""
 [[ -f "$SYS" ]] && SYS_CONTENT="$(cat "$SYS")"
+COMPUTER_USE_INSTR="$(spin_omp_computer_use_prompt)"
 SYS_CONTENT="${SYS_CONTENT}${BOARD_INSTR}"
+[[ -n "$COMPUTER_USE_INSTR" ]] && SYS_CONTENT="${SYS_CONTENT}
+
+$COMPUTER_USE_INSTR"
 SYSARG=(--append-system-prompt "$SYS_CONTENT")
 
 clear

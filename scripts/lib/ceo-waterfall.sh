@@ -74,6 +74,9 @@ _emit_yaml_list() {
 # credentials, per-account usage backoff, and model fallback at runtime; SPIN
 # only declares the roles/chains it wants for coordinator/project work.
 ensure_spin_omp_config() {
+  if [[ "${SPIN_OMP_MCP_BOOTSTRAP:-1}" != "0" ]] && command -v node >/dev/null 2>&1; then
+    node "$CEO_ROOT/scripts/omp-mcp-bootstrap.js" repair --quiet >/dev/null 2>&1 || true
+  fi
   mkdir -p "$(dirname "$SPIN_OMP_CONFIG")" 2>/dev/null || true
 
   local default_model smol_model slow_model plan_model task_model
@@ -122,6 +125,11 @@ ensure_spin_omp_config() {
   } > "$tmp"
   mv "$tmp" "$SPIN_OMP_CONFIG"
   echo "$SPIN_OMP_CONFIG"
+}
+
+spin_omp_computer_use_prompt() {
+  command -v node >/dev/null 2>&1 || return 0
+  node "$CEO_ROOT/scripts/omp-mcp-bootstrap.js" prompt 2>/dev/null || true
 }
 
 format_epoch() {
@@ -288,9 +296,13 @@ run_agent() {
       echo "$prompt" | gemini --model "${MODEL:-$CEO_GEMINI_MODEL}" > "$log" 2>&1 || rc=$?
       ;;
     omp)
-      local omp_config
+      local omp_config computer_use_prompt
+      local omp_args=()
       omp_config="$(ensure_spin_omp_config)"
-      spin_cmd omp -p --config "$omp_config" --cwd "$CEO_ROOT" --no-session "$prompt" > "$log" 2>&1 || rc=$?
+      computer_use_prompt="$(spin_omp_computer_use_prompt)"
+      omp_args=(-p --config "$omp_config" --cwd "$CEO_ROOT" --no-session)
+      [[ -n "$computer_use_prompt" ]] && omp_args+=(--append-system-prompt "$computer_use_prompt")
+      spin_cmd omp "${omp_args[@]}" "$prompt" > "$log" 2>&1 || rc=$?
       ;;
     ollama)
       echo "$prompt" | ollama run "${MODEL:-$CEO_OLLAMA_MODEL}" > "$log" 2>&1 || rc=$?

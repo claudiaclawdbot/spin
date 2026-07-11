@@ -16,6 +16,21 @@ source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 spin_prepare_cmux_environment
 spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or install cmux for the development visual interface. Headless: spin start" || exit 1
 
+if command -v node >/dev/null 2>&1; then
+  bridge_status="$(node "$ROOT/scripts/omp-mcp-bootstrap.js" repair --json 2>/dev/null || true)"
+  bridge_state="$(printf '%s' "$bridge_status" | node -e '
+let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () => {
+  try { process.stdout.write(JSON.parse(raw).status || "error"); } catch { process.stdout.write("error"); }
+});
+' 2>/dev/null)"
+  case "$bridge_state" in
+    ready|custom) echo "  ${c_g}✓${c_o} OMP computer-use bridge ready" ;;
+    custom-disabled) echo "  ${c_d}· custom OMP computer-use bridge disabled${c_o}" ;;
+    unavailable) echo "  ${c_d}· optional OMP computer-use bridge not installed${c_o}" ;;
+    *)           echo "  ${c_d}· OMP computer-use bridge needs attention ${c_o}(run: spin doctor)" ;;
+  esac
+fi
+
 echo "${c_v}Opening the SPIN interface…${c_o}"
 
 seed_spin_navigator_sidebar() {

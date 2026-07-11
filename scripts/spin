@@ -291,6 +291,22 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     echo
     app_health_rc=0
     node "$ROOT/scripts/spin-app-health.js" || app_health_rc=$?
+    if command -v node >/dev/null 2>&1; then
+      bridge_json="$(node "$ROOT/scripts/omp-mcp-bootstrap.js" status --json 2>/dev/null || true)"
+      bridge_state="$(printf '%s' "$bridge_json" | node -e '
+let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () => {
+  try { process.stdout.write(JSON.parse(raw).status || "error"); } catch { process.stdout.write("error"); }
+});
+' 2>/dev/null)"
+      case "$bridge_state" in
+        ready)       echo "  [OK] OMP computer-use bridge: node_repl plugin route ready" ;;
+        custom)      echo "  [OK] OMP computer-use bridge: custom executable configured" ;;
+        custom-disabled) echo "  [SKIP] OMP computer-use bridge: custom executable is disabled" ;;
+        repairable)  echo "  [WARN] OMP computer-use bridge: repairable (run: spin up)" ;;
+        unavailable) echo "  [SKIP] OMP computer-use bridge: optional client not installed" ;;
+        *)           echo "  [FAIL] OMP computer-use bridge: invalid or unreadable MCP config"; app_health_rc=1 ;;
+      esac
+    fi
     echo "  direct fallback CLIs:"; ac=0
     for a in claude codex gemini ollama; do command -v "$a" >/dev/null 2>&1 && { echo "    ${c_grn}✓${c_off} $a"; ac=$((ac+1)); }; done
     [[ $ac -eq 0 ]] && echo "    ${c_yel}✗ none found — install claude, codex, gemini, or ollama${c_off}"

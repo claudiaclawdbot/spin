@@ -18,7 +18,7 @@ mkdir -p "$KIT"
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
       scripts/lib/cmux-floor-layout.sh \
       scripts/lib/human-queue-summary.js \
-      scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js \
+      scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
       docs/MACOS_TESTER_INSTALL.md docs/PUBLIC_BETA_READINESS.md docs/assets \
@@ -161,6 +161,7 @@ node --check scripts/spin-app-health.js >/dev/null
 node --check scripts/app-compatibility.js >/dev/null
 node --check scripts/spin-app-update.js >/dev/null
 node --check scripts/spin-app-updates.js >/dev/null
+node --check scripts/omp-mcp-bootstrap.js >/dev/null
 node --check scripts/lib/spin-runtime.js >/dev/null
 node --check scripts/lib/human-queue-summary.js >/dev/null
 mkdir -p "$TMP/installed-runtime-home/Applications/SPIN.app/Contents/Resources/bin"
@@ -204,6 +205,7 @@ grep -q 'Download SPIN.app for Mac' README.md
 grep -q 'Source / CLI Setup' README.md
 grep -q 'v4.1.0-beta.2' README.md
 grep -q 'PUBLIC_BETA_READINESS.md' README.md
+grep -q 'node_repl.*plugin wrapper' README.md
 grep -q 'docs/MACOS_TESTER_INSTALL.md' README.md
 grep -q 'docs/assets/spin-public-beta-demo.gif' README.md
 test -s docs/assets/spin-public-beta-demo.gif
@@ -841,6 +843,59 @@ if grep -q 'send --workspace workspace:3' "$TMP/drift-cmux.calls"; then
 fi
 grep -q '"cmux_workspace": "workspace:9"' org/OMP_HARNESS.json
 
+# A matching terminal title and stale OMP scrollback are not proof of a live
+# floor when cmux exposes a TTY and the recorded process is dead.
+STALEBIN="$TMP/stalebin"
+mkdir -p "$STALEBIN" "$KIT/org/ceo/runs/floors"
+node - "$KIT/org/OMP_HARNESS.json" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+harness.projects['example-app'].cmux_workspace = 'workspace:15';
+fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+NODE
+cat > "$KIT/org/ceo/runs/floors/example-app.pid" <<'EOF'
+pid=999999
+target=example-app
+tty=/dev/ttys015
+EOF
+cat > "$STALEBIN/cmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP/stale-cmux.calls"
+if [[ "\${1:-}" == "--json" && "\${2:-}" == "list-workspaces" ]]; then
+  cat <<JSON
+{"workspaces":[{"ref":"workspace:15","title":"example-app","current_directory":"$KIT/org/projects/example-app"}]}
+JSON
+  exit 0
+fi
+case "\${1:-}" in
+  tree) echo 'surface:15 [terminal] "π: example-app" [selected] tty=ttys015'; exit 0 ;;
+  read-screen) echo 'OMP agent IDLE until you type'; exit 0 ;;
+  send|send-key) exit 0 ;;
+  new-workspace) echo 'workspace:99'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$STALEBIN/cmux"
+PATH="$STALEBIN:$PATH" SPIN_ROOT="$KIT" bash -c '
+  ROOT="$SPIN_ROOT"
+  source scripts/lib/spin-runtime.sh
+  source scripts/lib/cmux-floor-layout.sh
+  spin_cmux_ensure_project_floor example-app false
+' > "$TMP/stale-floor.out"
+if ! grep -q 'workspace:15' "$TMP/stale-floor.out"; then
+  echo "stale matching floor was not restarted in place" >&2
+  sed -n '1,80p' "$TMP/stale-floor.out" >&2
+  sed -n '1,160p' "$TMP/stale-cmux.calls" >&2
+  exit 1
+fi
+grep -q 'send --workspace workspace:15 --surface surface:15' "$TMP/stale-cmux.calls"
+grep -q 'send-key --workspace workspace:15 --surface surface:15 enter' "$TMP/stale-cmux.calls"
+if grep -q 'new-workspace' "$TMP/stale-cmux.calls"; then
+  echo "stale matching floor was duplicated instead of restarted in place" >&2
+  exit 1
+fi
+
 RECONCILEBIN="$TMP/reconcilebin"
 mkdir -p "$RECONCILEBIN"
 cat > "$RECONCILEBIN/cmux" <<EOF
@@ -954,7 +1009,99 @@ exit 0
 EOF
 chmod +x "$FAKEBIN/omp"
 
-PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" SPIN_OMP_DEFAULT_FALLBACKS= CEO_OMP_MODEL=openrouter/test-model bash -c "
+MCP_NODE_REPL="$TMP/computer-use-fixture/node_repl"
+MCP_PLUGIN_ROOT="$TMP/computer-use-fixture/plugin"
+MCP_FIXTURE_CONFIG="$TMP/omp-agent/mcp.json"
+mkdir -p "$MCP_PLUGIN_ROOT/scripts" "$MCP_PLUGIN_ROOT/skills/computer-use" \
+  "$(dirname "$MCP_FIXTURE_CONFIG")"
+cat > "$MCP_NODE_REPL" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$MCP_NODE_REPL"
+: > "$MCP_PLUGIN_ROOT/scripts/computer-use-client.mjs"
+: > "$MCP_PLUGIN_ROOT/skills/computer-use/SKILL.md"
+cat > "$MCP_FIXTURE_CONFIG" <<'EOF'
+{
+  "mcpServers": {
+    "keep-me": { "type": "stdio", "command": "/usr/bin/true" },
+    "computer-use": { "type": "stdio", "command": "./broken-relative-client" }
+  }
+}
+EOF
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
+  node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-mcp-repair.json"
+node - "$MCP_FIXTURE_CONFIG" "$TMP/omp-mcp-repair.json" <<'NODE'
+const fs = require('fs');
+const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const result = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+if (config.mcpServers['keep-me'].command !== '/usr/bin/true') process.exit(1);
+if (config.mcpServers['computer-use']) process.exit(1);
+if (!config.disabledServers.includes('computer-use')) process.exit(1);
+if (result.status !== 'ready' || result.route !== 'node_repl' || !result.changed) process.exit(1);
+NODE
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  mcp_config_mode="$(stat -f '%Lp' "$MCP_FIXTURE_CONFIG")"
+else
+  mcp_config_mode="$(stat -c '%a' "$MCP_FIXTURE_CONFIG")"
+fi
+test "$mcp_config_mode" = "600"
+before_mcp_hash="$(shasum -a 256 "$MCP_FIXTURE_CONFIG" | awk '{print $1}')"
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
+  node scripts/omp-mcp-bootstrap.js repair --quiet
+after_mcp_hash="$(shasum -a 256 "$MCP_FIXTURE_CONFIG" | awk '{print $1}')"
+test "$before_mcp_hash" = "$after_mcp_hash"
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" \
+  node scripts/omp-mcp-bootstrap.js prompt > "$TMP/omp-mcp-prompt.txt"
+grep -q 'connected node_repl MCP' "$TMP/omp-mcp-prompt.txt"
+grep -q "$MCP_PLUGIN_ROOT/scripts/computer-use-client.mjs" "$TMP/omp-mcp-prompt.txt"
+grep -q 'setupComputerUseRuntime' "$TMP/omp-mcp-prompt.txt"
+cat > "$TMP/omp-disabled-mcp.json" <<'EOF'
+{ "disabledServers": ["computer-use"], "mcpServers": {} }
+EOF
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$TMP/omp-disabled-mcp.json" \
+  node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-disabled-result.json"
+node -e 'const r=require(process.argv[1]); if(r.status!=="ready"||r.route!=="node_repl"||r.changed) process.exit(1)' "$TMP/omp-disabled-result.json"
+MCP_CUSTOM_CLIENT="$TMP/custom-computer-use"
+cat > "$MCP_CUSTOM_CLIENT" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$MCP_CUSTOM_CLIENT"
+cat > "$TMP/omp-custom-mcp.json" <<EOF
+{ "mcpServers": { "computer-use": { "command": "$MCP_CUSTOM_CLIENT", "args": ["serve"] } } }
+EOF
+before_custom_hash="$(shasum -a 256 "$TMP/omp-custom-mcp.json" | awk '{print $1}')"
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$TMP/omp-custom-mcp.json" \
+  node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-custom-result.json"
+after_custom_hash="$(shasum -a 256 "$TMP/omp-custom-mcp.json" | awk '{print $1}')"
+test "$before_custom_hash" = "$after_custom_hash"
+node -e 'const r=require(process.argv[1]); if(r.status!=="custom"||r.changed) process.exit(1)' "$TMP/omp-custom-result.json"
+cat > "$TMP/omp-custom-disabled-mcp.json" <<EOF
+{ "disabledServers": ["computer-use"], "mcpServers": { "computer-use": { "command": "$MCP_CUSTOM_CLIENT", "args": ["serve"] } } }
+EOF
+before_custom_disabled_hash="$(shasum -a 256 "$TMP/omp-custom-disabled-mcp.json" | awk '{print $1}')"
+SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$TMP/omp-custom-disabled-mcp.json" \
+  node scripts/omp-mcp-bootstrap.js repair --json > "$TMP/omp-custom-disabled-result.json"
+after_custom_disabled_hash="$(shasum -a 256 "$TMP/omp-custom-disabled-mcp.json" | awk '{print $1}')"
+test "$before_custom_disabled_hash" = "$after_custom_disabled_hash"
+node -e 'const r=require(process.argv[1]); if(r.status!=="custom-disabled"||r.changed) process.exit(1)' "$TMP/omp-custom-disabled-result.json"
+HOME="$SMOKE_HOME" CODEX_HOME="$TMP/missing-codex" SPIN_NODE_REPL_BIN="$TMP/missing-node-repl" \
+  SPIN_COMPUTER_USE_PLUGIN_ROOT="$TMP/missing-plugin" SPIN_OMP_MCP_CONFIG="$TMP/missing-mcp.json" \
+  node scripts/omp-mcp-bootstrap.js status --json > "$TMP/omp-mcp-unavailable.json"
+node -e 'const r=require(process.argv[1]); if(r.status!=="unavailable"||r.changed) process.exit(1)' "$TMP/omp-mcp-unavailable.json"
+test ! -e "$TMP/missing-mcp.json"
+
+PATH="$FAKEBIN:$PATH" HOME="$SMOKE_HOME" SPIN_OMP_CONFIG="$TMP/spin-omp.yml" \
+  SPIN_NODE_REPL_BIN="$MCP_NODE_REPL" SPIN_COMPUTER_USE_PLUGIN_ROOT="$MCP_PLUGIN_ROOT" \
+  SPIN_OMP_MCP_CONFIG="$MCP_FIXTURE_CONFIG" SPIN_OMP_DEFAULT_FALLBACKS= \
+  CEO_OMP_MODEL=openrouter/test-model bash -c "
   set -euo pipefail
   source '$KIT/scripts/lib/ceo-waterfall.sh'
   run_agent omp 'hello' '$TMP/omp.log'
@@ -968,6 +1115,8 @@ fi
 grep -q 'fallbackChains:' "$TMP/spin-omp.yml"
 grep -q 'openai-codex/gpt-5-codex' "$TMP/spin-omp.yml"
 grep -q 'openrouter/test-model' "$TMP/spin-omp.yml"
+grep -q -- '--append-system-prompt' "$TMP/omp.args"
+grep -q 'setupComputerUseRuntime' "$TMP/omp.args"
 
 cat > "$TMP/internal-omp" <<EOF
 #!/usr/bin/env bash

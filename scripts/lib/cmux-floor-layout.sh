@@ -201,11 +201,12 @@ spin_cmux_floor_running() {
   if [[ -n "$target" ]] && spin_cmux_floor_marker_running "$target"; then
     [[ -z "$tty_name" ]] && return 0
     marker_tty="$(spin_cmux_floor_marker_value "$target" tty 2>/dev/null || true)"
-    [[ -n "$marker_tty" ]] || return 1
-    [[ "$(spin_cmux_normalize_tty "$marker_tty")" == "$(spin_cmux_normalize_tty "$tty_name")" ]]
-    return
+    if [[ -n "$marker_tty" ]] &&
+      [[ "$(spin_cmux_normalize_tty "$marker_tty")" == "$(spin_cmux_normalize_tty "$tty_name")" ]]; then
+      return 0
+    fi
   fi
-  [[ -z "$target" ]] && spin_cmux_floor_process_running_on_tty "$tty_name"
+  [[ -n "$tty_name" ]] && spin_cmux_floor_process_running_on_tty "$tty_name"
 }
 
 spin_cmux_terminal_surface() {
@@ -268,8 +269,10 @@ spin_cmux_floor_active_in_workspace() {
   surface="$(spin_cmux_terminal_surface "$workspace")"
   [[ -n "$surface" ]] || return 1
   tty_name="$(spin_cmux_surface_tty "$workspace" "$surface")"
-  if [[ -n "$tty_name" ]] && spin_cmux_floor_running "$target" "$tty_name"; then
-    return 0
+  if [[ -n "$tty_name" ]]; then
+    spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
+      spin_cmux_floor_running "$target" "$tty_name"
+    return
   fi
   spin_cmux_terminal_title_matches_target "$workspace" "$target" &&
     spin_cmux_floor_screen_active "$workspace" "$surface"
