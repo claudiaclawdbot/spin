@@ -1601,11 +1601,14 @@ SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
 SPIN_CMUX_BIN_SOURCE="$TMP/internal-cmux" \
 SPIN_OMP_BIN_SOURCE="$TMP/internal-omp" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
-node - "$TMP/SPIN.app/Contents/Info.plist" <<'NODE'
+node - "$TMP/SPIN.app/Contents/Info.plist" VERSION <<'NODE'
 const fs = require('fs');
 const xml = fs.readFileSync(process.argv[2], 'utf8');
+const version = fs.readFileSync(process.argv[3], 'utf8').trim();
 const value = key => (xml.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`)) || [])[1];
-if (value('CFBundleShortVersionString') !== '4.1.0' || value('CFBundleVersion') !== '3') process.exit(1);
+const shortVersion = (version.match(/^\d+\.\d+\.\d+/) || [])[0];
+const buildVersion = (version.match(/(?:beta|rc)[.-]?(\d+)/i) || [])[1] || '1';
+if (value('CFBundleShortVersionString') !== shortVersion || value('CFBundleVersion') !== buildVersion) process.exit(1);
 NODE
 if [[ "$(uname -s)" == "Darwin" ]]; then
   codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null

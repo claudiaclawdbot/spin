@@ -63,7 +63,7 @@ function queued(id, resourceClass = 'normal') {
 
 test('adaptive dispatch pauses before crossing the memory reserve', t => {
   const root = fixture(t, [queued('normal-job')]);
-  const result = run(root, { OMP_AVAILABLE_MEMORY_MB: '1024' });
+  const result = run(root, { OMP_ADAPTIVE_PARALLELISM: '1', OMP_AVAILABLE_MEMORY_MB: '1024' });
   assert.equal(result.status, 0, result.stderr);
   const queue = JSON.parse(fs.readFileSync(path.join(root, 'org', 'AGENT_QUEUE.json'), 'utf8'));
   assert.equal(queue.jobs[0].status, 'queued');
