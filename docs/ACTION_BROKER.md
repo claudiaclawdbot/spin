@@ -119,7 +119,9 @@ of treating `enabled_rules > 0` as authorization:
     "version": 1,
     "policy_rule_expiry": true,
     "rejects_expired_execution": true,
-    "recovers_expired_policy": true
+    "recovers_expired_policy": true,
+    "owner_marked_arm": true,
+    "one_shot_consume_before_spawn": true
   },
   "lease": {
     "schema_version": 1,
