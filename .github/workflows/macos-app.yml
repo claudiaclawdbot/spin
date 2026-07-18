@@ -13,9 +13,9 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -42,7 +42,7 @@ jobs:
           scripts/prepare-open-source-release.sh --artifact "$artifact"
 
       - name: Upload SPIN macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: spin-macos-ad-hoc
           if-no-files-found: error
