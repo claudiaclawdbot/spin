@@ -6,6 +6,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { summarizeHumanQueue } = require('./lib/human-queue-summary.js');
+const { processLockOwnerAlive, readProcessLock } = require('./lib/spin-runtime.js');
 
 const root    = process.argv[2] || process.env.OMP_ROOT || require("path").resolve(__dirname, "..");
 const ORG     = path.join(root, 'org');
@@ -31,8 +32,10 @@ let driver = `${c.yel}○ paused${c.off}`;
 if (fs.existsSync(path.join(RUNS, 'STOP'))) {
   driver = `${c.yel}○ STOPPED (kill switch set)${c.off}`;
 } else if (fs.existsSync(lock)) {
-  const pid = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10);
-  driver = pidAlive(pid) ? `${c.grn}● running${c.off} (PID ${pid})` : `${c.yel}○ not running${c.off}`;
+  const owner = readProcessLock(lock);
+  driver = owner && processLockOwnerAlive(lock)
+    ? `${c.grn}● running${c.off} (PID ${owner.pid})`
+    : `${c.yel}○ not running${c.off}`;
 } else {
   driver = `${c.yel}○ not running${c.off}`;
 }

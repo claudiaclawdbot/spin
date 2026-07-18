@@ -162,7 +162,7 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
     echo
     if spin_have_binary omp && spin_cmd omp --help >/dev/null 2>&1; then
       source "$ROOT/scripts/lib/ceo-waterfall.sh"
-      OMP_CONFIG="$(ensure_spin_omp_config)"
+      OMP_CONFIG="$(ensure_spin_omp_config "navigator-chat")" || exit $?
       CHAT_DIR="$HOME/.omp-ceo"; mkdir -p "$CHAT_DIR"; cd "$CHAT_DIR"
       OMP_BIN="$(spin_resolve_binary omp)"
       exec "$OMP_BIN" \
@@ -204,8 +204,8 @@ Use absolute paths or run commands from \"\$SPIN_ROOT\" when touching org files.
       echo "${c_grn}STOP flag cleared.${c_off}"
     fi
     LOCK="$RUN_DIR/.workspace-ceo-tick.lock"
-    if [[ -f "$LOCK" ]] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
-      echo "${c_yel}SPIN driver already running (PID $(cat "$LOCK")).${c_off}"; exit 0
+    if spin_locked_process_running "$LOCK" "$ROOT/scripts/workspace-ceo-tick.sh"; then
+      echo "${c_yel}SPIN driver already running (PID $(spin_lock_read_pid "$LOCK" 2>/dev/null || echo unknown)).${c_off}"; exit 0
     fi
     nohup "$ROOT/scripts/workspace-ceo-tick.sh" \
       >> "$RUN_DIR/workspace-ceo-driver.log" 2>&1 &
@@ -328,7 +328,7 @@ let raw=""; process.stdin.on("data", c => raw += c); process.stdin.on("end", () 
     echo; echo "${c_bold}Driver${c_off}"
     if [[ -f "$RUN_DIR/STOP" ]]; then echo "  ${c_yel}⏸ paused (STOP flag) — spin start to resume${c_off}"
     elif spin_locked_process_running "$RUN_DIR/.workspace-ceo-tick.lock" "$ROOT/scripts/workspace-ceo-tick.sh"; then
-      echo "  ${c_grn}● running${c_off} (PID $(cat "$RUN_DIR/.workspace-ceo-tick.lock"))"
+      echo "  ${c_grn}● running${c_off} (PID $(spin_lock_read_pid "$RUN_DIR/.workspace-ceo-tick.lock" 2>/dev/null || echo unknown))"
     else echo "  ${c_red}○ down${c_off} — spin start"; fi
     echo
     workstation_rc=0
@@ -404,8 +404,8 @@ echo
 
 # driver alive?
 lock="$RUN_DIR/.workspace-ceo-tick.lock"
-if [[ -f "$lock" ]] && kill -0 "$(cat "$lock" 2>/dev/null)" 2>/dev/null; then
-  echo "${c_grn}● running${c_off} (PID $(cat "$lock"))"
+if spin_locked_process_running "$lock" "$ROOT/scripts/workspace-ceo-tick.sh"; then
+  echo "${c_grn}● running${c_off} (PID $(spin_lock_read_pid "$lock" 2>/dev/null || echo unknown))"
 else
   echo "${c_yel}○ not running${c_off} — run: spin start"
 fi

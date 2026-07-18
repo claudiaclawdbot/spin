@@ -14,13 +14,19 @@
 set -uo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
+source "$ROOT/scripts/lib/project-root.sh"
 
 PID="${1:?usage: run-project-omp.sh <project-id> [task]}"
 PROJ_ORG="$ROOT/org/projects/$PID"
 [[ -d "$PROJ_ORG" ]] || { echo "no such project: $PID" >&2; exit 1; }
 
-# Code repo: prefer a top-level code dir; fall back to the org coordination dir.
-REPO="$ROOT/$PID"; [[ -d "$REPO" ]] || REPO="$PROJ_ORG"
+REPO="$(spin_project_root "$PID")" || exit $?
+export SPIN_PROJECT_ROOT="$REPO"
+export SPIN_AGENT_CWD="$REPO"
+spin_load_project_env "$PROJ_ORG/project.env" || exit $?
+export SPIN_ROOT="$ROOT"
+export SPIN_PROJECT_ROOT="$REPO"
+export SPIN_AGENT_CWD="$REPO"
 
 HANDOFF="$(cat "$PROJ_ORG/WORKSPACE_HANDOFF.md" 2>/dev/null || echo '(none)')"
 CONTROLLER="$(cat "$PROJ_ORG/PROJECT_CONTROLLER_PROMPT.md" 2>/dev/null || echo '')"
@@ -53,7 +59,7 @@ Use the sensitive-action broker exactly as described above. Local reversible
 work remains allowed."
 
 echo "[run-project-omp] project=$PID repo=$REPO log=$LOG" >&2
-OMP_CONFIG="$(ensure_spin_omp_config)"
+OMP_CONFIG="$(ensure_spin_omp_config "project-one-shot:${PID}")" || exit $?
 spin_cmd omp -p \
   --config "$OMP_CONFIG" \
   --cwd "$REPO" \

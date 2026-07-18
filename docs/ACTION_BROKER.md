@@ -13,7 +13,9 @@ An enabled rule is still not executable by itself. The broker also requires a
 short-lived, one-shot lease in the private sibling file
 `org/ACTION_POLICY.lease.json`. The lease never changes the policy schema. It
 binds one rule id to the SHA-256 digest of the exact policy bytes and an expiry.
-The broker consumes the lease under its lock before starting the fixed command.
+Lease schema 2 also binds the executable's resolved path and SHA-256 digest,
+plus the resolved working directory. The broker consumes the lease under its
+lock before starting the fixed command.
 Consequently, a crash before or after process spawn cannot leave a reusable
 authorization behind.
 
@@ -30,6 +32,8 @@ authorization behind.
       "target": "github.com/claudiaclawdbot/spin:main",
       "enabled": true,
       "command": ["/usr/bin/git", "push", "origin", "HEAD:main"],
+      "executable_sha256": "<64 lowercase hex SHA-256 of the resolved executable>",
+      "env_allowlist": [],
       "cwd": "/absolute/path/to/spin",
       "timeout_seconds": 300
     }
@@ -41,6 +45,32 @@ Commands are fixed argv arrays and run without a shell. Use absolute executable
 paths. `${SPIN_ROOT}` and `${HOME}` are the only supported placeholders. Do not
 put secrets in the policy, command arguments, reasons, or targets.
 
+Every enabled rule must set `executable_sha256` to the digest of the resolved
+executable. For example, `shasum -a 256 /usr/bin/git` prints the digest to put
+in a rule that executes `/usr/bin/git`. Arming records that digest, the resolved
+executable path, and the resolved `cwd` in the one-shot lease. `check` and
+`execute` deny the rule if the executable bytes change or either configured path
+resolves somewhere else.
+
+Every enabled rule must also include `env_allowlist`. Use `[]` when the command
+needs no variables from the broker process. The child receives only fixed
+`HOME`, `PATH`, `LANG`, and `LC_ALL` values plus names explicitly listed by the
+rule. Code-injection and configuration-override variables cannot be allowlisted.
+That includes every `GIT_*`, `DYLD_*`, and `LD_*` name, plus the XDG
+configuration selectors. The receipt records allowlisted names, never their
+values.
+
+For `protected-push`, the fixed command must be a direct
+`git push <remote> <source>:<branch>`. When a lease is armed, SPIN resolves the
+remote's push URL from the pinned working directory under the same constrained
+environment used for execution. The named remote must resolve to exactly one
+push URL; Git configurations that fan one push out to multiple URLs are denied.
+SPIN requires the resolved repository plus destination branch to equal the
+rule's exact target. The lease and receipt record the canonical repository,
+destination, and a hash of the remote URL. If the remote is retargeted later,
+execution fails closed without exposing any credentials that may be embedded in
+the URL.
+
 A spend rule also needs positive caps:
 
 ```json
@@ -50,6 +80,8 @@ A spend rule also needs positive caps:
   "target": "vendor.example:test-credit",
   "enabled": false,
   "command": ["/absolute/path/to/scoped-purchase-wrapper"],
+  "executable_sha256": "<64 lowercase hex SHA-256 of the resolved executable>",
+  "env_allowlist": [],
   "cwd": "${SPIN_ROOT}",
   "timeout_seconds": 120,
   "per_action_usd": "10.00",
@@ -90,8 +122,14 @@ spin action lease revoke --json
 ```
 
 Missing, expired, malformed, group/world-readable, wrong-owner, wrong-digest,
-or wrong-rule leases all deny `check` and `execute`. Expiry is harmless across a
-reboot because the broker compares the persisted UTC timestamp on every use.
+wrong-rule, or wrong-attestation leases all deny `check` and `execute`. Expiry
+is harmless across a reboot because the broker compares the persisted UTC
+timestamp on every use.
+
+Lease schema 1 files and enabled rules created before executable pinning fail
+closed after this upgrade. Add `executable_sha256` and `env_allowlist` to each
+enabled rule, revoke the old lease if present, review the updated policy, and
+arm a new schema 2 lease. The seeded deny-all policy needs no migration.
 
 For an expired lease that still exactly binds the current policy and an enabled
 rule, the owner or control plane may safely deactivate that stale rule:
@@ -116,15 +154,19 @@ of treating `enabled_rules > 0` as authorization:
   "enabled_rules": 1,
   "executable_rules": 0,
   "lease_support": {
-    "version": 1,
+    "version": 2,
     "policy_rule_expiry": true,
     "rejects_expired_execution": true,
     "recovers_expired_policy": true,
     "owner_marked_arm": true,
-    "one_shot_consume_before_spawn": true
+    "one_shot_consume_before_spawn": true,
+    "executable_sha256_binding": true,
+    "resolved_path_binding": true,
+    "protected_push_target_binding": true,
+    "explicit_environment_allowlist": true
   },
   "lease": {
-    "schema_version": 1,
+    "schema_version": 2,
     "supports_expiring_one_shot_leases": true,
     "required_for_enabled_rules": true,
     "owner_mark_required": true,
@@ -133,10 +175,14 @@ of treating `enabled_rules > 0` as authorization:
     "active": false,
     "execution_allowed": false,
     "recovery_available": false,
-    "state": "missing|active|expired|policy_mismatch|rule_mismatch|untrusted",
+    "state": "missing|active|expired|policy_mismatch|rule_mismatch|attestation_mismatch|untrusted",
     "rule_id": null,
     "expires_at": null,
     "policy_sha256": null,
+    "executable_realpath": null,
+    "executable_sha256": null,
+    "cwd_realpath": null,
+    "target_attestation": null,
     "max_ttl_seconds": 3600
   }
 }

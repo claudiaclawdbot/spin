@@ -67,8 +67,9 @@ const active = value => {
   const status = String(value || '').toLowerCase();
   return status && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(status);
 };
+const validProjectId = value => /^(?!\.{1,2}$)[A-Za-z0-9._:-]+$/.test(String(value || ''));
 const add = id => {
-  if (id && !seen.has(id)) {
+  if (validProjectId(id) && !seen.has(id)) {
     seen.add(id);
     ordered.push(id);
   }

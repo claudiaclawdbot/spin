@@ -14,6 +14,12 @@ set -euo pipefail
 
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 PROJECT_ID="${1:?usage: bootstrap-project.sh <project-id>}"
+case "$PROJECT_ID" in
+  ''|'.'|'..'|*[!A-Za-z0-9._:-]*)
+    echo "invalid project id: $PROJECT_ID" >&2
+    exit 2
+    ;;
+esac
 PROJECT_DIR="$ROOT/org/projects/$PROJECT_ID"
 
 if [[ -d "$PROJECT_DIR" ]]; then

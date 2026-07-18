@@ -10,19 +10,19 @@ DRIVER_LOCK="$ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
 if [[ -f "$ROOT/org/ceo/runs/STOP" ]]; then
   DRIVER="paused - STOP file present (run \`spin start\` to resume)"
 elif spin_locked_process_running "$DRIVER_LOCK" "$ROOT/scripts/workspace-ceo-tick.sh"; then
-  DRIVER="running (PID $(cat "$DRIVER_LOCK" 2>/dev/null))"
+  DRIVER="running (PID $(spin_lock_read_pid "$DRIVER_LOCK" 2>/dev/null || echo unknown))"
 else
   DRIVER="DOWN - run \`spin service repair\`"
 fi
 
 if spin_locked_process_running "$ROOT/org/ceo/runs/.status-watch.lock" "$ROOT/scripts/workspace-status-watch.sh"; then
-  STATUS_WATCH="running (PID $(cat "$ROOT/org/ceo/runs/.status-watch.lock" 2>/dev/null))"
+  STATUS_WATCH="running (PID $(spin_lock_read_pid "$ROOT/org/ceo/runs/.status-watch.lock" 2>/dev/null || echo unknown))"
 else
   STATUS_WATCH="DOWN - live board refresh is not supervised"
 fi
 
 if spin_locked_process_running "$ROOT/org/ceo/runs/.wiki-watch.lock" "$ROOT/scripts/wiki-watch.sh"; then
-  WIKI_WATCH="running (PID $(cat "$ROOT/org/ceo/runs/.wiki-watch.lock" 2>/dev/null))"
+  WIKI_WATCH="running (PID $(spin_lock_read_pid "$ROOT/org/ceo/runs/.wiki-watch.lock" 2>/dev/null || echo unknown))"
 else
   WIKI_WATCH="DOWN - project indexes are not updating"
 fi
@@ -31,19 +31,22 @@ export DRIVER STATUS_WATCH WIKI_WATCH
 node - "$ROOT" "$OUT" <<'NODE'
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const root = process.argv[2];
 const out = process.argv[3];
+const { jobNeedsAttention } = require(path.join(root, 'scripts', 'lib', 'job-attention.js'));
 
 const active = value => {
   const status = String(value || '').toLowerCase();
   return status && !/^(candidate|inactive|complete(?:d)?|archived|paused|disabled)(?:$|-)/.test(status);
 };
+const validProjectId = value => /^(?!\.{1,2}$)[A-Za-z0-9._:-]+$/.test(String(value || ''));
 const activeProjectIds = () => {
   const ordered = [];
   const seen = new Set();
   const statuses = new Map();
   const add = id => {
-    if (id && !seen.has(id)) {
+    if (validProjectId(id) && !seen.has(id)) {
       seen.add(id);
       ordered.push(id);
     }
@@ -87,10 +90,10 @@ const firstLines = (value, count) => (value || '')
   .slice(0, count)
   .join(' ')
   .replace(/^[-*]\s*/, '');
-const normalize = value => value.replace(
-  /_Rolled up from active project floor boards - refreshed [^_]*_/,
-  '_Rolled up from active project floor boards - refreshed <dynamic>_',
-);
+const normalize = value => value
+  .replace(/_Status changed at [^_]*_/, '_Status changed at <dynamic>_')
+  .replace(/\bage (?:\d+[smhd]|unknown), heartbeat (?:\d+[smhd]|unknown)/g,
+    'age <dynamic>, heartbeat <dynamic>');
 const ageText = value => {
   const timestamp = Date.parse(value || '');
   if (!Number.isFinite(timestamp)) return 'unknown';
@@ -131,21 +134,43 @@ const running = jobs.filter(job => job.status === 'running');
 const queued = jobs.filter(job => job.status === 'queued');
 const blocked = jobs.filter(job => job.status === 'blocked');
 const failed = jobs.filter(job => job.status === 'failed');
-const recentProblems = [...blocked, ...failed]
-  .sort((a, b) => Date.parse(b.failed_at || b.blocked_at || b.updated_at || 0) - Date.parse(a.failed_at || a.blocked_at || a.updated_at || 0))
-  .slice(0, 6);
+const attention = jobs.filter(jobNeedsAttention)
+  .sort((a, b) => Date.parse(b.failed_at || b.blocked_at || b.updated_at || 0) - Date.parse(a.failed_at || a.blocked_at || a.updated_at || 0));
+const recentProblems = attention.slice(0, 6);
 
 let actionPolicy = 'missing (deny-all)';
 try {
-  const policy = JSON.parse(fs.readFileSync(path.join(root, 'org', 'ACTION_POLICY.json'), 'utf8'));
-  const enabled = Array.isArray(policy.rules) ? policy.rules.filter(rule => rule.enabled === true).length : 0;
-  actionPolicy = policy.mode === 'deny-by-default'
-    ? (enabled ? `ready - ${enabled} exact rule${enabled === 1 ? '' : 's'} enabled` : 'deny-all - 0 rules enabled')
-    : 'INVALID - mode must be deny-by-default';
-} catch {}
+  const broker = path.join(root, 'scripts', 'spin-action-broker.js');
+  if (!fs.existsSync(broker)) throw new Error('broker missing');
+  const probe = spawnSync(process.execPath, [broker, 'status', '--json'], {
+      encoding: 'utf8',
+      env: { SPIN_ROOT: root },
+      timeout: 5000,
+  });
+  if (probe.status !== 0) {
+    actionPolicy = 'INVALID - action broker rejected policy';
+  } else {
+    const report = JSON.parse(probe.stdout);
+    const enabled = Number(report.enabled_rules || 0);
+    const executable = Number(report.executable_rules || 0);
+    if (report.status === 'ready') {
+      actionPolicy = `ready - ${executable} one-shot rule${executable === 1 ? '' : 's'} executable now`;
+    } else if (report.status === 'lease_required') {
+      actionPolicy = `lease required - ${enabled} rule${enabled === 1 ? '' : 's'} enabled, 0 executable`;
+    } else if (report.status === 'deny_all') {
+      actionPolicy = 'deny-all - 0 rules enabled';
+    } else {
+      actionPolicy = 'missing (deny-all)';
+    }
+  }
+} catch (error) {
+  actionPolicy = error && error.message === 'broker missing'
+    ? 'missing (deny-all)'
+    : 'INVALID - action broker status unavailable';
+}
 
 let output = '# Workspace - Live Status\n\n';
-output += `_Rolled up from active project floor boards - refreshed ${new Date().toISOString()}_\n\n`;
+output += `_Status changed at ${new Date().toISOString()}_\n\n`;
 output += '## Control plane\n';
 output += `- **Driver:** ${process.env.DRIVER || '(unknown)'}\n`;
 output += `- **Live status:** ${process.env.STATUS_WATCH || '(unknown)'}\n`;
@@ -156,6 +181,7 @@ output += `- **Running:** ${running.length}\n`;
 output += `- **Queued:** ${queued.length}\n`;
 output += `- **Blocked:** ${blocked.length}\n`;
 output += `- **Failed history:** ${failed.length}\n`;
+output += `- **Needs attention:** ${attention.length}\n`;
 if (dispatchState) {
   output += `- **Dispatcher:** ${dispatchState.status || 'unknown'} - ${dispatchState.note || 'no detail'} (${dispatchState.available_memory_mb || '?'}MB available)\n`;
 }
@@ -170,11 +196,8 @@ for (const job of running.slice(0, 8)) {
   const resourceClass = job.resource_class === 'heavy' ? ' **HEAVY**' : '';
   output += `  - \`${job.id}\`${resourceClass} - ${job.project_id || 'unknown project'} - age ${ageText(job.started_at)}, heartbeat ${ageText(heartbeat)}${stale ? ' **STALE**' : ''}${resource}\n`;
 }
-if (recentProblems.length) {
-  output += '- **Needs attention:**\n';
-  for (const job of recentProblems) {
-    output += `  - \`${job.id}\` (${job.status}) - ${String(job.result || 'No failure detail recorded.').replace(/\s+/g, ' ').slice(0, 180)}\n`;
-  }
+for (const job of recentProblems) {
+  output += `  - \`${job.id}\` (${job.status}) - ${String(job.result || 'No failure detail recorded.').replace(/\s+/g, ' ').slice(0, 180)}\n`;
 }
 output += '\n';
 if (!boards.length) output += '_(no active project floor boards found)_\n';

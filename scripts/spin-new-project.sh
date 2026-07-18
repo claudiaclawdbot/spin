@@ -101,7 +101,7 @@ node -e '
   e.code_path="projects/"+id; s.updated_at=new Date().toISOString();
   fs.writeFileSync(sf,JSON.stringify(s,null,2)+"\n");
   const h=JSON.parse(fs.readFileSync(hf,"utf8")); h.projects=h.projects||{};
-  h.projects[id]=Object.assign({project_ceo:id+"-ceo",prompt:"org/projects/"+id+"/PROJECT_CONTROLLER_PROMPT.md",handoff:"org/projects/"+id+"/WORKSPACE_HANDOFF.md",agent:"scripts/project-ceo-agent.sh "+id,display_cmd:"scripts/project-floor-watch.sh "+id,allowed_job_types:["project-ceo-run","read-only-worker","implementation-worker","scout"],external_action_gate:true}, h.projects[id]||{});
+  h.projects[id]=Object.assign({project_ceo:id+"-ceo",code_path:"projects/"+id,prompt:"org/projects/"+id+"/PROJECT_CONTROLLER_PROMPT.md",handoff:"org/projects/"+id+"/WORKSPACE_HANDOFF.md",agent:"scripts/project-ceo-agent.sh "+id,display_cmd:"scripts/project-floor-watch.sh "+id,allowed_job_types:["project-ceo-run","read-only-worker","implementation-worker","scout"],external_action_gate:true}, h.projects[id]||{});
   fs.writeFileSync(hf,JSON.stringify(h,null,2)+"\n");
 ' "$ORG/state.json" "$HARNESS" "$PID" "$GOAL" 2>/dev/null || { echo "failed to register $PID"; exit 1; }
 echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entry, projects/$PID/)${c_o}"

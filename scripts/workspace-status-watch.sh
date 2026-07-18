@@ -25,15 +25,19 @@ rm -f "$STOP"
 CEO_WS="$(node -e 'const fs=require("fs"),f=process.argv[1];try{const h=JSON.parse(fs.readFileSync(f,"utf8"));process.stdout.write(h.workspace_ceo?.cmux_workspace||"workspace:1")}catch{process.stdout.write("workspace:1")}' "$ROOT/org/OMP_HARNESS.json" 2>/dev/null)"
 
 # Atomic singleton: only one watcher, ever.
-while ! ( set -o noclobber; echo $$ > "$LOCK" ) 2>/dev/null; do
-  other="$(cat "$LOCK" 2>/dev/null)"
-  if [[ -n "$other" ]] && kill -0 "$other" 2>/dev/null; then
-    echo "[status-watch] already running (PID $other); exiting." >&2; exit 0
+if spin_lock_acquire "$LOCK" "$ROOT/scripts/workspace-status-watch.sh"; then
+  LOCK_TOKEN="$SPIN_LOCK_OWNER_TOKEN"
+else
+  lock_rc=$?
+  if (( lock_rc == 1 )); then
+    other="$(spin_lock_read_pid "$LOCK" 2>/dev/null || true)"
+    echo "[status-watch] already running (PID ${other:-unknown}); exiting." >&2; exit 0
   fi
-  rm -f "$LOCK"
-done
-trap 'rm -f "$LOCK"' EXIT
-trap 'rm -f "$LOCK"; exit 0' INT TERM
+  echo "[status-watch] could not acquire singleton lock: $LOCK" >&2
+  exit 1
+fi
+trap 'spin_lock_release "$LOCK" "$LOCK_TOKEN" >/dev/null 2>&1 || true' EXIT
+trap 'exit 0' INT TERM
 
 while true; do
   [[ -f "$STOP" ]] && { echo "[status-watch] STOP flag — exiting." >&2; rm -f "$STOP"; exit 0; }
@@ -50,7 +54,9 @@ while true; do
 
   bash "$ROOT/scripts/workspace-status.sh" 2>/dev/null || true
   bash "$ROOT/scripts/wiki-update.sh"       2>/dev/null || true   # keep wiki fresh alongside WORKSPACE_STATUS
-  touch "$HEARTBEAT"
+  heartbeat_tmp="$HEARTBEAT.tmp.$$"
+  printf '{"observed_at":"%s"}\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$heartbeat_tmp"
+  mv "$heartbeat_tmp" "$HEARTBEAT"
 
   # ── driver watchdog: status chip + one-shot notification on state change ──
   # Catches the silent-halt situation (e.g. a STOP file or dead loop) that once
@@ -91,6 +97,7 @@ while true; do
 const fs = require('fs');
 const path = require('path');
 const root = process.argv[2];
+const { jobNeedsAttention } = require(path.join(root, 'scripts', 'lib', 'job-attention.js'));
 let jobs = [];
 let dispatchStatus = '';
 try {
@@ -100,12 +107,7 @@ try {
 } catch {}
 const running = jobs.filter(job => job.status === 'running');
 const queued = jobs.filter(job => job.status === 'queued');
-const blocked = jobs.filter(job => job.status === 'blocked');
-const recentFailed = jobs.filter(job => {
-  if (job.status !== 'failed') return false;
-  const at = Date.parse(job.failed_at || job.updated_at || '');
-  return !Number.isFinite(at) || Date.now() - at < 86400000;
-});
+const attention = jobs.filter(jobNeedsAttention);
 let stale = 0;
 let rss = 0;
 let rssLimit = 0;
@@ -129,7 +131,7 @@ for (const job of running) {
     }
   } catch {}
 }
-process.stdout.write([running.length, queued.length, blocked.length + recentFailed.length, stale, rss, rssLimit, processes, processLimit, sampled, dispatchStatus].join('\t'));
+process.stdout.write([running.length, queued.length, attention.length, stale, rss, rssLimit, processes, processLimit, sampled, dispatchStatus].join('\t'));
 NODE
 )"
   if [[ -n "$JOB_SUMMARY" ]]; then

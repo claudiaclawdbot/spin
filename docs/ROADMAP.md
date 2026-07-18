@@ -5,25 +5,13 @@ project floors, jobs, approvals, receipts, and supervisors. The macOS wrapper
 work is tracked separately in [APP_ROADMAP](APP_ROADMAP.md) so app packaging and
 core orchestration do not blur together.
 
-## 1. Harden the singleton lock (atomicity)
-
-Found while wiring up the launchd supervisor: the "only one driver" guard writes
-its PID with `echo $$ > lock` under `noclobber`. The *create* is atomic, but
-there's a sliver between create and write where a second near-simultaneous start
-can read an empty lock, decide it's stale, clobber it, and **both run** — the
-exact duplicate-driver failure that once burned a weekly quota. In practice the
-supervisor (launchd/systemd) only starts one, so it doesn't bite — but it should
-be mechanically impossible. Fix: write the PID to a temp file and `ln` (hardlink)
-it into place — `ln` is atomic and fails if the target exists, so the lock always
-has its PID. Apply to the driver, the watchers, and the dispatcher.
-
-## 2. INBOX / receipts rotation
+## 1. INBOX / receipts rotation
 
 `org/ceo/INBOX.md` and `RECEIPTS.md` grow forever; the brain reads tails so it
 works, but a year of operation shouldn't mean a 5 MB inbox. Rotate to dated
 archive files past ~400 lines (only when mtime is quiet to dodge append races).
 
-## 3. Coordinator-driven onboarding (conversational)
+## 2. Coordinator-driven onboarding (conversational)
 
 `spin init` is a solid bash wizard, but the real vision is the **Coordinator
 agent** onboarding you: first run drops you into the Coordinator floor with an
@@ -31,13 +19,7 @@ onboarding directive, and it asks what you want to build, creates the project
 (`spin new-project`), and briefs it — all in conversation. Keep the bash wizard
 as the headless fallback.
 
-## 4. PID-reuse hardening
-
-Locks and job liveness use `kill -0 <pid>`. After a reboot (or very long uptime)
-a recycled PID could make a stale lock look alive. Record
-`<pid>:<boot-epoch>:<start-time>` and compare all three. (Pairs with #1.)
-
-## 5. Live OMP/cmux product proof and a `--dry-run` org mode
+## 3. Live OMP/cmux product proof and a `--dry-run` org mode
 
 SPIN's central claim is not just that one job can dispatch. It is that multiple
 scoped project agents can stay context-isolated while the Navigator maintains the
@@ -53,25 +35,44 @@ OMP provider execution because that requires user accounts, credentials, and a
 GUI session; those remain release validation items until there is an integration
 rig for them.
 
-## 6. Job-level provider/model overrides in the queue schema
+## 4. Owner-facing action policy management
+
+The broker has a strict machine-readable policy, pinned commands, exact targets,
+and one-shot leases, but adding a new rule still requires editing JSON. Add a
+local owner-only editor that previews the resolved executable hash, environment
+names, target attestation, and final rule diff before it can enable or lease the
+rule. Keep the seeded state deny-all and preserve the existing CLI for headless
+operators.
+
+## 5. Job-level provider/model overrides in the queue schema
 
 `max_runtime_seconds` is honored per job; `provider`/`model` overrides still come
 from job *type* tiering only. Let the Navigator request `"provider": "omp"` (e.g.
 the OpenRouter lane) per job, with benching still able to veto.
 
-## 7. Cross-platform reach
+## 6. Cross-platform reach
 
 The supervisor is launchd (macOS) / systemd-user (Linux); Windows/WSL users fall
 back to `spin start`. A scheduled-task path (or a documented WSL recipe) would
-close the gap. Also: a screenshot/GIF of the cmux interface on the landing site.
+close the gap.
 
 ## Done (recently)
 
 - ~~**Machine-gated sensitive actions**~~ — `spin action` denies by default,
-  matches exact owner-enabled targets to fixed command vectors, enforces spend
-  caps, and writes append-only events plus a receipt. Shipped controller prompts
-  also prohibit direct execution; hard bypass resistance still requires OS or
-  credential isolation.
+  matches exact owner-enabled targets to fixed command vectors, and requires a
+  one-shot lease bound to the policy, executable bytes, resolved working
+  directory, allowlisted environment names, and exact target. Protected pushes
+  additionally bind the resolved remote repository and destination branch.
+  Shipped controller prompts also prohibit direct execution; hard bypass
+  resistance still requires OS or credential isolation.
+- ~~**Race-free singleton ownership**~~ — shell and Node runtimes acquire fully
+  written locks with atomic hardlinks, bind them to the process start identity,
+  reclaim stale locks without deleting a replacement owner's lock, and retain
+  read compatibility with legacy one-line PID files.
+- ~~**Outcome-aware job completion**~~ — newly dispatched jobs must write one
+  semantic `completed` or `blocked` outcome sidecar. Missing or malformed
+  evidence fails closed, and ordinary provider failures do not trigger a second
+  provider that could repeat partial work.
 - ~~**Visible execution and resource state**~~ — the Coordinator board and local
   control panel show running, queued, blocked, failed, stale-heartbeat, and live
   RSS/process data. The cmux dock includes a direct Control entry and the status

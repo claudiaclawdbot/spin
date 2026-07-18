@@ -30,6 +30,7 @@ const path = require('path');
 const selfDir = path.dirname(fs.realpathSync(__filename));
 const ROOT = process.env.SPIN_ROOT || process.env.OMP_ROOT ||
              path.resolve(selfDir, '..');
+const runtime = require(path.join(selfDir, 'lib', 'spin-runtime.js'));
 const ORG = path.join(ROOT, 'org');
 const F = {
   harness:   path.join(ORG, 'OMP_HARNESS.json'),
@@ -60,38 +61,14 @@ function parse(argv) {
   return { pos, flags };
 }
 
-// ── exclusive lock via atomic create (the node equivalent of noclobber) ─────
+// ── exclusive lock via a fully-written atomic hardlink ──────────────────────
 function withLock(name, fn) {
   const lock = path.join(F.runs, `.org-${name}.lock`);
-  fs.mkdirSync(F.runs, { recursive: true });
-  let tries = 0;
-  for (;;) {
-    try {
-      fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
-      break;
-    } catch (e) {
-      if (e.code !== 'EEXIST') die(3, `lock error: ${e.message}`);
-      // The holder can release the lock between our failed create and read.
-      let holder;
-      try { holder = parseInt(fs.readFileSync(lock, 'utf8').trim(), 10); }
-      catch (readError) {
-        if (readError.code === 'ENOENT') continue;
-        die(3, `lock read error: ${readError.message}`);
-      }
-      // A competing process may have created the file but not written its PID yet.
-      if (!Number.isInteger(holder)) {
-        if (++tries > 50) die(3, `could not acquire ${name} lock (holder not initialized)`);
-      } else {
-        // stale-lock break-in: if the holder PID is dead, clear and retry
-        let alive = false; try { process.kill(holder, 0); alive = true; } catch {}
-        if (!alive) { try { fs.unlinkSync(lock); } catch {} continue; }
-        if (++tries > 50) die(3, `could not acquire ${name} lock (held by ${holder})`);
-      }
-      const until = Date.now() + 100; while (Date.now() < until) {} // ~100ms spin
-    }
-  }
+  let handle;
+  try { handle = runtime.acquireProcessLock(lock); }
+  catch (error) { die(3, `${name} lock error: ${error.message}`); }
   try { return fn(); }
-  finally { try { fs.unlinkSync(lock); } catch {} }
+  finally { runtime.releaseProcessLock(handle); }
 }
 
 function readJSON(file, fallback) {
@@ -122,6 +99,10 @@ function readStdin() {
 }
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
 function validId(s) { return /^[A-Za-z0-9._:-]+$/.test(String(s)); }
+function validProjectId(s) {
+  const value = String(s || '');
+  return value !== '.' && value !== '..' && validId(value);
+}
 function hasFlag(flags, name) { return Object.prototype.hasOwnProperty.call(flags, name); }
 function parseDependencyIds(raw) {
   if (raw === undefined) return [];
@@ -164,6 +145,7 @@ const verbs = {
     const description = p.flags.description || rest.join(' ');
     if (!project || !type || !description)
       die(1, 'usage: org queue-job <project> <type> "<description>" [--max-runtime SEC] [--resource-class normal|heavy] [--after ID[,ID...]]');
+    if (!validProjectId(project)) die(2, `invalid project_id "${project}"`);
     const harness = readJSON(F.harness);
     const proj = harness.projects && harness.projects[project];
     if (!proj) die(2, `unknown project_id "${project}" — register it in OMP_HARNESS.json (or run bootstrap-project.sh)`);
@@ -239,6 +221,7 @@ const verbs = {
   'set-handoff'(p) {
     const project = p.pos[0];
     if (!project) die(1, 'usage: org set-handoff <project> [--file F]   (else stdin)');
+    if (!validProjectId(project)) die(2, `invalid project_id "${project}"`);
     const dir = path.join(ORG, 'projects', project);
     if (!fs.existsSync(dir)) die(2, `no such project dir: org/projects/${project}`);
     const body = p.flags.file ? fs.readFileSync(p.flags.file, 'utf8') : readStdin();
@@ -253,6 +236,7 @@ const verbs = {
   'set-state'(p) {
     const project = p.pos[0];
     if (!project) die(1, 'usage: org set-state <project> [--status S] [--next "…"]');
+    if (!validProjectId(project)) die(2, `invalid project_id "${project}"`);
     return withLock('state', () => {
       const s = readJSON(F.state, { project_orchestrators: [] });
       s.project_orchestrators = s.project_orchestrators || [];
@@ -341,6 +325,7 @@ const verbs = {
     const [project, ...rest] = p.pos;
     const msg = rest.join(' ').trim();
     if (!project || !msg) die(1, 'usage: org inbox <project> "<message>"');
+    if (!validProjectId(project)) die(2, `invalid project_id "${project}"`);
     appendLine(F.inbox, `[${nowISO().slice(0, 16)}Z] ${project}: ${msg}`);
     ok('appended to INBOX.md');
   },

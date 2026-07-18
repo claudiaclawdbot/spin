@@ -15,6 +15,7 @@
 set -uo pipefail
 ROOT="${WORKSPACE_ROOT:-${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 LOCK="$ROOT/org/ceo/runs/.wiki-watch.lock"
 STOP="$ROOT/org/ceo/runs/WIKI_WATCH_STOP"
 INTERVAL=8   # poll interval in seconds (fallback mode)
@@ -24,15 +25,19 @@ mkdir -p "$ROOT/org/ceo/runs" "$ROOT/logs"
 
 # ── singleton lock ────────────────────────────────────────────────────────────
 if [[ "${1:-}" != "--rebuild-all" ]]; then
-  while ! ( set -o noclobber; echo $$ > "$LOCK" ) 2>/dev/null; do
-    other="$(cat "$LOCK" 2>/dev/null)"
-    if [[ -n "$other" ]] && kill -0 "$other" 2>/dev/null; then
-      echo "[wiki-watch] already running (PID $other); exiting." >&2; exit 0
+  if spin_lock_acquire "$LOCK" "$ROOT/scripts/wiki-watch.sh"; then
+    LOCK_TOKEN="$SPIN_LOCK_OWNER_TOKEN"
+  else
+    lock_rc=$?
+    if (( lock_rc == 1 )); then
+      other="$(spin_lock_read_pid "$LOCK" 2>/dev/null || true)"
+      echo "[wiki-watch] already running (PID ${other:-unknown}); exiting." >&2; exit 0
     fi
-    rm -f "$LOCK"
-  done
-  trap 'rm -f "$LOCK"' EXIT
-  trap 'rm -f "$LOCK"; exit 0' INT TERM
+    echo "[wiki-watch] could not acquire singleton lock: $LOCK" >&2
+    exit 1
+  fi
+  trap 'spin_lock_release "$LOCK" "$LOCK_TOKEN" >/dev/null 2>&1 || true' EXIT
+  trap 'exit 0' INT TERM
   rm -f "$STOP"
 fi
 

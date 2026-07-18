@@ -82,17 +82,8 @@ xml_escape(){
 }
 
 stop_managed_process(){
-  local lock="$1" expected="$2" pid="" _
-  if spin_locked_process_running "$lock" "$expected"; then
-    pid="$(cat "$lock" 2>/dev/null || true)"
-    kill -TERM "$pid" 2>/dev/null || true
-    for _ in {1..30}; do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep 0.1
-    done
-    kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
-  fi
-  rm -f "$lock" 2>/dev/null || true
+  local lock="$1" expected="$2"
+  spin_stop_locked_process "$lock" "$expected" || true
 }
 
 stop_all_managed_processes(){

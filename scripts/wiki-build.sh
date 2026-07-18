@@ -21,6 +21,9 @@ if [[ -z "$PROJECT" ]]; then
   echo "Usage: $0 <project-id>" >&2
   exit 1
 fi
+case "$PROJECT" in
+  '.'|'..'|*[!A-Za-z0-9._:-]*) echo "[wiki-build] ERROR: invalid project id: $PROJECT" >&2; exit 2 ;;
+esac
 
 PROJECT_DIR="$ROOT/projects/$PROJECT"
 WIKI_DIR="$ROOT/org/wiki/projects"

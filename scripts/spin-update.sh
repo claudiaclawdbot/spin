@@ -11,6 +11,7 @@ set -euo pipefail
 
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 cd "$ROOT"
+source "$ROOT/scripts/lib/spin-runtime.sh"
 
 CHECK_ONLY=0
 DRY_RUN=0
@@ -129,9 +130,9 @@ check_clean_tracked_files() {
 
 running_driver_pid() {
   local lock="$ROOT/org/ceo/runs/.workspace-ceo-tick.lock" pid
-  [[ -f "$lock" ]] || return 1
-  pid="$(cat "$lock" 2>/dev/null || true)"
-  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null || return 1
+  spin_locked_process_running "$lock" "$ROOT/scripts/workspace-ceo-tick.sh" || return 1
+  pid="$(spin_lock_read_pid "$lock" 2>/dev/null || true)"
+  [[ -n "$pid" ]] || return 1
   printf '%s\n' "$pid"
 }
 

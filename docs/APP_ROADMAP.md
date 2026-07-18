@@ -74,7 +74,7 @@ into an app issue.
 8. **Repeatable OMP/Pi bundling**
 
    `scripts/vendor-app-deps.sh --omp-only` vendors the pinned
-   `@oh-my-pi/pi-coding-agent@16.1.16` npm package, writes a Bun lockfile,
+   `@oh-my-pi/pi-coding-agent@16.4.3` npm package, writes a Bun lockfile,
    compiles `vendor/bin/omp` with `bun build --compile`, copies the matching
    `pi_natives.<platform>.node` addon, and records npm integrity, lockfile,
    compiled binary, and native addon hashes in `agent/vendor/omp/metadata.json`.

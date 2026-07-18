@@ -18,10 +18,16 @@ jobs:
             bash -n "$f"
             echo "ok: $f"
           done
-      - name: node --check the node scripts
+      - name: node --check every shipped JavaScript file
         run: |
-          node --check scripts/ceo-dashboard.js
+          set -e
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+            echo "ok: $file"
+          done < <(find scripts app runtime -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
           node --check scripts/org
+      - name: focused Node tests
+        run: node --test tests/*.test.js
       - name: validate shipped JSON
         run: |
           set -e
@@ -107,9 +113,8 @@ jobs:
           echo "ok: piped launcher cloned + installed"
 
   shellcheck:
-    name: shellcheck (advisory)
+    name: shellcheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck (errors only)

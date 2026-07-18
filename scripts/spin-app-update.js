@@ -27,6 +27,8 @@ const REPLACEABLE_CODE = [
   'Resources/SPIN.app bundled UI engine',
 ];
 
+class AppUpdateError extends Error {}
+
 function usage(exitCode = 0) {
   const out = exitCode === 0 ? console.log : console.error;
   out(`Usage: spin app-update --dry-run|--install [options] SPIN-<version>-macos-<arch>.zip|.dmg
@@ -49,8 +51,7 @@ Production installs require Developer ID/notary verification.`);
 }
 
 function fail(message) {
-  console.error(`app-update failed: ${message}`);
-  process.exit(1);
+  throw new AppUpdateError(message);
 }
 
 function parseArgs(argv) {
@@ -236,32 +237,42 @@ function extractCandidate(candidate) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spin-app-update-'));
     const mount = path.join(tmp, 'mount');
     const app = path.join(tmp, 'SPIN.app');
-    fs.mkdirSync(mount, { recursive: true });
-    run('hdiutil', ['attach', '-nobrowse', '-readonly', '-mountpoint', mount, absolute]);
     try {
+      fs.mkdirSync(mount, { recursive: true });
+      run('hdiutil', ['attach', '-nobrowse', '-readonly', '-mountpoint', mount, absolute]);
       copyApp(path.join(mount, 'SPIN.app'), app);
-    } finally {
       run('hdiutil', ['detach', mount]);
+      if (!fs.existsSync(app)) fail(`candidate dmg did not contain SPIN.app: ${absolute}`);
+      return {
+        root: tmp,
+        app,
+        artifact: absolute,
+        cleanup: () => fs.rmSync(tmp, { recursive: true, force: true }),
+      };
+    } catch (error) {
+      // An attach command can partially mount and still return nonzero. The
+      // mountpoint is unique to this candidate, so always try to detach it.
+      spawnSync('hdiutil', ['detach', mount], { stdio: 'ignore' });
+      fs.rmSync(tmp, { recursive: true, force: true });
+      throw error;
     }
-    if (!fs.existsSync(app)) fail(`candidate dmg did not contain SPIN.app: ${absolute}`);
+  }
+  if (!absolute.endsWith('.zip')) fail(`candidate must be a .zip/.dmg artifact or .app bundle: ${absolute}`);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spin-app-update-'));
+  try {
+    run('ditto', ['-x', '-k', absolute, tmp]);
+    const app = path.join(tmp, 'SPIN.app');
+    if (!fs.existsSync(app)) fail(`candidate artifact did not contain SPIN.app: ${absolute}`);
     return {
       root: tmp,
       app,
       artifact: absolute,
       cleanup: () => fs.rmSync(tmp, { recursive: true, force: true }),
     };
+  } catch (error) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    throw error;
   }
-  if (!absolute.endsWith('.zip')) fail(`candidate must be a .zip/.dmg artifact or .app bundle: ${absolute}`);
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spin-app-update-'));
-  run('ditto', ['-x', '-k', absolute, tmp]);
-  const app = path.join(tmp, 'SPIN.app');
-  if (!fs.existsSync(app)) fail(`candidate artifact did not contain SPIN.app: ${absolute}`);
-  return {
-    root: tmp,
-    app,
-    artifact: absolute,
-    cleanup: () => fs.rmSync(tmp, { recursive: true, force: true }),
-  };
 }
 
 function compareValues(before, after) {
@@ -468,33 +479,43 @@ function printPlan(plan) {
   else console.log(`Mode: ${plan.dryRun ? 'dry run, no app code changed' : 'metadata only, no app code changed'}`);
 }
 
-const options = parseArgs(process.argv.slice(2));
-const candidate = extractCandidate(options.candidate);
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const candidate = extractCandidate(options.candidate);
+  try {
+    const installedAppInput = options.installedApp || defaultInstalledApp();
+    if (!installedAppInput) fail('installed app not found; pass --installed-app or run from a SPIN.app/checkouted dist/SPIN.app context');
+    const installedApp = path.resolve(installedAppInput);
+    const installedInfo = requireManifest(installedApp, 'installed');
+    const candidateInfo = requireManifest(candidate.app, 'candidate');
+    run(process.execPath, [path.join(ROOT, 'scripts', 'app-compatibility.js'), 'verify', candidate.app]);
+    verifyCodeSignature(candidate.app, 'candidate');
+    if (channelDowngrade(installedInfo.manifest, candidateInfo.manifest) && !options.forceChannel) {
+      fail(`candidate channel ${candidateInfo.manifest.release.channel} would downgrade installed channel ${installedInfo.manifest.release.channel}; pass --force-channel to acknowledge`);
+    }
+    if (options.install) {
+      if (!options.installedApp && !resolveAppFromResources(process.env.SPIN_APP_RESOURCES || '')) {
+        fail('--install requires --installed-app unless running from a SPIN.app bundle context');
+      }
+      enforceInstallGates(options, candidateInfo.manifest);
+      if (candidateInfo.manifest.release && candidateInfo.manifest.release.channel === 'production') {
+        verifyProductionTrust(candidate.app, candidateInfo.manifest);
+      }
+    }
+    const plan = buildPlan(options, installedInfo, { ...candidateInfo, artifact: path.resolve(options.candidate) });
+    if (options.install) installCandidate(plan, candidate.app);
+    else if (options.recordRollback) writeRollback(plan);
+    if (options.json) console.log(JSON.stringify(plan, null, 2));
+    else printPlan(plan);
+  } finally {
+    candidate.cleanup();
+  }
+}
+
 try {
-  const installedAppInput = options.installedApp || defaultInstalledApp();
-  if (!installedAppInput) fail('installed app not found; pass --installed-app or run from a SPIN.app/checkouted dist/SPIN.app context');
-  const installedApp = path.resolve(installedAppInput);
-  const installedInfo = requireManifest(installedApp, 'installed');
-  const candidateInfo = requireManifest(candidate.app, 'candidate');
-  run(process.execPath, [path.join(ROOT, 'scripts', 'app-compatibility.js'), 'verify', candidate.app]);
-  verifyCodeSignature(candidate.app, 'candidate');
-  if (channelDowngrade(installedInfo.manifest, candidateInfo.manifest) && !options.forceChannel) {
-    fail(`candidate channel ${candidateInfo.manifest.release.channel} would downgrade installed channel ${installedInfo.manifest.release.channel}; pass --force-channel to acknowledge`);
-  }
-  if (options.install) {
-    if (!options.installedApp && !resolveAppFromResources(process.env.SPIN_APP_RESOURCES || '')) {
-      fail('--install requires --installed-app unless running from a SPIN.app bundle context');
-    }
-    enforceInstallGates(options, candidateInfo.manifest);
-    if (candidateInfo.manifest.release && candidateInfo.manifest.release.channel === 'production') {
-      verifyProductionTrust(candidate.app, candidateInfo.manifest);
-    }
-  }
-  const plan = buildPlan(options, installedInfo, { ...candidateInfo, artifact: path.resolve(options.candidate) });
-  if (options.install) installCandidate(plan, candidate.app);
-  else if (options.recordRollback) writeRollback(plan);
-  if (options.json) console.log(JSON.stringify(plan, null, 2));
-  else printPlan(plan);
-} finally {
-  candidate.cleanup();
+  main();
+} catch (error) {
+  if (!(error instanceof AppUpdateError)) throw error;
+  console.error(`app-update failed: ${error.message}`);
+  process.exitCode = 1;
 }

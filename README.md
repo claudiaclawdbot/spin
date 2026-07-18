@@ -138,8 +138,9 @@ OMP is the primary agent and provider engine. SPIN writes a runtime overlay for:
 - `retry.fallbackChains` for quota, rate, server, and network failures.
 
 Configured lanes may include OpenAI Codex, Anthropic, OpenRouter, Gemini, or
-local runtimes. Direct vendor CLIs are an outer fallback when OMP is unavailable
-or hard-fails; they are not the primary project-workspace path.
+local runtimes. Direct vendor CLIs are an outer fallback when OMP is unavailable,
+times out, or fails before a session can start. They are not the primary
+project-workspace path.
 
 ## Computer Use
 
@@ -170,9 +171,12 @@ The default action policy denies four categories of action:
 
 Local, reversible work can continue without interrupting the operator. For the
 four categories above, `spin action` only runs exact commands and targets that
-the owner enabled in `org/ACTION_POLICY.json`; otherwise it records a structured
-request. Broker events and receipts remain in local runtime state. This is a
-user-space control, not a substitute for OS-level credential isolation.
+the owner enabled in `org/ACTION_POLICY.json`, and only under a short-lived,
+one-shot owner lease. Execution rechecks the pinned executable, working
+directory, and target, then passes only explicitly allowlisted environment
+variables. Otherwise it records a structured request. Broker events and
+receipts remain in local runtime state. This is a user-space control, not a
+substitute for OS-level credential isolation.
 
 ## App Updates
 

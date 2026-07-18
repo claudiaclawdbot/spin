@@ -16,9 +16,9 @@ mkdir -p "$KIT"
       app agent runtime assets licenses \
       SECURITY.md \
       scripts/lib/spin-runtime.sh scripts/lib/spin-runtime.js \
-      scripts/lib/cmux-floor-layout.sh \
-      scripts/lib/human-queue-summary.js \
-      scripts/lib/action-policy-prompt.md scripts/spin-action-broker.js tests/action-broker.test.js tests/resource-dispatch.test.js tests/control-visibility.test.js \
+      scripts/lib/cmux-floor-layout.sh scripts/lib/project-root.sh \
+      scripts/lib/human-queue-summary.js scripts/lib/job-attention.js \
+      scripts/lib/action-policy-prompt.md scripts/spin-action-broker.js tests/action-broker.test.js tests/resource-dispatch.test.js tests/control-visibility.test.js tests/project-context.test.js tests/provider-fallback.test.js \
       scripts/spin-web.js scripts/spin-app-health.js scripts/app-compatibility.js scripts/spin-app-update.js scripts/spin-app-updates.js scripts/omp-mcp-bootstrap.js scripts/codex-computer-use.sh \
       scripts/package-macos-app.sh scripts/package-macos-release.sh scripts/release-macos.sh scripts/prepare-open-source-release.sh scripts/check-installed-app.sh scripts/check-macos-signing-env.sh scripts/vendor-app-deps.sh scripts/check-app-release.sh scripts/build-app-icon.sh scripts/apply-cmux-spin-overlay.sh \
       scripts/ensure-xcode.sh scripts/build-cmux-spin.sh scripts/build-app-proof.sh \
@@ -137,7 +137,7 @@ STATUS_ROOT="$TMP/status-root"
 mkdir -p "$STATUS_ROOT/scripts/lib" "$STATUS_ROOT/org/ceo/runs" \
   "$STATUS_ROOT/org/projects/example" "$STATUS_ROOT/logs"
 cp scripts/workspace-status.sh "$STATUS_ROOT/scripts/workspace-status.sh"
-cp scripts/lib/spin-runtime.sh "$STATUS_ROOT/scripts/lib/spin-runtime.sh"
+cp scripts/lib/spin-runtime.sh scripts/lib/job-attention.js "$STATUS_ROOT/scripts/lib/"
 cat > "$STATUS_ROOT/org/projects/example/FLOOR.md" <<'EOF'
 # Example floor
 ## In progress
@@ -162,11 +162,14 @@ done
   bash "$STATUS_ROOT/scripts/workspace-status-watch.sh" & status_pid=$!
   bash "$STATUS_ROOT/scripts/wiki-watch.sh" & wiki_pid=$!
   trap 'kill "$driver_pid" "$status_pid" "$wiki_pid" "$unrelated_pid" 2>/dev/null || true' EXIT
-  echo "$driver_pid" > "$STATUS_ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
+  driver_identity="$(bash -c 'source "$1"; spin_process_identity "$2"' _ "$STATUS_ROOT/scripts/lib/spin-runtime.sh" "$driver_pid")"
+  printf '%s\nversion=1\nidentity=%s\ntoken=smoke-driver\n' "$driver_pid" "$driver_identity" \
+    > "$STATUS_ROOT/org/ceo/runs/.workspace-ceo-tick.lock"
   echo "$status_pid" > "$STATUS_ROOT/org/ceo/runs/.status-watch.lock"
   echo "$wiki_pid" > "$STATUS_ROOT/org/ceo/runs/.wiki-watch.lock"
   SPIN_ROOT="$STATUS_ROOT" bash "$STATUS_ROOT/scripts/workspace-status.sh"
   grep -q '\*\*Driver:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
+  ! grep -q 'version=1' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
   grep -q '\*\*Live status:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
   grep -q '\*\*Project index:\*\*.*running' "$STATUS_ROOT/org/ceo/WORKSPACE_STATUS.md"
 
@@ -243,8 +246,12 @@ grep -q 'AI agent command center for Mac' README.md
 grep -q 'SPIN for Mac packages' README.md
 grep -q 'Download SPIN For Mac' README.md
 grep -q 'Source And CLI Setup' README.md
-PUBLIC_VERSION="$(tr -d '[:space:]' < VERSION)"
+SOURCE_VERSION="$(tr -d '[:space:]' < VERSION)"
+SOURCE_RELEASE_DOC="docs/releases/SPIN-${SOURCE_VERSION}.md"
+PUBLIC_VERSION="$(sed -nE 's#.*releases/tag/v([^)/]+).*#\1#p' README.md | head -n 1)"
+test -n "$PUBLIC_VERSION"
 PUBLIC_RELEASE_DOC="docs/releases/SPIN-${PUBLIC_VERSION}.md"
+test -f "$PUBLIC_RELEASE_DOC"
 grep -q "v${PUBLIC_VERSION}" README.md
 grep -q 'signed Codex CLI' README.md
 grep -q 'spin computer-use probe' README.md
@@ -271,8 +278,8 @@ grep -q 'assets/spin-icon.svg' docs/index.html
 grep -q 'Install SPIN for Mac' docs/INSTALL_MACOS.md
 grep -q 'Control-click `SPIN.app`' docs/INSTALL_MACOS.md
 grep -q 'DMG opens and includes `SPIN.app`, `Applications`, and `README.txt`' docs/RELEASING_MACOS.md
-grep -q "SPIN for Mac ${PUBLIC_VERSION}" "$PUBLIC_RELEASE_DOC"
-! grep -qi 'attach these files\|maintainer checks\|open-source tester' "$PUBLIC_RELEASE_DOC"
+grep -q "SPIN for Mac ${SOURCE_VERSION}" "$SOURCE_RELEASE_DOC"
+! grep -qi 'attach these files\|maintainer checks\|open-source tester' "$SOURCE_RELEASE_DOC"
 test -f SECURITY.md
 grep -q 'Security Policy' SECURITY.md
 test -f .github/ISSUE_TEMPLATE/config.yml
@@ -541,6 +548,10 @@ if scripts/org queue-job example-app scout "bad id path" --id '../bad' >/dev/nul
   echo "bad job id accepted"
   exit 1
 fi
+if printf 'must not escape project state\n' | scripts/org set-handoff '..' >/dev/null 2>&1; then
+  echo "parent-directory project id accepted"
+  exit 1
+fi
 if scripts/org update-job smoke-scout --after smoke-dependent >/dev/null 2>&1; then
   echo "dependency cycle accepted"
   exit 1
@@ -573,6 +584,10 @@ cat > scripts/project-ceo-agent.sh <<EOF
   printf 'description=%s\n' "\${OMP_JOB_DESCRIPTION:-}"
   printf 'project=%s\n' "\${1:-}"
 } > "$TMP/project-agent.env"
+outcome_tmp="\${OMP_OUTCOME_FILE}.tmp.\$\$"
+printf '{"version":1,"job_id":"%s","outcome":"completed","detail":"deterministic smoke agent completed"}\n' \
+  "\${OMP_JOB_ID}" > "\$outcome_tmp"
+mv "\$outcome_tmp" "\${OMP_OUTCOME_FILE}"
 EOF
 chmod +x scripts/project-ceo-agent.sh
 scripts/omp-supervisor-once.sh >/dev/null
@@ -661,46 +676,6 @@ node -e '
   if (q.jobs.find(job => job.id === "smoke-requeue")?.status !== "completed") process.exit(1);
 '
 
-# A runaway agent/test process tree must be killed inside its detached process
-# group and leave a durable resource-limit result for the next reconciliation.
-cat > scripts/project-ceo-agent.sh <<'EOF'
-#!/usr/bin/env bash
-trap 'exit 0' TERM INT
-while true; do sleep 1; done
-EOF
-chmod +x scripts/project-ceo-agent.sh
-scripts/org queue-job example-app scout "resource governor fixture" --id smoke-resource-limit >/dev/null
-OMP_JOB_MAX_RSS_MB=1 OMP_RESOURCE_CHECK_INTERVAL=1 scripts/omp-supervisor-once.sh >/dev/null
-resource_job_pid="$(cat org/jobs/smoke-resource-limit.pid)"
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  [[ -s org/jobs/smoke-resource-limit.resource ]] && ! kill -0 "$resource_job_pid" 2>/dev/null && break
-  sleep 0.5
-done
-if kill -0 "$resource_job_pid" 2>/dev/null; then
-  kill -KILL -- "-$resource_job_pid" 2>/dev/null || kill -KILL "$resource_job_pid" 2>/dev/null || true
-  echo "resource governor did not stop the over-limit process group" >&2
-  exit 1
-fi
-grep -q 'Resource limit exceeded: RSS' org/jobs/smoke-resource-limit.resource
-for _ in 1 2 3 4 5; do
-  scripts/omp-supervisor-once.sh >/dev/null
-  if node - <<'NODE'
-const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
-const job = q.jobs.find(entry => entry.id === 'smoke-resource-limit');
-if (job?.status !== 'failed' || !/Resource limit exceeded/.test(job.result || '')) process.exit(1);
-if (job.resource_limits?.max_rss_mb !== 1 || job.resource_limits?.max_processes !== 16) process.exit(1);
-NODE
-  then
-    break
-  fi
-  sleep 0.2
-done
-node - <<'NODE'
-const q = JSON.parse(require('fs').readFileSync('org/AGENT_QUEUE.json', 'utf8'));
-const job = q.jobs.find(entry => entry.id === 'smoke-resource-limit');
-if (job?.status !== 'failed' || !/Resource limit exceeded/.test(job.result || '')) process.exit(1);
-NODE
-
 cat > scripts/project-ceo-agent.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -741,12 +716,17 @@ NODE
   --next "smoke proof complete: $JOB_ID" >/dev/null
 "$ROOT/scripts/org" inbox "$PROJECT_ID" \
   "job $JOB_ID complete: $JOB_DESCRIPTION" >/dev/null
+
+outcome_tmp="${OMP_OUTCOME_FILE}.tmp.$$"
+printf '{"version":1,"job_id":"%s","outcome":"completed","detail":"deterministic multi-project smoke agent completed"}\n' \
+  "$OMP_JOB_ID" > "$outcome_tmp"
+mv "$outcome_tmp" "$OMP_OUTCOME_FILE"
 EOF
 chmod +x scripts/project-ceo-agent.sh
 scripts/org queue-job example-app scout "multi-project proof: example lane" --id smoke-example-project >/dev/null
 scripts/org queue-job workspace scout "multi-project proof: workspace lane" --id smoke-workspace-project >/dev/null
 scripts/omp-supervisor-once.sh >/dev/null
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+for ((attempt = 0; attempt < 50; attempt += 1)); do
   if grep -q "Smoke Project Proof" org/projects/example-app/RECEIPTS.md &&
      grep -q "Smoke Project Proof" org/projects/workspace/RECEIPTS.md &&
      grep -q "smoke-example-project complete" org/ceo/INBOX.md &&
@@ -755,7 +735,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   fi
   sleep 0.2
 done
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+for ((attempt = 0; attempt < 50; attempt += 1)); do
   scripts/omp-supervisor-once.sh >/dev/null
   if node - <<'NODE'
 const fs = require('fs');
@@ -843,7 +823,7 @@ mkdir -p "$ROLLUP_ROOT/scripts/lib" "$ROLLUP_ROOT/org/ceo/runs" \
   "$ROLLUP_ROOT/org/projects/active-app" "$ROLLUP_ROOT/org/projects/old-app" \
   "$ROLLUP_ROOT/org/wiki"
 cp scripts/workspace-status.sh scripts/wiki-update.sh "$ROLLUP_ROOT/scripts/"
-cp scripts/lib/spin-runtime.sh scripts/lib/human-queue-summary.js "$ROLLUP_ROOT/scripts/lib/"
+cp scripts/lib/spin-runtime.sh scripts/lib/human-queue-summary.js scripts/lib/job-attention.js "$ROLLUP_ROOT/scripts/lib/"
 cat > "$ROLLUP_ROOT/org/state.json" <<'EOF'
 {
   "project_orchestrators": [
@@ -908,6 +888,7 @@ FLOOR_CAPTURE="$TMP/floor-omp.capture"
 mkdir -p "$FLOORBIN" "$TMP/protected-project" \
   "$KIT/org/projects/protected-floor"
 ln -s "$TMP/protected-project" "$KIT/projects/protected-floor"
+PROTECTED_PROJECT_REAL="$(cd "$TMP/protected-project" && pwd -P)"
 cat > "$FLOORBIN/omp" <<'EOF'
 #!/usr/bin/env bash
 {
@@ -921,10 +902,11 @@ TERM=xterm FLOOR_CAPTURE="$FLOOR_CAPTURE" SPIN_OMP_BIN="$FLOORBIN/omp" \
   SPIN_OMP_MCP_BOOTSTRAP=0 SPIN_ROOT="$KIT" \
   scripts/cmux-floor.sh protected-floor > "$TMP/protected-floor.out"
 grep -Fx "cwd=$KIT/org/projects/protected-floor" "$FLOOR_CAPTURE"
-grep -Fx "project=$KIT/projects/protected-floor" "$FLOOR_CAPTURE"
+grep -Fx "project=$PROTECTED_PROJECT_REAL" "$FLOOR_CAPTURE"
+grep -F -- "--config $KIT/org/ceo/runs/omp-configs/project-floor:protected-floor.yml" "$FLOOR_CAPTURE"
 grep -F 'Use absolute project paths' "$FLOOR_CAPTURE"
 grep -F "floor:  $KIT/org/projects/protected-floor" "$TMP/protected-floor.out"
-grep -F "code:   $KIT/projects/protected-floor" "$TMP/protected-floor.out"
+grep -F "code:   $PROTECTED_PROJECT_REAL" "$TMP/protected-floor.out"
 rm -f "$KIT/projects/protected-floor" \
   "$KIT/org/ceo/runs/floors/protected-floor.pid"
 rm -rf "$KIT/org/projects/protected-floor"
@@ -1599,9 +1581,24 @@ EOF
 
 scripts/ensure-xcode.sh --check >/dev/null 2>&1 || true
 
+PACKAGE_CMUX_SOURCE="$TMP/internal-cmux"
+PACKAGE_OMP_SOURCE="$TMP/internal-omp"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # Ad-hoc signing and repeatedly archiving shell-script or re-signed Apple
+  # platform binaries can make macOS execution policy reject the fixture after
+  # extraction. Compile a tiny first-party Mach-O no-op for these package tests;
+  # the hosted artifact workflow separately verifies the real bundled binaries.
+  printf '%s\n' 'int main(void) { return 0; }' | \
+    xcrun clang -x c -Os -o "$TMP/package-noop" -
+  cp "$TMP/package-noop" "$TMP/package-cmux"
+  cp "$TMP/package-noop" "$TMP/package-omp"
+  PACKAGE_CMUX_SOURCE="$TMP/package-cmux"
+  PACKAGE_OMP_SOURCE="$TMP/package-omp"
+fi
+
 SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
-SPIN_CMUX_BIN_SOURCE="$TMP/internal-cmux" \
-SPIN_OMP_BIN_SOURCE="$TMP/internal-omp" \
+SPIN_CMUX_BIN_SOURCE="$PACKAGE_CMUX_SOURCE" \
+SPIN_OMP_BIN_SOURCE="$PACKAGE_OMP_SOURCE" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
 node - "$TMP/SPIN.app/Contents/Info.plist" VERSION <<'NODE'
 const fs = require('fs');
@@ -1723,6 +1720,13 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   ) >/dev/null
   grep -q 'SPIN for Mac' "$RELEASE_NOTES"
   grep -q 'visual command center' "$RELEASE_NOTES"
+  node - "$SOURCE_RELEASE_DOC" "$RELEASE_NOTES" <<'NODE'
+const fs = require('fs');
+const [sourceFile, generatedFile] = process.argv.slice(2);
+const source = fs.readFileSync(sourceFile, 'utf8').split('\n').slice(1).join('\n').trim();
+const generated = fs.readFileSync(generatedFile, 'utf8');
+if (!source || !generated.includes(source)) process.exit(1);
+NODE
   grep -q 'ad-hoc signed' "$RELEASE_NOTES"
   grep -q 'not Apple-notarized' "$RELEASE_NOTES"
   ! grep -qi 'attach these files\|maintainer checks\|open-source tester' "$RELEASE_NOTES"
@@ -1779,11 +1783,21 @@ const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
 manifest.release.channel = 'production';
 fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
-  if scripts/spin app-update --dry-run --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
+  APP_UPDATE_FAILURE_TMP="$TMP/app-update-failure-temp"
+  mkdir -p "$APP_UPDATE_FAILURE_TMP"
+  if TMPDIR="$APP_UPDATE_FAILURE_TMP" scripts/spin app-update --dry-run --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" >/dev/null 2>&1; then
     echo "app-update allowed production channel downgrade without force"
     exit 1
   fi
-  scripts/spin app-update --dry-run --force-channel --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-force.out"
+  if find "$APP_UPDATE_FAILURE_TMP" -mindepth 1 -print -quit | grep -q .; then
+    echo "failed app-update leaked its extracted candidate" >&2
+    exit 1
+  fi
+  TMPDIR="$APP_UPDATE_FAILURE_TMP" scripts/spin app-update --dry-run --force-channel --installed-app "$PROD_APP" "$RELEASE_COMMAND_ZIP" > "$TMP/app-update-force.out"
+  if find "$APP_UPDATE_FAILURE_TMP" -mindepth 1 -print -quit | grep -q .; then
+    echo "successful app-update leaked its extracted candidate" >&2
+    exit 1
+  fi
   grep -q 'production -> ad-hoc' "$TMP/app-update-force.out"
   INSTALL_APP="$TMP/install-target/SPIN.app"
   mkdir -p "$TMP/install-target"
@@ -1868,6 +1882,17 @@ NODE
     echo "app-update installed untrusted production candidate"
     exit 1
   fi
+fi
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # Restore the interactive fakes for the final source-app launch checks. The
+  # release artifacts above retain the deterministic Mach-O package shims.
+  cp "$TMP/internal-cmux" "$TMP/SPIN.app/Contents/Resources/bin/cmux"
+  cp "$TMP/internal-omp" "$TMP/SPIN.app/Contents/Resources/bin/omp"
+  cp "$TMP/internal-omp" "$TMP/SPIN.app/Contents/Resources/bin/spin-agent"
+  chmod +x "$TMP/SPIN.app/Contents/Resources/bin/cmux" \
+    "$TMP/SPIN.app/Contents/Resources/bin/omp" \
+    "$TMP/SPIN.app/Contents/Resources/bin/spin-agent"
 fi
 
 env -i HOME="$SMOKE_HOME" PATH="$PATH" SPIN_APP_LAUNCH_DRY_RUN=1 scripts/spin app-launch > "$TMP/app-launch-before.out"

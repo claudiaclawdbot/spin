@@ -9,6 +9,8 @@ const { spawn } = require('child_process');
 const { URLSearchParams } = require('url');
 
 const selfDir = path.dirname(fs.realpathSync(__filename));
+const { jobNeedsAttention } = require(path.join(selfDir, 'lib', 'job-attention.js'));
+const { summarizeHumanQueue } = require(path.join(selfDir, 'lib', 'human-queue-summary.js'));
 const ROOT = process.env.SPIN_ROOT || process.env.OMP_ROOT || path.resolve(selfDir, '..');
 const ORG = path.join(ROOT, 'org');
 const RUNS = path.join(ORG, 'ceo', 'runs');
@@ -17,6 +19,7 @@ const HUMAN_QUEUE = path.join(ORG, 'HUMAN_QUEUE.md');
 const QUEUE = path.join(ORG, 'AGENT_QUEUE.json');
 const STATE = path.join(ORG, 'state.json');
 const WORKSPACE_STATUS = path.join(ORG, 'ceo', 'WORKSPACE_STATUS.md');
+const STATUS_HEARTBEAT = path.join(RUNS, '.status-watch.heartbeat');
 
 const args = process.argv.slice(2);
 const flagValue = (name, fallback) => {
@@ -26,6 +29,7 @@ const flagValue = (name, fallback) => {
 const HOST = flagValue('--host', process.env.SPIN_WEB_HOST || '127.0.0.1');
 const PORT = Number(flagValue('--port', process.env.SPIN_WEB_PORT || '8787'));
 const SHOULD_OPEN = args.includes('--open');
+const VALID_PROJECT_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]+$/;
 
 function read(file, fallback = '') {
   try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; }
@@ -47,13 +51,8 @@ function nowStamp() {
 }
 
 function humanQueueItems() {
-  return read(HUMAN_QUEUE).split('\n')
-    .filter(line => /^-\s+(\[[ xX]\]\s*)?/.test(line))
-    .map((line, index) => ({
-      index,
-      raw: line.replace(/^-+\s*/, '').trim(),
-      text: line.replace(/^-+\s*(\[[ xX]\]\s*)?/, '').trim(),
-    }))
+  return summarizeHumanQueue(ROOT).items
+    .map(item => ({ ...item, text: item.text.replace(/^\[[ xX]\]\s*/, '') }))
     .filter(item => item.text && !/^_?\(nothing/i.test(item.text));
 }
 
@@ -87,6 +86,7 @@ function writeApproval(action, item, note = '') {
 }
 
 function projectFloor(projectId) {
+  if (!VALID_PROJECT_ID.test(String(projectId || ''))) return '(invalid project id)';
   return read(path.join(ORG, 'projects', projectId, 'FLOOR.md'), '(no FLOOR.md yet)');
 }
 
@@ -141,15 +141,24 @@ function controlPlane() {
     const match = markdown.match(new RegExp(`^- \\*\\*${name}:\\*\\*\\s*(.+)$`, 'mi'));
     return match ? match[1].trim() : 'unknown';
   };
-  let modified = 0;
-  try { modified = fs.statSync(WORKSPACE_STATUS).mtimeMs; } catch {}
-  const stale = !modified || Date.now() - modified > 45_000;
+  let boardModified = 0;
+  try { boardModified = fs.statSync(WORKSPACE_STATUS).mtimeMs; } catch {}
+  let observedAt = 0;
+  try {
+    const heartbeat = readJSON(STATUS_HEARTBEAT, {});
+    observedAt = dateValue(heartbeat.observed_at);
+    if (!observedAt) observedAt = fs.statSync(STATUS_HEARTBEAT).mtimeMs;
+  } catch {}
+  const changedMatch = markdown.match(/^_Status changed at ([^_]+)_/mi);
+  const statusChangedAt = dateValue(changedMatch && changedMatch[1]) || boardModified;
+  const stale = !boardModified || !observedAt || Date.now() - observedAt > 45_000;
   return {
     driver: field('Driver'),
     status: field('Live status'),
     index: field('Project index'),
     actions: field('Sensitive actions'),
-    age: modified ? ageText(new Date(modified).toISOString()) : 'missing',
+    observedAge: observedAt ? ageText(new Date(observedAt).toISOString()) : 'missing',
+    changedAge: statusChangedAt ? ageText(new Date(statusChangedAt).toISOString()) : 'missing',
     stale,
   };
 }
@@ -193,7 +202,8 @@ function page(message = '') {
   const active = projects.filter(p => isActive(p.status));
   const running = newest(jobs.filter(j => j.status === 'running'));
   const queued = newest(jobs.filter(j => j.status === 'queued'));
-  const problems = newest(jobs.filter(j => j.status === 'blocked' || j.status === 'failed')).slice(0, 8);
+  const attention = newest(jobs.filter(jobNeedsAttention));
+  const problems = attention.slice(0, 8);
   const completed = newest(jobs.filter(j => j.status === 'completed')).slice(0, 5);
   const control = controlPlane();
   const sampled = running.map(resourceUsage).filter(Boolean);
@@ -207,6 +217,8 @@ function page(message = '') {
   const dispatch = dispatchState
     ? `${dispatchState.status || 'unknown'} · ${dispatchState.note || 'no detail'} · ${dispatchState.available_memory_mb || '?'} MB available`
     : 'waiting for dispatcher state';
+  const driverPaused = /paused/i.test(control.driver);
+  const driverClass = /DOWN|unknown/i.test(control.driver) ? 'bad' : driverPaused ? 'warn' : 'ok';
 
   return `<!doctype html>
 <html lang="en">
@@ -228,11 +240,11 @@ form.inline{display:inline-flex;gap:6px;margin:4px 4px 0 0;align-items:center}.d
 </style>
 </head>
 <body>
-<header><div><h1>SPIN Control</h1><div class="muted">${escapeHTML(ROOT)}</div></div><div><span class="pill ${control.stale ? 'bad' : ''}">${control.stale ? 'control stale' : 'control live'}</span><span class="pill">${running.length} running</span><span class="pill">${queued.length} queued</span><span class="pill ${problems.length ? 'bad' : ''}">${problems.length} attention</span><span class="pill">${waiting.length} waiting</span></div></header>
+<header><div><h1>SPIN Control</h1><div class="muted">${escapeHTML(ROOT)}</div></div><div><span class="pill ${control.stale ? 'bad' : ''}">${control.stale ? 'control stale' : 'control live'}</span>${driverPaused ? '<span class="pill warn">driver paused</span>' : ''}<span class="pill">${running.length} running</span><span class="pill">${queued.length} queued</span><span class="pill ${attention.length ? 'bad' : ''}">${attention.length} attention</span><span class="pill">${waiting.length} waiting</span></div></header>
 <main>
 ${message ? `<section><strong class="ok">${escapeHTML(message)}</strong></section>` : ''}
 <div class="grid">
-<section><h2>Control Plane</h2><p><strong>Driver</strong><br><span class="${/DOWN|unknown/i.test(control.driver) ? 'bad' : 'ok'}">${escapeHTML(control.driver)}</span></p><p><strong>Live status</strong><br><span class="${control.stale ? 'bad' : 'muted'}">${escapeHTML(control.status)} · board ${escapeHTML(control.age)} old</span></p><p><strong>Sensitive actions</strong><br><span class="muted">${escapeHTML(control.actions)}</span></p></section>
+<section><h2>Control Plane</h2><p><strong>Driver</strong><br><span class="${driverClass}">${escapeHTML(control.driver)}</span></p><p><strong>Live status</strong><br><span class="${control.stale ? 'bad' : 'muted'}">${escapeHTML(control.status)} · observed ${escapeHTML(control.observedAge)} ago</span><br><span class="muted">Status changed ${escapeHTML(control.changedAge)} ago.</span></p><p><strong>Sensitive actions</strong><br><span class="muted">${escapeHTML(control.actions)}</span></p></section>
 <section><h2>Waiting On You</h2>${waiting.length ? waiting.map(item => `
   <div class="decision">
     <div>${escapeHTML(item.text)}</div>
@@ -241,7 +253,7 @@ ${message ? `<section><strong class="ok">${escapeHTML(message)}</strong></sectio
 <section><h2>Pending Decisions</h2><ul>${pending.map(line => `<li>${escapeHTML(line)}</li>`).join('') || '<li class="muted">No pending approvals.</li>'}</ul>
 <form method="post" action="/decision"><input name="item" placeholder="Manual approval text"><div style="display:flex;gap:6px;margin-top:8px"><button name="action" value="APPROVE">Approve</button><button name="action" value="DECLINE">Decline</button><button name="action" value="ASK">Ask</button></div></form></section>
 </div>
-<section><h2>Jobs</h2><p class="resource-line"><strong>Dispatcher:</strong> <span class="muted">${escapeHTML(dispatch)}</span><br><strong>Current resources:</strong> <span class="muted">${escapeHTML(resources)}</span></p><div class="job-columns"><div class="lane"><h3>Running</h3>${jobList(running, 'No running jobs.')}</div><div class="lane"><h3>Queued</h3>${jobList(queued.slice(0, 8), 'No queued jobs.')}</div><div class="lane"><h3>Needs Attention</h3>${jobList(problems, 'No blocked or failed jobs.')}</div></div><div class="completed-line"><strong>Recently completed:</strong> <span class="muted">${completed.length ? completed.map(job => escapeHTML(job.id)).join(' · ') : 'none'}</span></div></section>
+<section><h2>Jobs</h2><p class="resource-line"><strong>Dispatcher:</strong> <span class="muted">${escapeHTML(dispatch)}</span><br><strong>Current resources:</strong> <span class="muted">${escapeHTML(resources)}</span></p><div class="job-columns"><div class="lane"><h3>Running</h3>${jobList(running, 'No running jobs.')}</div><div class="lane"><h3>Queued</h3>${jobList(queued.slice(0, 8), 'No queued jobs.')}</div><div class="lane"><h3>Needs Attention</h3>${jobList(problems, 'Nothing needs attention.')}</div></div><div class="completed-line"><strong>Recently completed:</strong> <span class="muted">${completed.length ? completed.map(job => escapeHTML(job.id)).join(' · ') : 'none'}</span></div></section>
 <section><h2>Projects</h2><div class="grid">${active.map(p => {
     const id = p.project || p.id || '?';
     return `<div class="project"><h3>${escapeHTML(id)}</h3><p class="muted">${escapeHTML(truncate(p.next_action || 'No next action.', 120))}</p><p><a href="/floor/${encodeURIComponent(id)}">Open floor board</a></p></div>`;
@@ -277,8 +289,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && url.pathname.startsWith('/floor/')) {
+      const projectId = decodeURIComponent(url.pathname.slice('/floor/'.length));
+      if (!VALID_PROJECT_ID.test(projectId)) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('invalid project id\n');
+        return;
+      }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(floorPage(decodeURIComponent(url.pathname.slice('/floor/'.length))));
+      res.end(floorPage(projectId));
       return;
     }
     if (req.method === 'POST' && url.pathname === '/decision') {

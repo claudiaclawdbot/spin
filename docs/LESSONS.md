@@ -38,11 +38,12 @@ When a CLI hits its usage limit, retrying it every tick wastes the window and
 hides the problem. Worse: an explicit `PROVIDER=x` override somewhere upstream
 kept resurrecting the rate-limited provider.
 
-**v3:** on any usage-limit error a direct CLI provider gets a **lockout file with
-an expiry epoch**; the outer fallback skips it — *even when explicitly requested* —
-until the lockout expires on its own. OMP keeps its own provider/account cooldowns
-inside the harness, so SPIN does not bench the whole OMP lane for one backend's
-429.
+**v3:** when the owner or control plane knows a direct CLI provider is limited,
+it writes a **lockout file with an expiry epoch**; the outer fallback skips it,
+*even when explicitly requested*, until the lockout expires on its own. Agent
+task logs never create that permission because a failed attempt may already have
+changed project files. OMP keeps its own provider/account cooldowns inside the
+harness, so SPIN does not bench the whole OMP lane for one backend's 429.
 
 ## 4. An LLM loop that runs on a timer is a money printer (for your provider)
 
@@ -57,9 +58,11 @@ a low-frequency forced heartbeat. An idle org costs a couple of brain runs a day
 Some CLIs exit cleanly after producing nothing (auth hiccup, empty completion).
 The queue marks them complete; work silently stalls.
 
-**v3:** after each job the agent script **diffs the project's STATE/RECEIPTS
-hashes**; an unchanged exit-0 run is retried once on claude and labeled a
-silent exit in the log.
+**v4:** after each job the agent script **diffs the project's STATE/RECEIPTS
+hashes** and requires a semantic receipt outcome. An unchanged exit-0 run fails
+closed. It is not retried through a second provider because the first attempt
+may already have changed project code, making a second pass duplicate partial
+work.
 
 ## 6. A kill switch you can forget is an outage
 
