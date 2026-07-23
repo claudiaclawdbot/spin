@@ -92,6 +92,11 @@ ambiguous outcome metadata fails closed, so blocked work cannot unlock a
 dependent job merely because its provider exited cleanly. Queue records created
 before this contract retain their legacy exit-code behavior.
 
+Blocked and failed records stay in queue history. After the operator has
+reviewed one, `org acknowledge-job <job-id> [--note "..."]` records that
+acknowledgement atomically and removes the record from current attention views
+without deleting it.
+
 The live visual path is explicit: `spin delegate --wait <project> "<task>"`
 types a stamped request into that project's cmux/omp floor and waits for a matching
 `org inbox` report (`delegate <id> complete: ...` or `blocked: ...`). Use it when

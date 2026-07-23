@@ -3,17 +3,20 @@
 'use strict';
 
 const fs = require('fs');
+const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { URLSearchParams } = require('url');
 
 const selfDir = path.dirname(fs.realpathSync(__filename));
+const runtime = require(path.join(selfDir, 'lib', 'spin-runtime.js'));
 const { jobNeedsAttention } = require(path.join(selfDir, 'lib', 'job-attention.js'));
 const { summarizeHumanQueue } = require(path.join(selfDir, 'lib', 'human-queue-summary.js'));
 const ROOT = process.env.SPIN_ROOT || process.env.OMP_ROOT || path.resolve(selfDir, '..');
 const ORG = path.join(ROOT, 'org');
 const RUNS = path.join(ORG, 'ceo', 'runs');
+const APPROVALS_LOCK = path.join(RUNS, '.org-approvals.lock');
 const APPROVALS = path.join(ORG, 'ceo', 'APPROVALS.md');
 const HUMAN_QUEUE = path.join(ORG, 'HUMAN_QUEUE.md');
 const QUEUE = path.join(ORG, 'AGENT_QUEUE.json');
@@ -30,6 +33,13 @@ const HOST = flagValue('--host', process.env.SPIN_WEB_HOST || '127.0.0.1');
 const PORT = Number(flagValue('--port', process.env.SPIN_WEB_PORT || '8787'));
 const SHOULD_OPEN = args.includes('--open');
 const VALID_PROJECT_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]+$/;
+const CSRF_TOKEN = crypto.randomBytes(32).toString('hex');
+const SECURITY_HEADERS = {
+  'cache-control': 'no-store',
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+};
 
 function read(file, fallback = '') {
   try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; }
@@ -50,6 +60,90 @@ function nowStamp() {
   return new Date().toISOString().slice(0, 16) + 'Z';
 }
 
+function loopbackHostname(value) {
+  const hostname = String(value || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
+}
+
+const BIND_HOST = String(HOST).replace(/^\[([^\]]+)\]$/, '$1');
+if (!loopbackHostname(BIND_HOST)) {
+  console.error(`SPIN web error: refusing non-loopback --host ${JSON.stringify(HOST)}; use 127.0.0.1, localhost, or ::1`);
+  process.exit(1);
+}
+
+function loopbackPeer(value) {
+  const address = String(value || '').toLowerCase();
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+function requestOrigin(req) {
+  const host = req.headers.host;
+  if (typeof host !== 'string' || !host || host.includes(',')) return null;
+
+  let authority;
+  try {
+    authority = new URL(`http://${host}`);
+  } catch {
+    return null;
+  }
+
+  const address = server.address();
+  const expectedPort = address && typeof address === 'object' ? String(address.port) : String(PORT);
+  const requestPort = authority.port || '80';
+  if (
+    authority.protocol !== 'http:'
+    || authority.username
+    || authority.password
+    || authority.pathname !== '/'
+    || authority.search
+    || authority.hash
+    || !loopbackHostname(authority.hostname)
+    || requestPort !== expectedPort
+  ) return null;
+
+  return authority.origin;
+}
+
+function validDecisionRequest(req) {
+  const expectedOrigin = requestOrigin(req);
+  if (!expectedOrigin || !loopbackPeer(req.socket.remoteAddress)) return false;
+
+  const originValue = req.headers.origin;
+  if (typeof originValue !== 'string' || !originValue || originValue.includes(',')) return false;
+
+  try {
+    const origin = new URL(originValue);
+    return (
+      origin.protocol === 'http:'
+      && !origin.username
+      && !origin.password
+      && origin.pathname === '/'
+      && !origin.search
+      && !origin.hash
+      && loopbackHostname(origin.hostname)
+      && origin.origin === expectedOrigin
+    );
+  } catch {
+    return false;
+  }
+}
+
+function validCsrfToken(value) {
+  if (typeof value !== 'string') return false;
+  const expected = Buffer.from(CSRF_TOKEN, 'utf8');
+  const actual = Buffer.from(value, 'utf8');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function forbidden(req, res) {
+  req.resume();
+  res.writeHead(403, {
+    ...SECURITY_HEADERS,
+    'content-type': 'text/plain; charset=utf-8',
+  });
+  res.end('forbidden\n');
+}
+
 function humanQueueItems() {
   return summarizeHumanQueue(ROOT).items
     .map(item => ({ ...item, text: item.text.replace(/^\[[ xX]\]\s*/, '') }))
@@ -67,6 +161,20 @@ function pendingApprovals() {
     .map(line => line.trim());
 }
 
+function withApprovalsLock(fn) {
+  let handle;
+  try {
+    handle = runtime.acquireProcessLock(APPROVALS_LOCK, { timeoutMs: 5000, pollMs: 100 });
+  } catch (error) {
+    throw new Error(`cannot acquire approvals lock: ${error.message}`);
+  }
+  try {
+    return fn();
+  } finally {
+    runtime.releaseProcessLock(handle);
+  }
+}
+
 function writeApproval(action, item, note = '') {
   const cleanAction = String(action || '').toUpperCase();
   if (!['APPROVE', 'DECLINE', 'ASK'].includes(cleanAction)) throw new Error('invalid decision action');
@@ -75,14 +183,16 @@ function writeApproval(action, item, note = '') {
   const cleanNote = String(note || '').replace(/\s+/g, ' ').trim();
   const message = `${cleanAction}: ${cleanItem}${cleanNote ? ` — ${cleanNote}` : ''}`;
   const line = `- [${nowStamp()}] ${message}`;
-  const txt = read(APPROVALS, '# Approvals\n\n## Pending\n\n## Processed\n');
-  const lines = txt.split('\n');
-  const pending = lines.findIndex(l => /^##\s+Pending/i.test(l));
-  if (pending < 0) throw new Error('APPROVALS.md has no Pending section');
-  lines.splice(pending + 1, 0, '', line);
-  const tmp = `${APPROVALS}.tmp.${process.pid}`;
-  fs.writeFileSync(tmp, lines.join('\n'));
-  fs.renameSync(tmp, APPROVALS);
+  return withApprovalsLock(() => {
+    const txt = read(APPROVALS, '# Approvals\n\n## Pending\n\n## Processed\n');
+    const lines = txt.split('\n');
+    const pending = lines.findIndex(l => /^##\s+Pending/i.test(l));
+    if (pending < 0) throw new Error('APPROVALS.md has no Pending section');
+    lines.splice(pending + 1, 0, '', line);
+    const tmp = `${APPROVALS}.tmp.${process.pid}`;
+    fs.writeFileSync(tmp, lines.join('\n'));
+    fs.renameSync(tmp, APPROVALS);
+  });
 }
 
 function projectFloor(projectId) {
@@ -248,10 +358,10 @@ ${message ? `<section><strong class="ok">${escapeHTML(message)}</strong></sectio
 <section><h2>Waiting On You</h2>${waiting.length ? waiting.map(item => `
   <div class="decision">
     <div>${escapeHTML(item.text)}</div>
-    ${['APPROVE','DECLINE','ASK'].map(action => `<form class="inline" method="post" action="/decision"><input type="hidden" name="item" value="${escapeHTML(item.text)}"><input type="hidden" name="action" value="${action}"><button>${action}</button></form>`).join('')}
+    ${['APPROVE','DECLINE','ASK'].map(action => `<form class="inline" method="post" action="/decision"><input type="hidden" name="csrf" value="${escapeHTML(CSRF_TOKEN)}"><input type="hidden" name="item" value="${escapeHTML(item.text)}"><input type="hidden" name="action" value="${action}"><button>${action}</button></form>`).join('')}
   </div>`).join('') : '<p class="ok">Nothing waiting.</p>'}</section>
 <section><h2>Pending Decisions</h2><ul>${pending.map(line => `<li>${escapeHTML(line)}</li>`).join('') || '<li class="muted">No pending approvals.</li>'}</ul>
-<form method="post" action="/decision"><input name="item" placeholder="Manual approval text"><div style="display:flex;gap:6px;margin-top:8px"><button name="action" value="APPROVE">Approve</button><button name="action" value="DECLINE">Decline</button><button name="action" value="ASK">Ask</button></div></form></section>
+<form method="post" action="/decision"><input type="hidden" name="csrf" value="${escapeHTML(CSRF_TOKEN)}"><input name="item" placeholder="Manual approval text"><div style="display:flex;gap:6px;margin-top:8px"><button name="action" value="APPROVE">Approve</button><button name="action" value="DECLINE">Decline</button><button name="action" value="ASK">Ask</button></div></form></section>
 </div>
 <section><h2>Jobs</h2><p class="resource-line"><strong>Dispatcher:</strong> <span class="muted">${escapeHTML(dispatch)}</span><br><strong>Current resources:</strong> <span class="muted">${escapeHTML(resources)}</span></p><div class="job-columns"><div class="lane"><h3>Running</h3>${jobList(running, 'No running jobs.')}</div><div class="lane"><h3>Queued</h3>${jobList(queued.slice(0, 8), 'No queued jobs.')}</div><div class="lane"><h3>Needs Attention</h3>${jobList(problems, 'Nothing needs attention.')}</div></div><div class="completed-line"><strong>Recently completed:</strong> <span class="muted">${completed.length ? completed.map(job => escapeHTML(job.id)).join(' · ') : 'none'}</span></div></section>
 <section><h2>Projects</h2><div class="grid">${active.map(p => {
@@ -282,41 +392,50 @@ function readBody(req, limit = 16_384) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, `http://${HOST}:${PORT}`);
+    const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': 'text/html; charset=utf-8' });
       res.end(page(url.searchParams.get('ok') || ''));
       return;
     }
     if (req.method === 'GET' && url.pathname.startsWith('/floor/')) {
       const projectId = decodeURIComponent(url.pathname.slice('/floor/'.length));
       if (!VALID_PROJECT_ID.test(projectId)) {
-        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.writeHead(400, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' });
         res.end('invalid project id\n');
         return;
       }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': 'text/html; charset=utf-8' });
       res.end(floorPage(projectId));
       return;
     }
     if (req.method === 'POST' && url.pathname === '/decision') {
+      if (!validDecisionRequest(req)) {
+        forbidden(req, res);
+        return;
+      }
       const params = new URLSearchParams(await readBody(req));
+      if (!validCsrfToken(params.get('csrf'))) {
+        forbidden(req, res);
+        return;
+      }
       writeApproval(params.get('action'), params.get('item'), params.get('note') || '');
-      res.writeHead(303, { location: '/?ok=Decision%20recorded' });
+      res.writeHead(303, { ...SECURITY_HEADERS, location: '/?ok=Decision%20recorded' });
       res.end();
       return;
     }
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.writeHead(404, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' });
     res.end('not found\n');
   } catch (err) {
-    res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+    res.writeHead(500, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' });
     res.end(`SPIN web error: ${err.message}\n`);
   }
 });
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, BIND_HOST, () => {
   const addr = server.address();
-  const url = `http://${HOST}:${addr.port}/`;
+  const displayHost = BIND_HOST.includes(':') ? `[${BIND_HOST}]` : BIND_HOST;
+  const url = `http://${displayHost}:${addr.port}/`;
   console.log(`SPIN web: ${url}`);
   if (SHOULD_OPEN && process.platform === 'darwin') {
     const child = spawn('open', [url], { stdio: 'ignore', detached: true });

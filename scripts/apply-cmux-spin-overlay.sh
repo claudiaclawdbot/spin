@@ -288,7 +288,10 @@ hydrate_cmux_build_inputs
 require_file cmux.xcodeproj/project.pbxproj
 require_file Resources/Info.plist
 require_file Sources/cmuxApp.swift
+require_file Sources/AppDelegate.swift
+require_file Sources/App/CmuxHelpCommands.swift
 require_file CLI/cmux.swift
+require_file Packages/macOS/CmuxUpdater/Sources/CmuxUpdater/UpdateController.swift
 require_file Packages/macOS/CmuxTerminal/Package.swift
 require_file Packages/iOS/CmuxMobileTerminal/Package.swift
 
@@ -311,9 +314,26 @@ replace_text Resources/Info.plist 'A program running within cmux would like to u
 replace_text Resources/Info.plist 'A program running within cmux would like to use AppleScript.' 'A program running within SPIN would like to use AppleScript.'
 replace_text Resources/Info.plist 'cmux Sidebar Tab Reorder' 'SPIN Sidebar Tab Reorder'
 replace_text Resources/Info.plist 'cmux File Preview Transfer' 'SPIN File Preview Transfer'
-replace_text Resources/Info.plist 'https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml' 'https://github.com/claudiaclawdbot/spin/releases/latest/download/appcast.xml'
+replace_text Resources/Info.plist '	<key>SUEnableAutomaticChecks</key>
+	<true/>' '	<key>SUEnableAutomaticChecks</key>
+	<false/>'
+replace_text Resources/Info.plist '	<key>SUFeedURL</key>
+	<string>https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml</string>
+' ''
+replace_text Resources/Info.plist '	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
+' ''
 replace_text Resources/Info.plist 'com.cmux.sidebar-tab-reorder' 'dev.spin.sidebar-tab-reorder'
 replace_text Resources/Info.plist 'com.cmux.filepreview.transfer' 'dev.spin.filepreview.transfer'
+
+if ! grep -A1 '<key>SUEnableAutomaticChecks</key>' "$CMUX_DIR/Resources/Info.plist" | grep -q '<false/>'; then
+  echo "SPIN overlay failed to disable automatic Sparkle update checks" >&2
+  exit 1
+fi
+if grep -qE '<key>(SUFeedURL|SUPublicEDKey)</key>' "$CMUX_DIR/Resources/Info.plist"; then
+  echo "SPIN overlay left an inherited Sparkle feed or public key enabled" >&2
+  exit 1
+fi
 
 echo "patching bundled CLI welcome copy"
 replace_text CLI/cmux.swift '\(c1)c\(c2)m\(c3)u\(c7)x\(reset)' '\(c1)S\(c2)P\(c3)I\(c7)N\(reset)'
@@ -337,6 +357,38 @@ replace_text Sources/cmuxApp.swift 'A Ghostty-based terminal with vertical tabs\
 replace_text Sources/cmuxApp.swift 'private let githubURL = URL(string: "https://github.com/manaflow-ai/cmux")' 'private let githubURL = URL(string: "https://github.com/claudiaclawdbot/spin")'
 replace_text Sources/cmuxApp.swift 'private let docsURL = URL(string: "https://cmux.com/docs")' 'private let docsURL = URL(string: "https://github.com/claudiaclawdbot/spin#readme")'
 replace_text Sources/cmuxApp.swift 'URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")' 'URL(string: "https://github.com/claudiaclawdbot/spin")'
+replace_text Sources/cmuxApp.swift '                Button(String(localized: "menu.app.checkForUpdates", defaultValue: "Check for Updates…")) {
+                    appDelegate.checkForUpdates(nil)
+                }
+                InstallUpdateMenuItem(model: appDelegate.updateViewModel, actions: appDelegate)
+' ''
+replace_text Sources/App/CmuxHelpCommands.swift '            Button(String(localized: "command.checkForUpdates.title", defaultValue: "Check for Updates")) {
+                AppDelegate.shared?.checkForUpdates(nil)
+            }
+
+' ''
+replace_text Sources/AppDelegate.swift '            updateController.actionDelegate = self
+            updateController.startUpdaterIfNeeded()
+' ''
+replace_text Packages/macOS/CmuxUpdater/Sources/CmuxUpdater/UpdateController.swift \
+  '        let isDevLikeBundle = isDevLikeBundle ?? Self.isDevLikeBundleIdentifier(hostBundle.bundleIdentifier)' \
+  '        let isDevLikeBundle = isDevLikeBundle ?? (
+            Self.isDevLikeBundleIdentifier(hostBundle.bundleIdentifier) ||
+            hostBundle.bundleIdentifier == "dev.spin.app" ||
+            hostBundle.bundleIdentifier?.hasPrefix("dev.spin.app.") == true
+        )'
+
+if grep -q 'appDelegate.checkForUpdates(nil)' "$CMUX_DIR/Sources/cmuxApp.swift" ||
+   grep -q 'AppDelegate.shared?.checkForUpdates(nil)' "$CMUX_DIR/Sources/App/CmuxHelpCommands.swift" ||
+   grep -q 'updateController.startUpdaterIfNeeded()' "$CMUX_DIR/Sources/AppDelegate.swift"; then
+  echo "SPIN overlay left an inherited Sparkle update entry point enabled" >&2
+  exit 1
+fi
+if ! grep -q 'hostBundle.bundleIdentifier == "dev.spin.app"' \
+    "$CMUX_DIR/Packages/macOS/CmuxUpdater/Sources/CmuxUpdater/UpdateController.swift"; then
+  echo "SPIN overlay failed to suppress fallback Sparkle feeds for the SPIN bundle" >&2
+  exit 1
+fi
 
 if [ -f "$CMUX_DIR/Sources/ContentView.swift" ]; then
   replace_text Sources/ContentView.swift 'Open cmux.json' 'Open SPIN Workspace Config'

@@ -86,6 +86,14 @@ spin_load_project_env() {
     fi
 
     case "$key" in
+      # Beta 4 project.env files recorded these paths as project metadata.
+      # Canonical roots now come from the harness and OMP configs are selected
+      # by an owner environment override or a trusted SPIN lane. Keep old
+      # installations bootable without letting project-writable files choose
+      # either path.
+      SPIN_OMP_CONFIG|COMPANY_ROOT|PROJECT_CODE_PATH)
+        continue
+        ;;
       PROJECT_CEO_PROVIDER|MODEL|CEO_CODEX_MODEL|CEO_CODEX_REASONING|CEO_CLAUDE_MODEL|CEO_SCOUT_MODEL|CEO_CURSOR_MODEL|CEO_GEMINI_MODEL|CEO_GEMINI_PRO_MODEL|CEO_OLLAMA_MODEL|CEO_OMP_MODEL|CEO_PROVIDER_TIMEOUT_SECS|SPIN_OMP_DEFAULT_MODEL|SPIN_OMP_SMOL_MODEL|SPIN_OMP_SLOW_MODEL|SPIN_OMP_PLAN_MODEL|SPIN_OMP_TASK_MODEL|SPIN_OMP_DEFAULT_FALLBACKS|SPIN_OMP_SMOL_FALLBACKS|SPIN_OMP_SLOW_FALLBACKS|SPIN_OMP_PROVIDER_ORDER|SPIN_OMP_RETRY_MAX_RETRIES|SPIN_OMP_RETRY_BASE_DELAY_MS|SPIN_OMP_RETRY_MAX_DELAY_MS|SPIN_OMP_FALLBACK_REVERT_POLICY)
         ;;
       *)

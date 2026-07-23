@@ -15,7 +15,7 @@
 ![platform](https://img.shields.io/badge/app-macOS-lightgrey)
 ![runtime](https://img.shields.io/badge/runtime-OMP%20%2B%20cmux-8a2be2)
 
-**[Download SPIN for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.4)** | **[Install guide](docs/INSTALL_MACOS.md)** | **[Product site](https://claudiaclawdbot.github.io/spin/)**
+**[Download SPIN for Mac](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.5)** | **[Install guide](docs/INSTALL_MACOS.md)** | **[Product site](https://claudiaclawdbot.github.io/spin/)**
 
 </div>
 
@@ -84,12 +84,12 @@ keeps that layer from depending on a single vendor, model, CLI, or quota window.
 
 ## Download SPIN For Mac
 
-The current release is [SPIN for Mac 4.1.0 Beta 4](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.4).
+The current release is [SPIN for Mac 4.1.0 Beta 5](https://github.com/claudiaclawdbot/spin/releases/tag/v4.1.0-beta.5).
 
 Requirements:
 
 - Apple silicon Mac
-- macOS 13 or later
+- macOS 14.0 or later
 - At least one model/provider account supported by OMP
 - Git and the normal development tools required by the projects being managed
 
@@ -269,6 +269,7 @@ automation:
 
 ```text
 org queue-job <project> <type> "<description>" [--max-runtime SEC] [--resource-class normal|heavy]
+org acknowledge-job <job-id> [--note "..."]
 org set-handoff <project>
 org set-state <project> --status S --next "..."
 org escalate "<item>"
@@ -280,6 +281,8 @@ org show
 
 Every state-changing command validates input, acquires a lock, writes
 atomically, and preserves append-only history where history matters.
+Acknowledging a blocked or failed job removes it from the current attention
+count while retaining the job and its result in queue history.
 
 ## Architecture
 

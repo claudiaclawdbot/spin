@@ -324,6 +324,8 @@ mkdir -p \
   "$FAKE_CMUX/Assets.xcassets/AppIcon-Nightly.appiconset" \
   "$FAKE_CMUX/Assets.xcassets/AppIconLight.imageset" \
   "$FAKE_CMUX/Assets.xcassets/AppIconDark.imageset" \
+  "$FAKE_CMUX/Sources/App" \
+  "$FAKE_CMUX/Packages/macOS/CmuxUpdater/Sources/CmuxUpdater" \
   "$FAKE_CMUX/Packages/macOS/CmuxTerminal" \
   "$FAKE_CMUX/Packages/iOS/CmuxMobileTerminal" \
   "$FAKE_CMUX/vendor/bonsplit" \
@@ -347,6 +349,18 @@ A program running within cmux would like to use Bluetooth to discover passkeys a
 A program running within cmux would like to use AppleScript.
 cmux Sidebar Tab Reorder
 cmux File Preview Transfer
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUSendProfileInfo</key>
+	<false/>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
 EOF
 cat > "$FAKE_CMUX/Sources/cmuxApp.swift" <<'EOF'
 Button(String(localized: "menu.app.openCmuxSettingsFile", defaultValue: "Open cmux.json")) {}
@@ -368,6 +382,23 @@ imageForMode: { mode in
 imageForName: { imageName in
                     NSImage(named: imageName)
                 },
+                Button(String(localized: "menu.app.checkForUpdates", defaultValue: "Check for Updates…")) {
+                    appDelegate.checkForUpdates(nil)
+                }
+                InstallUpdateMenuItem(model: appDelegate.updateViewModel, actions: appDelegate)
+EOF
+cat > "$FAKE_CMUX/Sources/AppDelegate.swift" <<'EOF'
+            updateController.actionDelegate = self
+            updateController.startUpdaterIfNeeded()
+EOF
+cat > "$FAKE_CMUX/Sources/App/CmuxHelpCommands.swift" <<'EOF'
+            Button(String(localized: "command.checkForUpdates.title", defaultValue: "Check for Updates")) {
+                AppDelegate.shared?.checkForUpdates(nil)
+            }
+
+EOF
+cat > "$FAKE_CMUX/Packages/macOS/CmuxUpdater/Sources/CmuxUpdater/UpdateController.swift" <<'EOF'
+        let isDevLikeBundle = isDevLikeBundle ?? Self.isDevLikeBundleIdentifier(hostBundle.bundleIdentifier)
 EOF
 cat > "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift" <<'EOF'
     private var appBundle: Bundle? {
@@ -427,9 +458,16 @@ grep -q 'PRODUCT_BUNDLE_IDENTIFIER = dev.spin.app;' "$FAKE_CMUX/cmux.xcodeproj/p
 grep -q 'CMUX_AUTH_CALLBACK_SCHEME = spin;' "$FAKE_CMUX/cmux.xcodeproj/project.pbxproj"
 grep -q 'CMUX_SIDEBAR_EXTENSION_POINT_ID = dev.spin.app.cmux.sidebar;' "$FAKE_CMUX/cmux.xcodeproj/project.pbxproj"
 grep -q 'SPIN Sidebar Tab Reorder' "$FAKE_CMUX/Resources/Info.plist"
+grep -A1 '<key>SUEnableAutomaticChecks</key>' "$FAKE_CMUX/Resources/Info.plist" | grep -q '<false/>'
+! grep -qE '<key>(SUFeedURL|SUPublicEDKey)</key>' "$FAKE_CMUX/Resources/Info.plist"
 grep -q 'About SPIN' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'Terminal Engine Settings' "$FAKE_CMUX/Sources/cmuxApp.swift"
 grep -q 'Bundle.main.bundleURL.lastPathComponent == "SPIN.app"' "$FAKE_CMUX/Sources/cmuxApp.swift"
+! grep -q 'appDelegate.checkForUpdates(nil)' "$FAKE_CMUX/Sources/cmuxApp.swift"
+! grep -q 'AppDelegate.shared?.checkForUpdates(nil)' "$FAKE_CMUX/Sources/App/CmuxHelpCommands.swift"
+! grep -q 'updateController.startUpdaterIfNeeded()' "$FAKE_CMUX/Sources/AppDelegate.swift"
+grep -q 'hostBundle.bundleIdentifier == "dev.spin.app"' \
+  "$FAKE_CMUX/Packages/macOS/CmuxUpdater/Sources/CmuxUpdater/UpdateController.swift"
 grep -q 'bundledSpinAppIcon' "$FAKE_CMUX/Sources/AppIconDockTilePlugin.swift"
 grep -q 'Open SPIN Workspace Config' "$FAKE_CMUX/Sources/ContentView.swift"
 grep -q 'settings.hidesAllDetails ? 3 : 8' "$FAKE_CMUX/Sources/ContentView.swift"
@@ -467,25 +505,34 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 0.2
 done
 WEB_URL="$(awk '/SPIN web:/{print $3; exit}' "$TMP/spin-web.out")"
-node - "$WEB_URL" <<'NODE'
+node - "$WEB_URL" "$TMP/spin-web-csrf" <<'NODE'
 const http = require('http');
 const url = process.argv[2];
+const tokenFile = process.argv[3];
 http.get(url, res => {
   let body = '';
   res.on('data', chunk => body += chunk);
   res.on('end', () => {
     if (!body.includes('SPIN Control') || !body.includes('smoke approval needed')) process.exit(1);
     if (!body.includes('Control Plane') || !body.includes('Needs Attention') || !body.includes('Current resources')) process.exit(1);
+    const token = body.match(/name="csrf" value="([a-f0-9]{64})"/);
+    if (!token) process.exit(1);
+    require('fs').writeFileSync(tokenFile, token[1]);
   });
 }).on('error', () => process.exit(1));
 NODE
-node - "$WEB_URL" <<'NODE'
+node - "$WEB_URL" "$TMP/spin-web-csrf" <<'NODE'
 const http = require('http');
 const url = new URL('/decision', process.argv[2]);
-const body = new URLSearchParams({ action: 'APPROVE', item: 'smoke approval needed' }).toString();
+const csrf = require('fs').readFileSync(process.argv[3], 'utf8');
+const body = new URLSearchParams({ csrf, action: 'APPROVE', item: 'smoke approval needed' }).toString();
 const req = http.request(url, {
   method: 'POST',
-  headers: { 'content-type': 'application/x-www-form-urlencoded', 'content-length': Buffer.byteLength(body) },
+  headers: {
+    origin: url.origin,
+    'content-type': 'application/x-www-form-urlencoded',
+    'content-length': Buffer.byteLength(body),
+  },
 }, res => process.exit(res.statusCode === 303 ? 0 : 1));
 req.on('error', () => process.exit(1));
 req.end(body);
@@ -812,9 +859,185 @@ SPIN_ROOT="$KIT" scripts/wiki-build.sh wiki-symlink >/dev/null
 grep -q 'src/index.ts' "$KIT/org/wiki/projects/wiki-symlink.md"
 rm -f "$KIT/projects/wiki-symlink" "$KIT/org/wiki/projects/wiki-symlink.md"
 
+prove_dynamic_wiki_discovery() {
+  local mode="$1"
+  local watch_root="$TMP/wiki-watch-$mode"
+  local linked_root="$TMP/wiki-linked-$mode"
+  local seed_root="$TMP/wiki-seed-$mode"
+  local fake_bin="$watch_root/fake-bin"
+  local fake_fswatch="$watch_root/fake-fswatch"
+  local fake_pids="$watch_root/fake-fswatch.pids"
+  local fake_fswatch_args="$watch_root/fake-fswatch.args"
+  local find_calls="$watch_root/find.calls"
+  local real_find
+  local resolved_linked_root
+  local fake_pid
+  local pid_count
+  local watcher_pid=""
+
+  real_find="$(command -v find)"
+  mkdir -p "$watch_root/scripts/lib" "$watch_root/projects" "$fake_bin" \
+    "$watch_root/org/ceo/runs" "$watch_root/org/wiki/projects" "$watch_root/logs" \
+    "$linked_root/src" "$seed_root/src"
+  cp scripts/wiki-watch.sh scripts/wiki-build.sh "$watch_root/scripts/"
+  cp scripts/lib/spin-runtime.sh "$watch_root/scripts/lib/"
+  printf '# Dynamic project\n' > "$linked_root/README.md"
+  printf 'export const discovered = true;\n' > "$linked_root/src/index.ts"
+  printf '# Seed project\n' > "$seed_root/README.md"
+  printf 'export const seeded = true;\n' > "$seed_root/src/seed.ts"
+  printf 'export const removed = true;\n' > "$seed_root/src/deleted.ts"
+  ln -s "$seed_root" "$watch_root/projects/seed-project"
+  resolved_linked_root="$(cd -P "$linked_root" && pwd)"
+
+  # Simulate a file deletion while the watcher is stopped. All surviving
+  # content predates the stale wiki; only the containing directory is newer.
+  touch -t 202001010000 "$seed_root/README.md" "$seed_root/src/seed.ts" \
+    "$seed_root/src/deleted.ts" "$seed_root/src" "$seed_root"
+  printf '%s\n' \
+    '# seed-project' \
+    '## What it is' \
+    'Deletion recovery fixture.' \
+    '## Key files' \
+    '| File | Purpose |' \
+    '| `src/deleted.ts` | stale entry |' \
+    > "$watch_root/org/wiki/projects/seed-project.md"
+  touch -t 202501010000 "$watch_root/org/wiki/projects/seed-project.md"
+  rm "$seed_root/src/deleted.ts"
+
+  cat > "$fake_bin/find" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$find_calls"
+exec "$real_find" "\$@"
+EOF
+  chmod +x "$fake_bin/find"
+
+  if [[ "$mode" == "fswatch" ]]; then
+    cat > "$fake_fswatch" <<EOF
+#!/usr/bin/env bash
+echo "\$\$" >> "$fake_pids"
+printf '%s\n' "\$*" >> "$fake_fswatch_args"
+trap 'exit 0' TERM INT
+while [[ ! -f "$watch_root/emit-content-event" ]]; do sleep 0.1; done
+rm -f "$watch_root/emit-content-event"
+printf '%s\n' "$linked_root/src/added.ts"
+while true; do sleep 1; done
+EOF
+    chmod +x "$fake_fswatch"
+  fi
+
+  (
+    cleanup_dynamic_watcher() {
+      touch "$watch_root/org/ceo/runs/WIKI_WATCH_STOP" 2>/dev/null || true
+      if [[ -n "$watcher_pid" ]]; then
+        kill "$watcher_pid" 2>/dev/null || true
+        wait "$watcher_pid" 2>/dev/null || true
+      fi
+    }
+    trap cleanup_dynamic_watcher EXIT
+
+    if [[ "$mode" == "fswatch" ]]; then
+      PATH="$fake_bin:$PATH" SPIN_ROOT="$watch_root" WORKSPACE_ROOT="$watch_root" \
+        SPIN_FSWATCH_BIN="$fake_fswatch" \
+        SPIN_WIKI_WATCH_INTERVAL_SECONDS=1 \
+        SPIN_WIKI_WATCH_DEBOUNCE_SECONDS=0 \
+        bash "$watch_root/scripts/wiki-watch.sh" > "$watch_root/watcher.log" 2>&1 &
+    else
+      PATH="$fake_bin:$PATH" SPIN_ROOT="$watch_root" WORKSPACE_ROOT="$watch_root" \
+        SPIN_WIKI_WATCH_FORCE_POLLING=1 \
+        SPIN_WIKI_WATCH_INTERVAL_SECONDS=1 \
+        bash "$watch_root/scripts/wiki-watch.sh" > "$watch_root/watcher.log" 2>&1 &
+    fi
+    watcher_pid=$!
+
+    for _ in {1..50}; do
+      [[ -s "$watch_root/org/ceo/runs/.wiki-watch.lock" ]] && break
+      sleep 0.1
+    done
+    [[ -s "$watch_root/org/ceo/runs/.wiki-watch.lock" ]]
+
+    for _ in {1..80}; do
+      if grep -q 'src/seed.ts' "$watch_root/org/wiki/projects/seed-project.md" 2>/dev/null; then
+        if [[ "$mode" != "fswatch" || -s "$fake_pids" ]]; then
+          break
+        fi
+      fi
+      sleep 0.1
+    done
+    grep -q 'src/seed.ts' "$watch_root/org/wiki/projects/seed-project.md"
+    ! grep -q 'src/deleted.ts' "$watch_root/org/wiki/projects/seed-project.md"
+    [[ "$mode" != "fswatch" || -s "$fake_pids" ]]
+    if grep -v -- '-prune' "$find_calls" | grep -q .; then
+      echo "wiki indexing invoked find without pruning ignored directories" >&2
+      cat "$find_calls" >&2
+      exit 1
+    fi
+
+    ln -s "$linked_root" "$watch_root/projects/dynamic-project"
+    for _ in {1..80}; do
+      if grep -q 'src/index.ts' "$watch_root/org/wiki/projects/dynamic-project.md" 2>/dev/null; then
+        break
+      fi
+      sleep 0.1
+    done
+    grep -q 'src/index.ts' "$watch_root/org/wiki/projects/dynamic-project.md"
+
+    if [[ "$mode" == "fswatch" ]]; then
+      for _ in {1..50}; do
+        pid_count="$(wc -l < "$fake_pids" | tr -d ' ')"
+        (( pid_count >= 2 )) && break
+        sleep 0.1
+      done
+      (( $(wc -l < "$fake_pids" | tr -d ' ') >= 2 ))
+      grep -Fq -- "$resolved_linked_root" "$fake_fswatch_args"
+
+      # A real content event rebuilds only its mapped project.
+      printf 'export const added = true;\n' > "$linked_root/src/added.ts"
+      touch "$watch_root/emit-content-event"
+      for _ in {1..80}; do
+        grep -q 'src/added.ts' "$watch_root/org/wiki/projects/dynamic-project.md" 2>/dev/null && break
+        sleep 0.1
+      done
+      if ! grep -q 'src/added.ts' "$watch_root/org/wiki/projects/dynamic-project.md"; then
+        echo "fswatch content event did not rebuild dynamic-project" >&2
+        sed -n '1,160p' "$watch_root/watcher.log" >&2
+        exit 1
+      fi
+
+      # Link-set checks must stay lightweight after the watch set stabilizes.
+      # Any find call here would mean fswatch mode regressed to repo traversal.
+      : > "$find_calls"
+      sleep 3
+      [[ ! -s "$find_calls" ]]
+    else
+      # The polling fallback may traverse, but it must prune artifact trees.
+      for _ in {1..30}; do
+        grep -q -- '-prune' "$find_calls" 2>/dev/null && break
+        sleep 0.1
+      done
+      grep -q -- '-prune' "$find_calls"
+    fi
+
+    touch "$watch_root/org/ceo/runs/WIKI_WATCH_STOP"
+    wait "$watcher_pid"
+    watcher_pid=""
+    [[ ! -e "$watch_root/org/ceo/runs/.wiki-watch.lock" ]]
+    if [[ "$mode" == "fswatch" ]]; then
+      while IFS= read -r fake_pid; do
+        [[ -n "$fake_pid" ]] || continue
+        ! kill -0 "$fake_pid" 2>/dev/null
+      done < "$fake_pids"
+    fi
+  )
+}
+
+prove_dynamic_wiki_discovery polling
+prove_dynamic_wiki_discovery fswatch
+
 PATH="$FAKEBIN:$PATH" SPIN_ROOT="$KIT" \
   scripts/spin-new-project.sh smoke-floor "Smoke-test two-pane floor" > "$TMP/new-project.out"
 grep -q 'Smoke-test two-pane floor' org/projects/smoke-floor/FLOOR.md
+grep -q 'README.md' org/wiki/projects/smoke-floor.md
+grep -q "indexed project 'smoke-floor'" "$TMP/new-project.out"
 grep -q 'new-workspace --name smoke-floor' "$TMP/cmux.calls"
 grep -q 'markdown open .*/org/projects/smoke-floor/FLOOR.md --workspace workspace:7 --surface surface:7 --direction right --focus false' "$TMP/cmux.calls"
 
@@ -1537,12 +1760,22 @@ cat > "$FAKE_CMUX_APP/Contents/Info.plist" <<'EOF'
   <string>SPIN</string>
   <key>CFBundleIdentifier</key>
   <string>dev.spin.app</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.64.17</string>
+  <key>CFBundleVersion</key>
+  <string>97</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIconName</key>
   <string>AppIcon</string>
   <key>CFBundleName</key>
   <string>SPIN</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>SUAutomaticallyUpdate</key>
+  <false/>
+  <key>SUEnableAutomaticChecks</key>
+  <false/>
 </dict>
 </plist>
 EOF
@@ -1589,7 +1822,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   # extraction. Compile a tiny first-party Mach-O no-op for these package tests;
   # the hosted artifact workflow separately verifies the real bundled binaries.
   printf '%s\n' 'int main(void) { return 0; }' | \
-    xcrun clang -x c -Os -o "$TMP/package-noop" -
+    xcrun clang -x c -Os -mmacosx-version-min=14.0 -o "$TMP/package-noop" -
   cp "$TMP/package-noop" "$TMP/package-cmux"
   cp "$TMP/package-noop" "$TMP/package-omp"
   PACKAGE_CMUX_SOURCE="$TMP/package-cmux"
@@ -1600,14 +1833,33 @@ SPIN_CMUX_APP_SOURCE="$FAKE_CMUX_APP" \
 SPIN_CMUX_BIN_SOURCE="$PACKAGE_CMUX_SOURCE" \
 SPIN_OMP_BIN_SOURCE="$PACKAGE_OMP_SOURCE" \
   scripts/package-macos-app.sh "$TMP/SPIN.app" >/dev/null
-node - "$TMP/SPIN.app/Contents/Info.plist" VERSION <<'NODE'
+node - "$TMP/SPIN.app/Contents/Info.plist" "$TMP/SPIN.app/Contents/Resources/SPIN.app/Contents/Info.plist" VERSION <<'NODE'
 const fs = require('fs');
-const xml = fs.readFileSync(process.argv[2], 'utf8');
-const version = fs.readFileSync(process.argv[3], 'utf8').trim();
-const value = key => (xml.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`)) || [])[1];
+const outerXml = fs.readFileSync(process.argv[2], 'utf8');
+const nestedXml = fs.readFileSync(process.argv[3], 'utf8');
+const version = fs.readFileSync(process.argv[4], 'utf8').trim();
+const value = (xml, key) =>
+  (xml.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`)) || [])[1];
 const shortVersion = (version.match(/^\d+\.\d+\.\d+/) || [])[0];
 const buildVersion = (version.match(/(?:beta|rc)[.-]?(\d+)/i) || [])[1] || '1';
-if (value('CFBundleShortVersionString') !== shortVersion || value('CFBundleVersion') !== buildVersion) process.exit(1);
+for (const key of ['CFBundleShortVersionString', 'CFBundleVersion']) {
+  if (value(outerXml, key) !== value(nestedXml, key)) process.exit(1);
+}
+if (
+  value(outerXml, 'CFBundleShortVersionString') !== shortVersion ||
+  value(outerXml, 'CFBundleVersion') !== buildVersion
+) process.exit(1);
+const outerMinimum = value(outerXml, 'LSMinimumSystemVersion');
+const nestedMinimum = value(nestedXml, 'LSMinimumSystemVersion');
+const compare = (left, right) => {
+  const a = left.split('.').map(Number);
+  const b = right.split('.').map(Number);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0);
+  }
+  return 0;
+};
+if (outerMinimum !== '14.0' || compare(nestedMinimum, outerMinimum) > 0) process.exit(1);
 NODE
 if [[ "$(uname -s)" == "Darwin" ]]; then
   codesign --verify --deep --strict --verbose=2 "$TMP/SPIN.app" >/dev/null
@@ -1618,6 +1870,10 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (manifest.release.channel !== 'local-dev') process.exit(1);
 if (manifest.release.signing.identity !== '-') process.exit(1);
 if (manifest.cmux.source.commit !== process.argv[3]) process.exit(1);
+if (manifest.product.minimumMacOS !== '14.0') process.exit(1);
+if (manifest.cmux.minimumMacOS !== '14.0') process.exit(1);
+if (manifest.cmux.appVersion !== manifest.product.version) process.exit(1);
+if (manifest.cmux.appBuild !== manifest.product.build) process.exit(1);
 NODE
 fi
 printf 'smoke native addon\n' > "$TMP/SPIN.app/Contents/Resources/bin/pi_natives.smoke.node"
@@ -1666,6 +1922,97 @@ if ! SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_
   sed -n '1,160p' "$TMP/check-app-release.out" >&2
   exit 1
 fi
+CMUX_INFO="$TMP/SPIN.app/Contents/Resources/SPIN.app/Contents/Info.plist"
+cp "$CMUX_INFO" "$TMP/Info.plist.release-metadata-backup"
+node - "$CMUX_INFO" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const xml = fs.readFileSync(file, 'utf8').replace(
+  /(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]+/,
+  (_, prefix) => `${prefix}9.9.9`,
+);
+fs.writeFileSync(file, xml);
+NODE
+if SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release-nested-version.out" 2>&1; then
+  echo "release check accepted a bundled SPIN UI version that differs from the outer app" >&2
+  exit 1
+fi
+grep -q 'bundled SPIN UI version' "$TMP/check-app-release-nested-version.out"
+cp "$TMP/Info.plist.release-metadata-backup" "$CMUX_INFO"
+node - "$CMUX_INFO" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const xml = fs.readFileSync(file, 'utf8').replace(
+  /(<key>LSMinimumSystemVersion<\/key>\s*<string>)[^<]+/,
+  (_, prefix) => `${prefix}99.0`,
+);
+fs.writeFileSync(file, xml);
+NODE
+if SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release-nested-minimum.out" 2>&1; then
+  echo "release check accepted a bundled SPIN UI minimum above the outer app" >&2
+  exit 1
+fi
+grep -q 'bundled SPIN UI requires macOS' "$TMP/check-app-release-nested-minimum.out"
+cp "$TMP/Info.plist.release-metadata-backup" "$CMUX_INFO"
+cp "$CMUX_INFO" "$TMP/Info.plist.sparkle-policy-backup"
+node - "$CMUX_INFO" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const xml = fs.readFileSync(file, 'utf8').replace(
+  /(<key>SUEnableAutomaticChecks<\/key>\s*)<false\/>/,
+  '$1<true/>',
+);
+fs.writeFileSync(file, xml);
+NODE
+if SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release-auto-feed.out" 2>&1; then
+  echo "release check accepted enabled automatic Sparkle update checks" >&2
+  exit 1
+fi
+grep -q 'automatic Sparkle update checks' "$TMP/check-app-release-auto-feed.out"
+cp "$TMP/Info.plist.sparkle-policy-backup" "$CMUX_INFO"
+node - "$CMUX_INFO" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const xml = fs.readFileSync(file, 'utf8').replace(
+  '</dict>',
+  [
+    '  <key>SUFeedURL</key>',
+    '  <string>https://example.invalid/unverified-appcast.xml</string>',
+    '</dict>',
+  ].join('\n'),
+);
+fs.writeFileSync(file, xml);
+NODE
+if SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release-unverified-feed.out" 2>&1; then
+  echo "release check accepted an unverified Sparkle update feed" >&2
+  exit 1
+fi
+grep -q 'unverified Sparkle update feed' "$TMP/check-app-release-unverified-feed.out"
+cp "$TMP/Info.plist.sparkle-policy-backup" "$CMUX_INFO"
+node - "$CMUX_INFO" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const xml = fs.readFileSync(file, 'utf8').replace(
+  '</dict>',
+  [
+    '  <key>SUPublicEDKey</key>',
+    '  <string>upstream-or-unowned-key</string>',
+    '</dict>',
+  ].join('\n'),
+);
+fs.writeFileSync(file, xml);
+NODE
+if SPIN_SKIP_BINARY_EXEC_CHECK=1 SPIN_REQUIRE_BRANDED_CMUX_APP=1 SPIN_REQUIRE_VENDORED_OMP=1 \
+  scripts/check-app-release.sh "$TMP/SPIN.app" > "$TMP/check-app-release-unowned-key.out" 2>&1; then
+  echo "release check accepted a Sparkle key without a SPIN appcast" >&2
+  exit 1
+fi
+grep -q 'Sparkle public key before SPIN has a signed appcast' "$TMP/check-app-release-unowned-key.out"
+cp "$TMP/Info.plist.sparkle-policy-backup" "$CMUX_INFO"
 scripts/check-macos-signing-env.sh >/dev/null
 if env SPIN_RELEASE_PRODUCTION=1 SPIN_CODESIGN_IDENTITY=- SPIN_APPLE_TEAM_ID= SPIN_CODESIGN_HARDENED=0 SPIN_CMUX_ENTITLEMENTS= SPIN_NOTARIZE=0 SPIN_NOTARY_PROFILE= \
   scripts/check-macos-signing-env.sh --production >/dev/null 2>&1; then

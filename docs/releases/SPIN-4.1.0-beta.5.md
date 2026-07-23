@@ -3,6 +3,8 @@
 Beta 5 is the reliability and control-boundary release. It starts project work
 from the selected repository, requires an explicit terminal outcome before
 marking a job complete, and strengthens the owner gate around sensitive actions.
+The packaged Mac app requires an Apple silicon Mac with macOS 14.0 or later.
+This public beta is ad-hoc signed and is not Apple-notarized.
 
 ## Highlights
 
@@ -10,6 +12,9 @@ marking a job complete, and strengthens the owner gate around sensitive actions.
   and loads that project's own provider overrides through an allowlisted,
   non-executable parser. The workspace-maintenance lane remains explicitly
   scoped to SPIN itself.
+- Keeps Beta 4 project registrations working while treating legacy
+  `project.env` path and OMP-config keys as inert metadata. Canonical registered
+  roots and an owner-provided process-level OMP config remain authoritative.
 - Generates a separate OMP model-policy overlay for Coordinator, project floor,
   queued job, one-shot, and Navigator chat lanes so concurrent agents cannot
   replace one another's provider configuration.
@@ -28,6 +33,11 @@ marking a job complete, and strengthens the owner gate around sensitive actions.
   changed. The Control panel now keeps healthy idle systems live, treats an
   intentional pause as actionable, and hides acknowledged or resolved history
   from the attention count.
+- Adds `org acknowledge-job` so an owner can explicitly clear a reviewed failed
+  or blocked job from the attention view without deleting its history.
+- Makes wiki indexing follow project lifecycle changes: new projects are seeded
+  immediately, added and removed project links refresh the watch set, symlink
+  targets are watched, and the polling fallback prunes offline directories.
 - Upgrades sensitive-action leases to bind the policy, executable bytes,
   resolved working directory, and exact target. Protected pushes additionally
   bind the resolved Git remote and destination branch, and reject remotes that
@@ -35,6 +45,18 @@ marking a job complete, and strengthens the owner gate around sensitive actions.
 - Runs broker commands with a fixed minimal environment plus only the variable
   names explicitly allowlisted by the owner. Git and XDG configuration
   selectors remain forbidden so execution cannot diverge from attestation.
+- Restricts the local web console to loopback binds and peers, requires an exact
+  same-origin request plus a per-process CSRF token for decisions, and applies
+  no-store, framing, referrer, MIME-sniffing, and content-policy headers.
+- Serializes every approvals and human-queue writer through shared lock domains
+  so concurrent decisions and escalations cannot overwrite one another. Receipt
+  creation now uses exclusive, collision-safe names with private `0600` mode.
+- Disables the inherited Sparkle feed, automatic checks, and unusable update
+  menus until SPIN owns a published signed appcast. Beta updates continue through
+  the checked local `spin app-updates` path after the operator downloads the DMG.
+- Stamps the outer launcher and nested SPIN UI as version `4.1.0`, build `5`,
+  and verifies their matching version, build, macOS minimum, and Mach-O
+  deployment targets before release.
 - Makes all shipped JavaScript checks, focused Node tests, and error-level
   ShellCheck required CI gates.
 
@@ -64,6 +86,6 @@ bypass resistance is required.
 
 ## Release Gate
 
-The public artifact is created only after the source branch passes required CI,
-the checked macOS artifact workflow, installed-app first launch and restart
+The public release is published only after the source branch passes required
+CI, the checked macOS artifact workflow, installed-app first launch and restart
 proof, checksum generation, and final deny-all verification.

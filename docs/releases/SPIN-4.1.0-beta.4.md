@@ -31,7 +31,7 @@ scoped wrapper when bypass resistance is required.
 ## Requirements
 
 - Apple silicon Mac
-- macOS 13 or later
+- macOS 14.0 or later
 - At least one model/provider account supported by OMP
 - Git and the normal development tools used by managed projects
 

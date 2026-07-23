@@ -150,6 +150,79 @@ run_agent_resilient() {
     'completed');
 });
 
+test('legacy project path metadata cannot replace floor roots or OMP config lanes', t => {
+  const root = fixture(t);
+  fs.copyFileSync(path.join(repo, 'scripts', 'cmux-floor.sh'), path.join(root, 'scripts', 'cmux-floor.sh'));
+  fs.copyFileSync(
+    path.join(repo, 'scripts', 'lib', 'cmux-floor-layout.sh'),
+    path.join(root, 'scripts', 'lib', 'cmux-floor-layout.sh'),
+  );
+  fs.writeFileSync(path.join(root, 'org', 'projects', 'app', 'PROJECT_CONTROLLER_PROMPT.md'), '# app\n');
+  fs.writeFileSync(path.join(root, 'org', 'projects', 'app', 'FLOOR.md'), '# app floor\n');
+
+  const legacyConfig = path.join(root, 'project-controlled', 'legacy-omp.yml');
+  const legacyCompanyRoot = path.join(root, 'project-controlled', 'company');
+  const legacyProjectRoot = path.join(root, 'project-controlled', 'code');
+  fs.writeFileSync(path.join(root, 'org', 'projects', 'app', 'project.env'), [
+    `SPIN_OMP_CONFIG=${legacyConfig}`,
+    `COMPANY_ROOT='${legacyCompanyRoot}'`,
+    `PROJECT_CODE_PATH="${legacyProjectRoot}"`,
+    'SPIN_OMP_DEFAULT_MODEL=provider/project-model',
+    '',
+  ].join('\n'));
+
+  const fakeOmp = path.join(root, 'bin', 'omp');
+  fs.writeFileSync(fakeOmp, `#!/usr/bin/env bash
+node - "$FLOOR_CAPTURE" "$PWD" "\${SPIN_PROJECT_ROOT:-}" "\${SPIN_OMP_CONFIG:-}" "$@" <<'NODE'
+const fs = require('fs');
+const [file, cwd, projectRoot, ownerConfig, ...args] = process.argv.slice(2);
+fs.writeFileSync(file, JSON.stringify({ cwd, projectRoot, ownerConfig, args }) + '\\n');
+NODE
+`, { mode: 0o755 });
+
+  const generatedCapture = path.join(root, 'generated-floor.json');
+  const generated = runBash(root, `
+    bash "$ROOT/scripts/cmux-floor.sh" app
+  `, {
+    FLOOR_CAPTURE: generatedCapture,
+    SPIN_OMP_BIN: fakeOmp,
+    SPIN_OMP_CONFIG: '',
+    SPIN_OMP_MCP_BOOTSTRAP: '0',
+    TERM: 'xterm',
+  });
+  assert.equal(generated.status, 0, generated.stderr);
+  const generatedFloor = JSON.parse(fs.readFileSync(generatedCapture, 'utf8'));
+  const generatedConfig = path.join(
+    root, 'org', 'ceo', 'runs', 'omp-configs', 'project-floor:app.yml',
+  );
+  assert.equal(generatedFloor.cwd, path.join(root, 'org', 'projects', 'app'));
+  assert.equal(generatedFloor.projectRoot, fs.realpathSync(path.join(root, 'projects', 'app')));
+  assert.equal(generatedFloor.ownerConfig, '');
+  assert.equal(generatedFloor.args[generatedFloor.args.indexOf('--config') + 1], generatedConfig);
+  assert.match(fs.readFileSync(generatedConfig, 'utf8'), /default: 'provider\/project-model'/);
+  assert.equal(fs.existsSync(legacyConfig), false);
+  assert.equal(fs.existsSync(legacyCompanyRoot), false);
+  assert.equal(fs.existsSync(legacyProjectRoot), false);
+
+  const ownerConfig = path.join(root, 'owner-controlled', 'omp.yml');
+  const ownerCapture = path.join(root, 'owner-floor.json');
+  const owner = runBash(root, `
+    bash "$ROOT/scripts/cmux-floor.sh" app
+  `, {
+    FLOOR_CAPTURE: ownerCapture,
+    SPIN_OMP_BIN: fakeOmp,
+    SPIN_OMP_CONFIG: ownerConfig,
+    SPIN_OMP_MCP_BOOTSTRAP: '0',
+    TERM: 'xterm',
+  });
+  assert.equal(owner.status, 0, owner.stderr);
+  const ownerFloor = JSON.parse(fs.readFileSync(ownerCapture, 'utf8'));
+  assert.equal(ownerFloor.ownerConfig, ownerConfig);
+  assert.equal(ownerFloor.args[ownerFloor.args.indexOf('--config') + 1], ownerConfig);
+  assert.match(fs.readFileSync(ownerConfig, 'utf8'), /default: 'provider\/project-model'/);
+  assert.equal(fs.existsSync(legacyConfig), false);
+});
+
 test('project env parsing cannot execute shell or replace canonical context', t => {
   const root = fixture(t);
   const envFile = path.join(root, 'org', 'projects', 'app', 'project.env');
@@ -185,5 +258,20 @@ test('project env parsing cannot execute shell or replace canonical context', t 
   assert.equal(literal.status, 0, literal.stderr);
   assert.equal(literal.stdout.trim(),
     `${path.join(root, 'projects', 'app')}|$(touch ${marker})|anthropic/project-model`);
+  assert.equal(fs.existsSync(marker), false);
+
+  fs.writeFileSync(envFile, [
+    'SPIN_OMP_CONFIG=/tmp/project-controlled.yml',
+    'COMPANY_ROOT=/tmp/project-controlled-company',
+    'PROJECT_CODE_PATH=/tmp/project-controlled-code',
+    `OPENAI_API_KEY=$(touch ${marker})`,
+    '',
+  ].join('\n'));
+  const unknownSecret = runBash(root, `
+    source "$ROOT/scripts/lib/project-root.sh"
+    spin_load_project_env "$ROOT/org/projects/app/project.env"
+  `);
+  assert.equal(unknownSecret.status, 2);
+  assert.match(unknownSecret.stderr, /OPENAI_API_KEY/);
   assert.equal(fs.existsSync(marker), false);
 });

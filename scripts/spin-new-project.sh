@@ -105,6 +105,11 @@ node -e '
   fs.writeFileSync(hf,JSON.stringify(h,null,2)+"\n");
 ' "$ORG/state.json" "$HARNESS" "$PID" "$GOAL" 2>/dev/null || { echo "failed to register $PID"; exit 1; }
 echo "${c_g}✓ created project '$PID'${c_o} ${c_d}(charter, state, harness entry, projects/$PID/)${c_o}"
+if bash "$ROOT/scripts/wiki-build.sh" "$PID" >/dev/null; then
+  echo "${c_g}✓ indexed project '$PID'${c_o} ${c_d}(org/wiki/projects/$PID.md)${c_o}"
+else
+  echo "${c_d}  (project created, but its wiki index could not be built; wiki-watch will retry)${c_o}" >&2
+fi
 
 # ── 2. open the cmux floor (the sidebar "tab") ───────────────────────────────
 if [[ "$FLOOR" == 1 ]] && spin_have_binary cmux; then

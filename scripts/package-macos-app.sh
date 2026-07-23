@@ -150,37 +150,60 @@ copy_app_icon_if_present() {
   echo "  bundled app icon from $icon"
 }
 
-stamp_outer_app_version() {
-  local version short_version build_number
-  version="$(tr -d '[:space:]' < "$ROOT/VERSION")"
-  short_version="${version%%-*}"
-  build_number="${SPIN_BUILD_NUMBER:-}"
-  if [ -z "$build_number" ]; then
-    build_number="$(printf '%s' "$version" | sed -n 's/.*\.\([0-9][0-9]*\)$/\1/p')"
+resolve_spin_app_bundle_version() {
+  spin_package_runtime_version="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+  spin_package_short_version="${spin_package_runtime_version%%-*}"
+  spin_package_build_number="${SPIN_BUILD_NUMBER:-}"
+  if [ -z "$spin_package_build_number" ]; then
+    spin_package_build_number="$(printf '%s' "$spin_package_runtime_version" | sed -n 's/.*\.\([0-9][0-9]*\)$/\1/p')"
   fi
-  [ -n "$build_number" ] || build_number=1
-  [[ "$short_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-    echo "  error: VERSION must start with a three-part numeric app version: $version" >&2
+  [ -n "$spin_package_build_number" ] || spin_package_build_number=1
+  [[ "$spin_package_short_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "  error: VERSION must start with a three-part numeric app version: $spin_package_runtime_version" >&2
     return 1
   }
-  [[ "$build_number" =~ ^[0-9]+$ ]] || {
-    echo "  error: SPIN_BUILD_NUMBER must be numeric: $build_number" >&2
+  [[ "$spin_package_build_number" =~ ^[0-9]+$ ]] || {
+    echo "  error: SPIN_BUILD_NUMBER must be numeric: $spin_package_build_number" >&2
     return 1
   }
-  node - "$CONTENTS/Info.plist" "$short_version" "$build_number" <<'NODE'
-const fs = require('fs');
-const [plist, shortVersion, buildNumber] = process.argv.slice(2);
-let xml = fs.readFileSync(plist, 'utf8');
-function setString(key, value) {
-  const pattern = new RegExp(`(<key>${key}</key>\\s*<string>)[\\s\\S]*?(</string>)`);
-  if (!pattern.test(xml)) throw new Error(`missing ${key} in ${plist}`);
-  xml = xml.replace(pattern, `$1${value}$2`);
 }
-setString('CFBundleShortVersionString', shortVersion);
-setString('CFBundleVersion', buildNumber);
+
+set_plist_string_value() {
+  local plist="$1" key="$2" value="$3"
+  if [ -x /usr/libexec/PlistBuddy ]; then
+    /usr/libexec/PlistBuddy -c "Set :$key $value" "$plist" >/dev/null 2>&1 ||
+      /usr/libexec/PlistBuddy -c "Add :$key string $value" "$plist" >/dev/null
+    return 0
+  fi
+  node - "$plist" "$key" "$value" <<'NODE'
+const fs = require('fs');
+const [plist, key, value] = process.argv.slice(2);
+let xml = fs.readFileSync(plist, 'utf8');
+if (!xml.includes('<plist')) throw new Error(`${plist} is not an XML plist and PlistBuddy is unavailable`);
+const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const pattern = new RegExp(`(<key>${escapedKey}</key>\\s*<string>)[\\s\\S]*?(</string>)`);
+if (!pattern.test(xml)) throw new Error(`missing ${key} in ${plist}`);
+xml = xml.replace(pattern, `$1${value}$2`);
 fs.writeFileSync(plist, xml);
 NODE
-  echo "  stamped app version $short_version ($build_number) from runtime $version"
+}
+
+stamp_app_bundle_version() {
+  local plist="$1" label="$2"
+  resolve_spin_app_bundle_version
+  set_plist_string_value "$plist" CFBundleShortVersionString "$spin_package_short_version"
+  set_plist_string_value "$plist" CFBundleVersion "$spin_package_build_number"
+  echo "  stamped $label version $spin_package_short_version ($spin_package_build_number) from runtime $spin_package_runtime_version"
+}
+
+stamp_outer_app_version() {
+  stamp_app_bundle_version "$CONTENTS/Info.plist" "outer app"
+}
+
+stamp_bundled_cmux_app_version() {
+  local plist="$RES/SPIN.app/Contents/Info.plist"
+  [ -f "$plist" ] || return 0
+  stamp_app_bundle_version "$plist" "bundled SPIN UI"
 }
 
 cmux_source_commit_from_manifest() {
@@ -295,6 +318,7 @@ copy_omp_companions_if_present
 copy_agent_alias_if_present
 copy_cmux_app_if_present || true
 apply_icon_to_bundled_cmux_app
+stamp_bundled_cmux_app_version
 stage_codesign_identity="unsigned"
 if [ "$(uname -s)" = "Darwin" ]; then
   stage_codesign_identity="-"

@@ -36,6 +36,7 @@ const RECEIPTS_DIR = path.join(BROKER_DIR, 'receipts');
 const EVENTS_FILE = path.join(BROKER_DIR, 'events.jsonl');
 const LOCK_FILE = path.join(BROKER_DIR, '.lock');
 const HUMAN_QUEUE = path.join(ORG, 'HUMAN_QUEUE.md');
+const HUMAN_QUEUE_LOCK_FILE = path.join(ORG, 'ceo', 'runs', '.org-human.lock');
 const CATEGORIES = new Set([
   'external-send',
   'spend',
@@ -519,6 +520,20 @@ function withLock(fn) {
   }
 }
 
+function withHumanQueueLock(fn) {
+  let handle;
+  try {
+    handle = runtime.acquireProcessLock(HUMAN_QUEUE_LOCK_FILE, { timeoutMs: 5000, pollMs: 100 });
+  } catch (error) {
+    throw new Error(`cannot acquire human queue lock: ${error.message}`);
+  }
+  try {
+    return fn();
+  } finally {
+    runtime.releaseProcessLock(handle);
+  }
+}
+
 function readEvents() {
   if (!fs.existsSync(EVENTS_FILE)) return [];
   if (fs.lstatSync(EVENTS_FILE).isSymbolicLink()) die(3, 'events.jsonl must not be a symlink');
@@ -778,7 +793,7 @@ function requestAction(category, target, amountCents, reason) {
   const amount = amountCents === null ? '' : ` $${money(amountCents)}`;
   const line = `- [ ] [action:${id}] ${category}${amount} -> ${target} | ${reason}`;
   try {
-    withLock(() => {
+    withHumanQueueLock(() => {
       fs.mkdirSync(path.dirname(HUMAN_QUEUE), { recursive: true });
       let current = '';
       try { current = fs.readFileSync(HUMAN_QUEUE, 'utf8'); } catch {}
