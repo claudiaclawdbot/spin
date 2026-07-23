@@ -870,12 +870,14 @@ prove_dynamic_wiki_discovery() {
   local fake_fswatch_args="$watch_root/fake-fswatch.args"
   local find_calls="$watch_root/find.calls"
   local real_find
+  local real_stat
   local resolved_linked_root
   local fake_pid
   local pid_count
   local watcher_pid=""
 
   real_find="$(command -v find)"
+  real_stat="$(command -v stat)"
   mkdir -p "$watch_root/scripts/lib" "$watch_root/projects" "$fake_bin" \
     "$watch_root/org/ceo/runs" "$watch_root/org/wiki/projects" "$watch_root/logs" \
     "$linked_root/src" "$seed_root/src"
@@ -909,7 +911,21 @@ prove_dynamic_wiki_discovery() {
 printf '%s\n' "\$*" >> "$find_calls"
 exec "$real_find" "\$@"
 EOF
-  chmod +x "$fake_bin/find"
+  cat > "$fake_bin/stat" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "-c" && "\${2:-}" == "%Y" ]]; then
+  if "$real_stat" -c %Y "\${3:-}" >/dev/null 2>&1; then
+    exec "$real_stat" -c %Y "\${3:-}"
+  fi
+  exec "$real_stat" -f %m "\${3:-}"
+fi
+if [[ "\${1:-}" == "-f" && "\${2:-}" == "%m" ]]; then
+  printf '  File: "%s"\n' "\${3:-}"
+  exit 0
+fi
+exec "$real_stat" "\$@"
+EOF
+  chmod +x "$fake_bin/find" "$fake_bin/stat"
 
   if [[ "$mode" == "fswatch" ]]; then
     cat > "$fake_fswatch" <<EOF
