@@ -501,6 +501,8 @@ grep -q 'app-launch: onboarding' <<<"$launch_out" || fail "launcher did not rout
 [ -x "$TMP/home/runtime/scripts/spin" ] || fail "launcher did not seed writable runtime"
 [ -x "$TMP/home/runtime/scripts/org" ] || fail "launcher did not seed writable org CLI"
 [ -f "$TMP/home/runtime/org/ACTION_POLICY.json" ] || fail "launcher did not seed the deny-all action policy"
+grep -Fxq "version=$runtime_version" "$TMP/home/runtime/org/.spin-version" || fail "launcher did not stamp the installed runtime version"
+grep -Fxq 'source=SPIN.app' "$TMP/home/runtime/org/.spin-version" || fail "launcher did not identify the app install source"
 [ -f "$TMP/home/.config/cmux/cmux.json" ] || fail "launcher did not seed SPIN cmux config"
 grep -q '"hideAllDetails": true' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config does not hide sidebar details"
 grep -q '"showWorkspaceDescription": false' "$TMP/home/.config/cmux/cmux.json" || fail "seeded cmux config still shows workspace descriptions"
@@ -605,6 +607,11 @@ ok "real first-launch path creates SPIN onboarding workspace"
 SESSION_ORG="$SEEDED_RUNTIME/org"
 SESSION_MARKER="spin-restart-proof-$$"
 mkdir -p "$SESSION_ORG/ceo/runs" "$SESSION_ORG/projects/restart-proof" "$SEEDED_RUNTIME/logs"
+cat > "$SESSION_ORG/.spin-version" <<'EOF'
+version=4.1.0-dev
+installed_at=1970-01-01T00:00:00Z
+git=stale-release-metadata
+EOF
 cat > "$SESSION_ORG/.spin-onboarded" <<EOF
 onboarded_at=1970-01-01T00:00:00Z
 proof=$SESSION_MARKER
@@ -640,6 +647,12 @@ ln -s "$TMP/restart-proof-project" "$SEEDED_RUNTIME/projects/restart-proof"
 
 relaunch_out="$(app_launcher_dry_run)"
 grep -q 'app-launch: spin up' <<<"$relaunch_out" || fail "launcher did not route onboarded app home to spin up"
+grep -Fxq "version=$runtime_version" "$SESSION_ORG/.spin-version" || fail "launcher preserved a stale installed runtime version"
+grep -Fxq 'source=SPIN.app' "$SESSION_ORG/.spin-version" || fail "launcher did not refresh the app install source"
+if grep -Fq 'stale-release-metadata' "$SESSION_ORG/.spin-version"; then
+  fail "launcher preserved stale git install metadata"
+fi
+VERSION_MARKER_SNAPSHOT="$(cat "$SESSION_ORG/.spin-version")"
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/.spin-onboarded" || fail "onboarding marker did not persist across relaunch"
 grep -Fq 'workspace:restart-ceo' "$SESSION_ORG/OMP_HARNESS.json" || fail "Coordinator cmux workspace ref did not persist across relaunch"
 grep -Fq 'workspace:restart-project' "$SESSION_ORG/OMP_HARNESS.json" || fail "project cmux workspace ref did not persist across relaunch"
@@ -659,6 +672,7 @@ EOF
 chmod +x "$SEEDED_RUNTIME/scripts/spin"
 same_version_refresh_out="$(app_launcher_dry_run)"
 grep -q 'app-launch: spin up' <<<"$same_version_refresh_out" || fail "launcher did not refresh same-version runtime code"
+[ "$(cat "$SESSION_ORG/.spin-version")" = "$VERSION_MARKER_SNAPSHOT" ] || fail "same-version relaunch rewrote installed version metadata"
 grep -Fq "$SESSION_MARKER" "$SESSION_ORG/.spin-onboarded" || fail "onboarding marker was overwritten during same-version runtime refresh"
 grep -Fq 'workspace:restart-ceo' "$SESSION_ORG/OMP_HARNESS.json" || fail "Coordinator cmux workspace ref was overwritten during same-version runtime refresh"
 grep -Fq 'workspace:restart-project' "$SESSION_ORG/OMP_HARNESS.json" || fail "project cmux workspace ref was overwritten during same-version runtime refresh"

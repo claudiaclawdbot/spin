@@ -56,6 +56,37 @@ seed_org_if_missing() {
   fi
 }
 
+refresh_installed_version_marker() {
+  local source="$SPIN_BUNDLED_RUNTIME/VERSION"
+  local target="$RUNTIME_DIR/org/.spin-version"
+  local version current_version installed_at tmp
+  [ -f "$source" ] || return 0
+  version="$(tr -d '[:space:]' < "$source")"
+  [ -n "$version" ] || return 0
+
+  current_version="$(sed -n 's/^version=//p' "$target" 2>/dev/null | sed -n '1p')"
+  installed_at="$(sed -n 's/^installed_at=//p' "$target" 2>/dev/null | sed -n '1p')"
+  if [ "$current_version" != "$version" ] || [ -z "$installed_at" ]; then
+    installed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  fi
+
+  mkdir -p "$(dirname "$target")"
+  tmp="$target.tmp.$$"
+  (
+    umask 077
+    printf 'version=%s\ninstalled_at=%s\nsource=SPIN.app\n' "$version" "$installed_at"
+  ) > "$tmp" || {
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  }
+  if cmp -s "$tmp" "$target"; then
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$target"
+  fi
+  chmod 600 "$target" 2>/dev/null || true
+}
+
 seed_action_policy() {
   local source="$SPIN_BUNDLED_RUNTIME/org/ACTION_POLICY.example.json"
   local target="$RUNTIME_DIR/org/ACTION_POLICY.json"
@@ -137,6 +168,7 @@ EOF
 
 copy_runtime
 seed_org_if_missing
+refresh_installed_version_marker
 seed_action_policy
 seed_cmux_defaults
 seed_cmux_user_defaults

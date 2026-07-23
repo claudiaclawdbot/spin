@@ -111,6 +111,61 @@ test('adaptive dispatch pauses before crossing the memory reserve', t => {
   assert.equal(queue.dispatch_state.dispatch_slots, 0);
 });
 
+test('queued model tier overrides workspace defaults while missing values inherit them', t => {
+  const id = 'read-only-model-tier';
+  const root = fixture(t, [{ ...queued(id), type: 'read-only-worker' }], {
+    app: { allowed_job_types: ['read-only-worker'] },
+  });
+  fs.mkdirSync(path.join(root, 'home', '.config'), { recursive: true });
+  for (const name of ['ceo-waterfall.sh', 'spin-runtime.sh']) {
+    fs.copyFileSync(path.join(repo, 'scripts', 'lib', name), path.join(root, 'scripts', 'lib', name));
+  }
+  fs.writeFileSync(path.join(root, 'home', '.config', 'omp.env'), [
+    "export SPIN_OMP_DEFAULT_MODEL='global/default'",
+    "export SPIN_OMP_DEFAULT_FALLBACKS='global/fallback'",
+    "export SPIN_OMP_SMOL_MODEL='global/smol'",
+    "export SPIN_OMP_PROVIDER_ORDER='global-first'",
+    '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(root, 'org', 'ceo', 'workspace.env'), [
+    "export SPIN_OMP_DEFAULT_MODEL='workspace/default'",
+    "export SPIN_OMP_DEFAULT_FALLBACKS='workspace/fallback'",
+    "export SPIN_OMP_SMOL_MODEL='workspace/smol'",
+    "export SPIN_OMP_PROVIDER_ORDER='workspace-first'",
+    '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(root, 'scripts', 'project-ceo-agent.sh'), `#!/usr/bin/env bash
+set -euo pipefail
+source "$SPIN_ROOT/scripts/lib/ceo-waterfall.sh"
+printf '%s|%s|%s|%s\\n' \\
+  "$SPIN_OMP_DEFAULT_MODEL" "$SPIN_OMP_DEFAULT_FALLBACKS" \\
+  "$SPIN_OMP_SMOL_MODEL" "$SPIN_OMP_PROVIDER_ORDER" \\
+  > "$SPIN_ROOT/org/jobs/\${OMP_JOB_ID}.env"
+exec /bin/sleep 30
+`, { mode: 0o755 });
+
+  const result = spawnSync('/bin/bash', [supervisor], {
+    env: {
+      HOME: path.join(root, 'home'),
+      PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin`,
+      SPIN_ROOT: root,
+      OMP_ADAPTIVE_PARALLELISM: '0',
+      OMP_RESOURCE_CHECK_INTERVAL: '1',
+      OMP_HEARTBEAT_INTERVAL: '1',
+      SPIN_OMP_SCOUT_MODEL: 'job/read-only',
+      SPIN_OMP_SCOUT_FALLBACKS: 'job/fallback',
+    },
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    readJobEnvironment(root, id),
+    'job/read-only|job/fallback|workspace/smol|workspace-first\n',
+  );
+});
+
 test('a heavy job gets the exclusive lease and larger bounded limits', t => {
   const root = fixture(t, [queued('normal-job'), queued('heavy-job', 'heavy')]);
   const first = run(root, { OMP_ADAPTIVE_PARALLELISM: '0' });
