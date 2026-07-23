@@ -29,8 +29,10 @@ hard-fails, not the main product identity.
    at startup and a second launch exits immediately.
 4. **Project orchestrators.** One per registered project. Run either as dispatched
    background jobs (`scripts/project-ceo-agent.sh <id>`) or as live cmux/omp floor
-   agents for explicit human-visible handoffs; read their handoff, do the work,
-   update `STATE.json` + `RECEIPTS.md`, report up to `org/ceo/INBOX.md`.
+   agents for explicit human-visible handoffs. A canonical project-root resolver
+   starts every provider in that project's configured code directory, while its
+   own handoff, state, receipts, and provider overrides stay under
+   `org/projects/<id>/`.
 5. **Workers / subagents.** Per-task LLM invocations a project orchestrator spawns.
 
 ## One tick, in detail
@@ -39,12 +41,14 @@ hard-fails, not the main product identity.
 
 1. **Render** the cockpit — org state, provider status, inbox tail — to its pane.
 2. **Dispatch** (`omp-supervisor-once.sh`):
-   - mark finished jobs by *PID liveness* (not ps-grep);
+   - detect exited jobs by PID liveness, then require an explicit semantic
+     outcome for newly dispatched work;
    - spawn each `queued` job in `org/AGENT_QUEUE.json` as a **detached background
      process** with its own PID file and log under `org/jobs/`;
    - enforce one-job-per-project and a global parallelism cap (default 3);
-   - enforce a per-job process-tree budget (default 4096 MB RSS and 32
-     processes), killing the detached group and recording the exact violation;
+   - enforce a per-job process-tree budget (default 3072 MB RSS and 16
+     processes; 6144 MB and 32 processes for an exclusive heavy job), killing
+     the detached group and recording the exact violation;
    - block jobs whose `project_id` isn't registered in `org/OMP_HARNESS.json`
      or whose type isn't in that project's `allowed_job_types`;
    - update cmux status chips (display only — never executes through cmux).
@@ -76,10 +80,22 @@ The durable background path uses the queue:
 Navigator brain ──appends──▶ AGENT_QUEUE.json (status: queued)
 tick N+1 dispatcher ──spawns──▶ bash project-ceo-agent.sh <project>   (detached, env: OMP_JOB_*)
                                  │  log: org/jobs/<id>.log   pid: org/jobs/<id>.pid
-agent ──writes──▶ project STATE.json + RECEIPTS.md ──appends──▶ org/ceo/INBOX.md
-tick N+2 dispatcher ──sees pid dead──▶ status: completed
+agent ──writes──▶ project STATE.json + RECEIPTS.md + Queue-Outcome marker
+tick N+2 dispatcher ──sees pid dead + validates outcome sidecar──▶ completed | blocked | failed
 brain (gate sees INBOX change) ──reads receipt──▶ decides next step
 ```
+
+An exit code of zero is only process success. New jobs also carry
+`org/jobs/<id>.outcome.json`, atomically derived from exactly one
+`Queue-Outcome: <id> COMPLETED|BLOCKED` receipt marker. Missing, malformed, or
+ambiguous outcome metadata fails closed, so blocked work cannot unlock a
+dependent job merely because its provider exited cleanly. Queue records created
+before this contract retain their legacy exit-code behavior.
+
+Blocked and failed records stay in queue history. After the operator has
+reviewed one, `org acknowledge-job <job-id> [--note "..."]` records that
+acknowledgement atomically and removes the record from current attention views
+without deleting it.
 
 The live visual path is explicit: `spin delegate --wait <project> "<task>"`
 types a stamped request into that project's cmux/omp floor and waits for a matching
@@ -94,35 +110,46 @@ work role. OMP handles model/provider fallback inside the run.
 ## OMP-first fallback (`scripts/lib/ceo-waterfall.sh`)
 
 SPIN treats **OMP as the primary agent harness**, not just another LLM provider.
-On every OMP run, SPIN writes an ignored runtime overlay:
+For every execution lane, SPIN writes an ignored runtime overlay:
 
 ```
-org/ceo/runs/spin-omp-config.yml
+org/ceo/runs/omp-configs/<lane>.yml
 ```
 
-That overlay declares OMP `modelRoles` plus `retry.fallbackChains`. OMP then owns:
+Coordinator, project floor, queued job, one-shot, and Navigator chat lanes use
+distinct files so concurrent model policies cannot overwrite one another. An
+explicit owner-provided `SPIN_OMP_CONFIG` remains an intentional opt-out. Each
+overlay declares OMP `modelRoles` plus `retry.fallbackChains`. OMP then owns:
 
 - retrying transient/rate/usage/server/network failures,
 - switching between authenticated credentials for the same provider,
 - falling through configured models/providers such as Anthropic → OpenAI Codex → OpenRouter,
 - restoring the primary model after cooldown when OMP says it is safe.
 
-The outer SPIN fallback is only for cases where OMP is unavailable or hard-fails:
+The outer SPIN fallback is only for cases where OMP is unavailable or cannot
+produce a usable run:
 
 ```
 omp → codex → claude → gemini → ollama
 ```
+
+Each outer attempt has a deadline derived from the queued job's runtime budget
+and keeps its own attempt log. SPIN advances only after a timeout, a missing or
+non-executable CLI, OMP's fail-fast command-line usage status, or a direct
+provider lockout already present before the attempt. It never infers retry safety
+from provider log text. An
+ordinary task failure stops the chain so another provider cannot duplicate
+partial project work.
 
 SPIN validates Codex candidates before using them and prefers an explicit
 `SPIN_CODEX_BIN`/`CODEX_CLI_PATH` or the signed CLI inside ChatGPT/Codex.app over
 a broken PATH shim. Unless `CEO_CODEX_MODEL` is explicitly set, the direct lane
 uses the subscription account's current default instead of pinning a stale model.
 
-Direct CLI providers still use SPIN's old bench files
-(`org/ceo/runs/.<provider>-blocked-until`) when they report usage/session/rate
-limits. OMP is deliberately not benched by SPIN for provider 429s because OMP
-tracks those per account/provider internally; benching the whole OMP harness would
-throw away the fallback chain.
+Direct CLI providers still honor SPIN's old owner/control-plane bench files
+(`org/ceo/runs/.<provider>-blocked-until`). OMP is deliberately not benched by
+SPIN for provider 429s because OMP tracks those per account/provider internally;
+benching the whole OMP harness would throw away the fallback chain.
 
 ### Desktop execution
 
@@ -151,9 +178,10 @@ export SPIN_OMP_SMOL_FALLBACKS="openai-codex/gpt-5.1-codex-mini openrouter/~anth
 
 | Failure | Defense |
 |---|---|
-| duplicate driver loops (quota burn) | lock file claimed atomically at startup; a second copy sees it and exits |
+| duplicate driver loops (quota burn) | fully written hardlink lock claimed atomically and bound to process-start identity; coordinated stop pins ownership until exit |
 | hung brain | per-run `timeout`, loop continues |
-| agent exits 0 having done nothing | post-run content diff → one retry on claude |
+| agent exits 0 without state or receipt evidence | post-run content diff fails closed without a duplicate provider run |
+| agent exits 0 while the business outcome is blocked | semantic outcome sidecar marks the job blocked and prevents dependent dispatch |
 | driver/status/wiki service dies | launchd/systemd independently restarts all three; the board verifies PID plus expected command |
 | restored cmux session has stale/missing floors | status-watch periodically reconciles the Coordinator, active project floors, and boards |
 | agent or test runner consumes the machine | adaptive dispatch preserves a memory reserve; heavy jobs run alone; process-group RSS/count governor kills a breach and records the reason |
@@ -176,9 +204,12 @@ the durable queue.
 
 - Keys live outside the repo in `~/.config/omp.env` (chmod 600).
 - `spin action` is the executable gate for external sends, spending, production
-  deploys, and protected pushes. It denies by default, matches an exact enabled
-  target, runs a fixed argv vector without a shell, applies spend caps, and
-  writes append-only events plus a receipt.
+  deploys, and protected pushes. It denies by default and requires an exact
+  enabled rule plus a short-lived, one-shot owner lease. The lease binds the
+  policy digest, resolved executable and hash, resolved working directory, and
+  target attestation. Protected pushes additionally resolve the Git remote and
+  destination branch. Commands run without a shell and inherit only a fixed
+  baseline environment plus explicitly allowlisted variable names.
 - Prompts forbid direct execution and tell agents to request denied targets in
   HUMAN_QUEUE. Agents must not edit `org/ACTION_POLICY.json`.
 - This broker is machine-enforced for work routed through it, but it is not an

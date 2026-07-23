@@ -144,6 +144,10 @@ esac
 [ -n "$version" ] || fail "manifest missing version"
 [ -n "$archs" ] || fail "manifest missing archs"
 [ -n "$compat_sha" ] || fail "manifest missing compatibility manifest hash"
+VERSIONED_NOTES="$ROOT/docs/releases/SPIN-$version.md"
+[ -f "$VERSIONED_NOTES" ] || fail "missing versioned release notes: $VERSIONED_NOTES"
+[ "$(sed -n '1p' "$VERSIONED_NOTES")" = "# SPIN for Mac $version" ] || \
+  fail "versioned release notes heading does not match artifact version $version"
 ok "public beta manifest policy"
 
 TMP="$(mktemp -d)"
@@ -261,14 +265,11 @@ SPIN is a visual command center for coordinating AI coding agents across
 multiple software projects. Each project keeps its own repository context,
 while the Navigator manages portfolio priorities, delegation, approvals, and
 progress from one Mac workspace.
+EOF
 
-## Highlights
+tail -n +2 "$VERSIONED_NOTES" >> "$NOTES"
 
-- Navigator-level coordination across isolated project workspaces.
-- OMP-backed agent sessions with configurable model and provider routing.
-- Refined project handoffs with objectives, paths, constraints, and checks.
-- Persistent queues, boards, approvals, handoffs, and receipts.
-- Bundled workspace engine and OMP/Pi runtime in one Mac app.
+cat >> "$NOTES" <<EOF
 
 ## Requirements
 

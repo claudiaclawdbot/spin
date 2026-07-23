@@ -40,6 +40,9 @@ done
 PID="${1:?usage: delegate.sh <project-id> \"<task>\"}"; shift
 TASK="$*"
 [[ -z "$TASK" ]] && { echo "no task text given" >&2; exit 1; }
+case "$PID" in
+  ''|'.'|'..'|*[!A-Za-z0-9._:-]*) echo "invalid project id: $PID" >&2; exit 2 ;;
+esac
 [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || { echo "--timeout must be seconds" >&2; exit 1; }
 [[ -n "$REQ_ID" ]] || REQ_ID="delegate-$(date -u '+%Y%m%d%H%M%S')-$$"
 [[ "$REQ_ID" =~ ^[A-Za-z0-9._:-]+$ ]] || { echo "--id may only contain letters, numbers, dot, underscore, colon, or hyphen" >&2; exit 1; }

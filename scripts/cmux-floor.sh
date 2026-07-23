@@ -17,9 +17,8 @@ export SPIN_ROOT="$ROOT"
 export WORKSPACE_ROOT="$ROOT"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
 source "$ROOT/scripts/lib/cmux-floor-layout.sh"
+source "$ROOT/scripts/lib/project-root.sh"
 TARGET="${1:?usage: cmux-floor.sh ceo|<project-id>}"
-OMP_CONFIG="$(ensure_spin_omp_config)"
-MODEL=(--config "$OMP_CONFIG")
 
 if [[ "$TARGET" == "ceo" ]]; then
   SYS="$ROOT/org/ceo/WORKSPACE_CONTROLLER_PROMPT.md"
@@ -30,19 +29,27 @@ if [[ "$TARGET" == "ceo" ]]; then
   # by absolute path via tools, so it doesn't need to sit inside the repo.
   DIR="$HOME/.omp-ceo"; mkdir -p "$DIR"
   PROJECT_CODE_DIR=""
+  OMP_CONFIG_LANE="coordinator-floor"
   TITLE="WORKSPACE CEO  ·  omp agent"
 else
   SYS="$ROOT/org/projects/$TARGET/PROJECT_CONTROLLER_PROMPT.md"
   FLOOR_DOC="$ROOT/org/projects/$TARGET/FLOOR.md"
-  PROJECT_CODE_DIR="$ROOT/projects/$TARGET"
-  [[ -d "$PROJECT_CODE_DIR" ]] || PROJECT_CODE_DIR="$ROOT/org/projects/$TARGET"
+  PROJECT_CODE_DIR="$(spin_project_root "$TARGET")" || exit $?
   # Keep the long-lived OMP process in SPIN-owned state. Calling getcwd() from
   # Desktop/Documents/Downloads can block an ad-hoc app behind macOS privacy.
   DIR="$(spin_cmux_project_cwd "$TARGET")"
   mkdir -p "$DIR"
+  spin_load_project_env "$ROOT/org/projects/$TARGET/project.env" || exit $?
+  # Reassert the canonical control-plane boundary after project overrides.
+  export SPIN_ROOT="$ROOT"
+  export WORKSPACE_ROOT="$ROOT"
   export SPIN_PROJECT_ROOT="$PROJECT_CODE_DIR"
+  OMP_CONFIG_LANE="project-floor:${TARGET}"
   TITLE="$TARGET  ·  omp orchestrator"
 fi
+
+OMP_CONFIG="$(ensure_spin_omp_config "$OMP_CONFIG_LANE")" || exit $?
+MODEL=(--config "$OMP_CONFIG")
 
 # Standing instruction: keep the live floor board current (it's shown on this cmux floor).
 BOARD_INSTR="

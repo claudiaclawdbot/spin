@@ -16,6 +16,9 @@ set -uo pipefail
 
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 PROJECT_ID="${1:?usage: project-floor-watch.sh <project-id>}"
+case "$PROJECT_ID" in
+  ''|'.'|'..'|*[!A-Za-z0-9._:-]*) echo "invalid project id: $PROJECT_ID" >&2; exit 2 ;;
+esac
 JOBS_DIR="$ROOT/org/jobs"
 STATE="$ROOT/org/projects/$PROJECT_ID/STATE.json"
 INBOX="$ROOT/org/ceo/INBOX.md"
@@ -56,6 +59,7 @@ console.log('  updated:     ' + (s.updated_at || '—'));
       if (mine[0]) process.stdout.write(mine[0].id);
     } catch (e) {}
   ' "$ROOT/org/AGENT_QUEUE.json" "$PROJECT_ID" 2>/dev/null)"
+  [[ "$JOB_ID" =~ ^[A-Za-z0-9._:-]+$ ]] || JOB_ID=""
   LATEST_LOG=""
   [[ -n "$JOB_ID" && -f "$JOBS_DIR/$JOB_ID.log" ]] && LATEST_LOG="$JOBS_DIR/$JOB_ID.log"
   if [[ -n "$LATEST_LOG" ]]; then

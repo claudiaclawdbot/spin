@@ -41,19 +41,73 @@ const fs = require('fs');
 const [plist, key] = process.argv.slice(2);
 const xml = fs.readFileSync(plist, 'utf8');
 const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const match = xml.match(new RegExp(`<key>${escaped}</key>\\s*<string>([\\s\\S]*?)</string>`));
+const match = xml.match(new RegExp(
+  `<key>${escaped}</key>\\s*(?:<string>([\\s\\S]*?)</string>|<(true|false)\\s*/>|<integer>([^<]+)</integer>)`,
+));
 if (!match) process.exit(1);
-const value = match[1]
-  .replace(/&quot;/g, '"')
-  .replace(/&apos;/g, "'")
-  .replace(/&lt;/g, '<')
-  .replace(/&gt;/g, '>')
-  .replace(/&amp;/g, '&');
+const value = match[1] !== undefined
+  ? match[1]
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+  : match[2] || match[3];
 process.stdout.write(value);
 NODE
     return $?
   fi
   return 1
+}
+
+version_lte() {
+  "$NODE_BIN" - "$1" "$2" <<'NODE'
+const [left, right] = process.argv.slice(2);
+function parts(value) {
+  if (!/^\d+(?:\.\d+)*$/.test(value)) {
+    console.error(`invalid numeric version: ${value}`);
+    process.exit(2);
+  }
+  return value.split('.').map(Number);
+}
+const a = parts(left);
+const b = parts(right);
+const width = Math.max(a.length, b.length);
+for (let index = 0; index < width; index += 1) {
+  const av = a[index] || 0;
+  const bv = b[index] || 0;
+  if (av < bv) process.exit(0);
+  if (av > bv) process.exit(1);
+}
+NODE
+}
+
+assert_macho_minimum_compatible() {
+  local binary="$1" declared="$2" label="$3" minimums minimum
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ -f "$binary" ] || return 0
+  /usr/bin/file -b "$binary" 2>/dev/null | grep -q 'Mach-O' || return 0
+  [ -x /usr/bin/otool ] || fail "otool is required to verify $label minimum macOS compatibility"
+  minimums="$(/usr/bin/otool -l "$binary" 2>/dev/null | awk '
+    $1 == "cmd" && $2 == "LC_BUILD_VERSION" { build = 1; legacy = 0; next }
+    $1 == "cmd" && $2 == "LC_VERSION_MIN_MACOSX" { legacy = 1; build = 0; next }
+    build && $1 == "minos" { print $2; build = 0; next }
+    legacy && $1 == "version" { print $2; legacy = 0; next }
+  ')"
+  [ -n "$minimums" ] || fail "could not read the Mach-O minimum macOS version for $label"
+  while IFS= read -r minimum; do
+    [ -n "$minimum" ] || continue
+    version_lte "$minimum" "$declared" ||
+      fail "$label requires macOS $minimum but its containing app declares $declared"
+  done <<<"$minimums"
+}
+
+assert_macho_tree_minimum_compatible() {
+  local tree="$1" declared="$2" label="$3" file
+  [ -d "$tree" ] || return 0
+  while IFS= read -r -d '' file; do
+    assert_macho_minimum_compatible "$file" "$declared" "$label ${file#"$tree"/}"
+  done < <(find "$tree" -type f \( -perm -111 -o -name '*.dylib' -o -name '*.node' \) -print0)
 }
 
 assert_icon_has_transparent_corners() {
@@ -240,7 +294,16 @@ outer_short_version="$(plist_string "$APP/Contents/Info.plist" CFBundleShortVers
 outer_build_number="$(plist_string "$APP/Contents/Info.plist" CFBundleVersion || true)"
 [ "$outer_short_version" = "$runtime_short_version" ] || fail "outer app version $outer_short_version does not match runtime $runtime_version"
 case "$outer_build_number" in ''|*[!0-9]*) fail "outer app build number is not numeric: ${outer_build_number:-missing}" ;; esac
-ok "app identity"
+outer_minimum_macos="$(plist_string "$APP/Contents/Info.plist" LSMinimumSystemVersion || true)"
+source_minimum_macos="$(plist_string "$RUNTIME/app/macos/Info.plist" LSMinimumSystemVersion || true)"
+[ -n "$outer_minimum_macos" ] || fail "outer app omits LSMinimumSystemVersion"
+[ "$outer_minimum_macos" = "$source_minimum_macos" ] ||
+  fail "outer app minimum macOS $outer_minimum_macos does not match runtime source ${source_minimum_macos:-missing}"
+grep -Fq "macOS $outer_minimum_macos or later" "$RUNTIME/README.md" ||
+  fail "bundled README does not state the outer app minimum macOS $outer_minimum_macos"
+grep -Fq "macOS $outer_minimum_macos or later" "$RUNTIME/docs/INSTALL_MACOS.md" ||
+  fail "bundled install guide does not state the outer app minimum macOS $outer_minimum_macos"
+ok "outer app identity and macOS compatibility"
 
 [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] || fail "node not found for release check; set SPIN_RELEASE_CHECK_NODE"
 
@@ -253,19 +316,41 @@ ok "app icon"
 [ -d "$CMUX_APP" ] || fail "missing bundled cmux app at Resources/SPIN.app"
 [ -f "$CMUX_APP/Contents/Info.plist" ] || fail "bundled cmux app missing Info.plist"
 cmux_bundle_id="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIdentifier || true)"
+cmux_short_version="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleShortVersionString || true)"
+cmux_build_number="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleVersion || true)"
+cmux_minimum_macos="$(plist_string "$CMUX_APP/Contents/Info.plist" LSMinimumSystemVersion || true)"
+[ "$cmux_short_version" = "$outer_short_version" ] ||
+  fail "bundled SPIN UI version ${cmux_short_version:-missing} does not match outer app $outer_short_version"
+[ "$cmux_build_number" = "$outer_build_number" ] ||
+  fail "bundled SPIN UI build ${cmux_build_number:-missing} does not match outer app $outer_build_number"
+[ -n "$cmux_minimum_macos" ] || fail "bundled SPIN UI omits LSMinimumSystemVersion"
+version_lte "$cmux_minimum_macos" "$outer_minimum_macos" ||
+  fail "bundled SPIN UI requires macOS $cmux_minimum_macos but outer app declares $outer_minimum_macos"
+assert_macho_tree_minimum_compatible "$CMUX_APP/Contents" "$cmux_minimum_macos" "bundled SPIN UI"
+assert_macho_tree_minimum_compatible "$RES/bin" "$outer_minimum_macos" "outer app runtime"
 if [ "${SPIN_REQUIRE_BRANDED_CMUX_APP:-}" = "1" ]; then
   [ "$cmux_bundle_id" = "dev.spin.app" ] || fail "bundled cmux app bundle id is not dev.spin.app: ${cmux_bundle_id:-missing}"
+  cmux_automatic_downloads="$(plist_string "$CMUX_APP/Contents/Info.plist" SUAutomaticallyUpdate || true)"
+  case "$cmux_automatic_downloads" in
+    false|0) ;;
+    *) fail "bundled cmux app does not explicitly disable automatic Sparkle installs: ${cmux_automatic_downloads:-missing}" ;;
+  esac
+  cmux_automatic_checks="$(plist_string "$CMUX_APP/Contents/Info.plist" SUEnableAutomaticChecks || true)"
+  case "$cmux_automatic_checks" in
+    false|0) ;;
+    *) fail "bundled cmux app does not explicitly disable automatic Sparkle update checks: ${cmux_automatic_checks:-missing}" ;;
+  esac
   cmux_feed_url="$(plist_string "$CMUX_APP/Contents/Info.plist" SUFeedURL || true)"
-  if grep -q 'manaflow-ai/cmux' <<<"$cmux_feed_url"; then
-    fail "bundled cmux app still uses the upstream cmux update feed"
-  fi
+  [ -z "$cmux_feed_url" ] || fail "bundled cmux app exposes an unverified Sparkle update feed: $cmux_feed_url"
+  cmux_sparkle_key="$(plist_string "$CMUX_APP/Contents/Info.plist" SUPublicEDKey || true)"
+  [ -z "$cmux_sparkle_key" ] || fail "bundled cmux app exposes a Sparkle public key before SPIN has a signed appcast"
 else
   case "$cmux_bundle_id" in
     dev.spin.app|com.cmuxterm.app) ;;
     *) fail "bundled cmux app bundle id is not recognized: ${cmux_bundle_id:-missing}" ;;
   esac
 fi
-ok "bundled cmux app identity ($cmux_bundle_id)"
+ok "bundled cmux app identity, version, and macOS compatibility ($cmux_bundle_id)"
 
 cmux_icon_file="$(plist_string "$CMUX_APP/Contents/Info.plist" CFBundleIconFile || true)"
 [ "$cmux_icon_file" = "AppIcon" ] || fail "bundled cmux app icon plist key is not AppIcon: ${cmux_icon_file:-missing}"

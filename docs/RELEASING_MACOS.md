@@ -29,7 +29,10 @@ scripts/prepare-open-source-release.sh \
 The release pipeline builds the SPIN-branded app, bundles OMP/Pi, signs the
 bundle, creates the DMG and metadata, verifies extraction, and tests an
 installed-app first launch. The preparation step verifies those artifacts and
-creates customer-facing release notes.
+creates customer-facing release notes. It requires
+`docs/releases/SPIN-<version>.md` and incorporates that versioned changelog into
+the artifact-specific install, checksum, and licensing body, so the checked
+package and the repository do not publish competing release summaries.
 
 An existing artifact can be prepared through the CLI alias:
 

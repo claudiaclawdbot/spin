@@ -18,7 +18,7 @@
   "dispatch": {
     "mechanism": "background-process",
     "note": "Queued jobs spawn as detached bash processes (PID files at org/jobs/<job-id>.pid, logs at org/jobs/<job-id>.log). cmux is display/status for queued work; explicit spin delegate handoffs are the separate live-floor path.",
-    "completion_detection": "PID liveness check",
+    "completion_detection": "PID liveness plus fail-closed semantic outcome sidecar for newly dispatched jobs",
     "max_parallel": 3,
     "adaptive_parallelism": "pause new dispatch when available memory would cross the reserve",
     "resource_classes": {
@@ -36,7 +36,7 @@
     "primary": "omp with generated SPIN config overlay (modelRoles + retry.fallbackChains)",
     "outer_fallback": ["codex", "claude", "gemini", "ollama"],
     "workspace_ceo_outer_fallback": ["claude", "gemini", "ollama"],
-    "note": "OMP is the normal harness and uses authenticated providers from omp setup / ~/.config/omp.env. SPIN only falls through to direct CLIs if OMP is absent or hard-fails. Direct CLI lockout files: org/ceo/runs/.<provider>-blocked-until"
+    "note": "OMP is the normal harness and uses authenticated providers from omp setup / ~/.config/omp.env. Bounded outer attempts fall through to direct CLIs only when OMP is absent, times out, or hard-fails; ordinary task failures stop to prevent duplicate partial work. Direct CLI lockout files: org/ceo/runs/.<provider>-blocked-until"
   },
   "workspace_ceo": {
     "id": "workspace-ceo",
@@ -53,6 +53,7 @@
   "projects": {
     "example-app": {
       "project_ceo": "example-app-ceo",
+      "code_path": "projects/example-app",
       "cmux_workspace": "workspace:2",
       "prompt": "org/projects/example-app/PROJECT_CONTROLLER_PROMPT.md",
       "handoff": "org/projects/example-app/WORKSPACE_HANDOFF.md",
@@ -64,6 +65,7 @@
     },
     "workspace": {
       "project_ceo": "workspace-maintenance",
+      "code_path": ".",
       "prompt": "org/projects/workspace/PROJECT_CONTROLLER_PROMPT.md",
       "handoff": "org/projects/workspace/WORKSPACE_HANDOFF.md",
       "agent": "scripts/project-ceo-agent.sh workspace",

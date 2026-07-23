@@ -15,14 +15,18 @@ source "$ROOT/scripts/lib/cmux-floor-layout.sh"
 
 mkdir -p "$RUN"
 STARTUP_LOCK="$RUN/.spin-up.lock"
-while ! ( set -o noclobber; echo $$ > "$STARTUP_LOCK" ) 2>/dev/null; do
-  if spin_locked_process_running "$STARTUP_LOCK" "spin-up.sh"; then
+if spin_lock_acquire "$STARTUP_LOCK" "spin-up.sh"; then
+  STARTUP_LOCK_TOKEN="$SPIN_LOCK_OWNER_TOKEN"
+else
+  lock_rc=$?
+  if (( lock_rc == 1 )); then
     echo "SPIN interface startup is already in progress."
     exit 0
   fi
-  rm -f "$STARTUP_LOCK"
-done
-trap 'rm -f "$STARTUP_LOCK"' EXIT
+  echo "Could not acquire the SPIN interface startup lock." >&2
+  exit 1
+fi
+trap 'spin_lock_release "$STARTUP_LOCK" "$STARTUP_LOCK_TOKEN" >/dev/null 2>&1 || true' EXIT
 
 spin_prepare_cmux_environment
 spin_require_binary cmux "SPIN.app bundles it under Resources/bin/cmux, or install cmux for the development visual interface. Headless: spin start" || exit 1

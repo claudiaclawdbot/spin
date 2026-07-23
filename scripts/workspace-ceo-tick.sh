@@ -35,18 +35,19 @@ stop_if_requested
 # recurring duplicate-driver problem. If another live instance holds the lock,
 # exit immediately.
 LOCKFILE="$CEO_RUN_DIR/.workspace-ceo-tick.lock"
-# Atomic acquire via noclobber: only one process can create the lock. Prevents
-# the race where two near-simultaneous launches both pass a non-atomic check.
-while ! ( set -o noclobber; echo $$ > "$LOCKFILE" ) 2>/dev/null; do
-  OTHER_PID="$(cat "$LOCKFILE" 2>/dev/null)"
-  if [[ -n "$OTHER_PID" ]] && kill -0 "$OTHER_PID" 2>/dev/null; then
-    echo "[workspace-ceo-tick] another driver is already running (PID $OTHER_PID); exiting." >&2
-    exit 0
-  fi
-  rm -f "$LOCKFILE"   # stale lock (owner dead) — clear and retry the atomic acquire
-done
-trap 'rm -f "$LOCKFILE"' EXIT
-trap 'rm -f "$LOCKFILE"; exit 0' INT TERM
+spin_lock_acquire "$LOCKFILE" "$ROOT/scripts/workspace-ceo-tick.sh"
+lock_rc=$?
+if (( lock_rc == 1 )); then
+  OTHER_PID="$(spin_lock_read_pid "$LOCKFILE" 2>/dev/null || true)"
+  echo "[workspace-ceo-tick] another driver is already running (PID ${OTHER_PID:-unknown}); exiting." >&2
+  exit 0
+elif (( lock_rc != 0 )); then
+  echo "[workspace-ceo-tick] could not acquire singleton lock: $LOCKFILE" >&2
+  exit 1
+fi
+LOCK_TOKEN="$SPIN_LOCK_OWNER_TOKEN"
+trap 'spin_lock_release "$LOCKFILE" "$LOCK_TOKEN" >/dev/null 2>&1 || true' EXIT
+trap 'exit 0' INT TERM
 
 # Reconcile the visible board immediately after acquiring the driver lock. This
 # prevents a restored cmux session from displaying pre-reboot process state while

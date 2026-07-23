@@ -74,4 +74,4 @@ PREAMBLE
 
 base64 < "$PAYLOAD" >> "$OUT"
 chmod +x "$OUT"
-echo "built $OUT — $(wc -c < "$OUT" | tr -d ' ') bytes, payload $(wc -l < "$PAYLOAD" 2>/dev/null || echo '?') tar-bytes"
+echo "built $OUT — $(wc -c < "$OUT" | tr -d ' ') bytes, payload $(wc -c < "$PAYLOAD" | tr -d ' ') bytes"

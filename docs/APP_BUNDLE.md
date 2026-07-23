@@ -357,7 +357,10 @@ The cmux dock Updates control runs `scripts/spin app-updates`, which is safe whe
 no candidate is available: it reports current app state and exits without
 changing app code. This still does not fetch a remote update feed or run a
 background auto-updater; it is the user-facing surface over the checked local
-artifact updater.
+artifact updater. The SPIN overlay removes cmux's inherited Sparkle feed and key,
+disables automatic Sparkle checks, and hides its update commands. Release checks
+fail if those inherited network update paths reappear before SPIN has its own
+published signed appcast.
 
 ## Release Artifact
 

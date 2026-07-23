@@ -14,20 +14,26 @@ set -euo pipefail
 ROOT="${SPIN_ROOT:-${OMP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}}"
 source "$ROOT/scripts/lib/ceo-waterfall.sh"
 source "$ROOT/scripts/lib/spin-runtime.sh"
+export SPIN_OMP_CONFIG_LANE="workspace-agent"
 
 AGENT_LOCK="$CEO_RUN_DIR/.workspace-ceo-agent.lock"
-while ! ( set -o noclobber; printf '%s\n' "$$" > "$AGENT_LOCK" ) 2>/dev/null; do
-  if spin_locked_process_running "$AGENT_LOCK" "$ROOT/scripts/workspace-ceo-agent.sh"; then
-    echo "[workspace-ceo-agent] already running (PID $(cat "$AGENT_LOCK")); skipping duplicate tick." >&2
+if spin_lock_acquire "$AGENT_LOCK" "$ROOT/scripts/workspace-ceo-agent.sh"; then
+  AGENT_LOCK_TOKEN="$SPIN_LOCK_OWNER_TOKEN"
+else
+  lock_rc=$?
+  if (( lock_rc == 1 )); then
+    other_pid="$(spin_lock_read_pid "$AGENT_LOCK" 2>/dev/null || true)"
+    echo "[workspace-ceo-agent] already running (PID ${other_pid:-unknown}); skipping duplicate tick." >&2
     exit 0
   fi
-  rm -f "$AGENT_LOCK"
-done
+  echo "[workspace-ceo-agent] could not acquire singleton lock: $AGENT_LOCK" >&2
+  exit 1
+fi
 
 CONTEXT=""
 cleanup() {
   [[ -n "$CONTEXT" ]] && rm -f "$CONTEXT"
-  rm -f "$AGENT_LOCK"
+  spin_lock_release "$AGENT_LOCK" "$AGENT_LOCK_TOKEN" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -96,7 +102,7 @@ $(cat "$ROOT/scripts/lib/action-policy-prompt.md")
 $(cat "$CONTEXT")
 "
 
-# --- run (resilient: falls through providers on usage-limit) --------------
+# --- run (OMP-first; outer fallback only for preflight-safe failures) -------
 echo "[workspace-ceo-agent] run=$RUN_LOG" >&2
 rc=0
 run_agent_resilient true "${WORKSPACE_CEO_PROVIDER:-omp}" "$PROMPT_BODY" "$RUN_LOG" "$ROOT/org" "$ROOT/scripts" || rc=$?

@@ -10,7 +10,7 @@ jobs:
     name: syntax checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: bash -n every script
         run: |
           set -e
@@ -18,10 +18,16 @@ jobs:
             bash -n "$f"
             echo "ok: $f"
           done
-      - name: node --check the node scripts
+      - name: node --check every shipped JavaScript file
         run: |
-          node --check scripts/ceo-dashboard.js
+          set -e
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+            echo "ok: $file"
+          done < <(find scripts app runtime -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
           node --check scripts/org
+      - name: focused Node tests
+        run: node --test tests/*.test.js
       - name: validate shipped JSON
         run: |
           set -e
@@ -34,7 +40,7 @@ jobs:
     name: install.sh smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: run installer (no agent CLIs in CI)
         run: SPIN_NO_DEPS=1 SPIN_INSTALL_SKIP_AGENT_CHECK=1 ./install.sh
       - name: assert runtime files exist
@@ -84,7 +90,7 @@ jobs:
     name: launcher + offline installer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: offline self-extractor installs (no network)
         run: |
           set -e
@@ -107,11 +113,10 @@ jobs:
           echo "ok: piped launcher cloned + installed"
 
   shellcheck:
-    name: shellcheck (advisory)
+    name: shellcheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck (errors only)
         run: |
           sudo apt-get install -y shellcheck >/dev/null

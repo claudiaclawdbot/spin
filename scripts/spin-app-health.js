@@ -257,10 +257,16 @@ function checkActionBroker() {
       state: report.status,
       secureDefault: report.secure_default === true,
       enabledRules: Number(report.enabled_rules || 0),
+      executableRules: Number(report.executable_rules || 0),
+      leaseState: report.lease && typeof report.lease.state === 'string' ? report.lease.state : 'unsupported',
       policy: report.policy,
       message: report.status === 'missing'
         ? 'policy file missing; sensitive actions still fail closed'
-        : (report.status === 'deny_all' ? 'deny-all policy active' : 'exact action rules configured'),
+        : (report.status === 'deny_all'
+          ? 'deny-all policy active'
+          : (report.status === 'lease_required'
+            ? 'enabled exact rules require an active one-shot lease'
+            : 'exact action rules configured and leased')),
     };
   } catch {
     return { status: 'error', state: 'invalid', message: 'action broker returned invalid JSON' };
@@ -375,7 +381,8 @@ function renderText(health) {
   lines.push('');
   lines.push('Sensitive Actions');
   lines.push(`  [${mark(health.security.actionBroker.status)}] broker: ${health.security.actionBroker.state}`);
-  lines.push(`  enabled exact rules: ${health.security.actionBroker.enabledRules || 0}`);
+  lines.push(`  enabled/executable exact rules: ${health.security.actionBroker.enabledRules || 0}/${health.security.actionBroker.executableRules || 0}`);
+  lines.push(`  lease: ${health.security.actionBroker.leaseState || 'unsupported'}`);
   lines.push(`  note: ${health.security.actionBroker.message}`);
   return `${lines.join('\n')}\n`;
 }

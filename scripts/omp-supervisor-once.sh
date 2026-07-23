@@ -50,14 +50,19 @@ const RESOURCE_CHECK_INTERVAL = parsePositiveInt(process.env.OMP_RESOURCE_CHECK_
 const validJobId = (id) => /^[A-Za-z0-9._:-]+$/.test(String(id || ''));
 const queueLock = path.join(root, 'org', 'ceo', 'runs', '.org-queue.lock');
 let queueLockHeld = false;
+let queueLockHandle = null;
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function normalizeResourceClass(job) {
+  return String(job.resource_class || '').trim().toLowerCase() === 'heavy' ? 'heavy' : 'normal';
+}
+
 function jobIsHeavy(job) {
-  return job.resource_class === 'heavy';
+  return normalizeResourceClass(job) === 'heavy';
 }
 
 function availableMemoryMb() {
@@ -91,40 +96,14 @@ function adaptiveDispatchBudget(runningCount) {
 }
 
 function acquireQueueLock() {
-  fs.mkdirSync(path.dirname(queueLock), { recursive: true });
-  let tries = 0;
-  for (;;) {
-    try {
-      fs.writeFileSync(queueLock, String(process.pid), { flag: 'wx' });
-      queueLockHeld = true;
-      return;
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      let holder;
-      try { holder = parseInt(fs.readFileSync(queueLock, 'utf8').trim(), 10); }
-      catch (readError) {
-        if (readError.code === 'ENOENT') continue;
-        throw readError;
-      }
-      if (Number.isInteger(holder)) {
-        let alive = false;
-        try { process.kill(holder, 0); alive = true; } catch {}
-        if (!alive) {
-          try { fs.unlinkSync(queueLock); } catch {}
-          continue;
-        }
-      }
-      if (++tries > 50) throw new Error(`could not acquire queue lock (held by ${holder || 'unknown'})`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    }
-  }
+  queueLockHandle = runtime.acquireProcessLock(queueLock);
+  queueLockHeld = true;
 }
 
 function releaseQueueLock() {
   if (!queueLockHeld) return;
-  try {
-    if (fs.readFileSync(queueLock, 'utf8').trim() === String(process.pid)) fs.unlinkSync(queueLock);
-  } catch {}
+  runtime.releaseProcessLock(queueLockHandle);
+  queueLockHandle = null;
   queueLockHeld = false;
 }
 
@@ -152,26 +131,96 @@ function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+function jobProcessIdentity(job) {
+  if (job.process_identity === undefined) return null;
+  const identity = String(job.process_identity || '').trim();
+  return identity || null;
+}
+
+function jobProcessAlive(job, pid) {
+  const expectedIdentity = jobProcessIdentity(job);
+  if (job.process_identity !== undefined) {
+    return Boolean(expectedIdentity) && runtime.processIdentity(pid) === expectedIdentity;
+  }
+  // Jobs already running when process identities were introduced retain their
+  // legacy PID-only behavior. Every newly dispatched job records an identity.
+  return pidAlive(pid);
+}
+
 // ── helper: kill a job's whole process group (jobs spawn detached, so the
 // bash PID is the group leader; -pid reaches the agent CLI grandchildren) ───
-function killJobGroup(pid) {
+function killJobGroup(pid, expectedIdentity = null) {
+  const originalOwnerAlive = () => expectedIdentity
+    ? runtime.processIdentity(pid) === expectedIdentity
+    : pidAlive(pid);
+  if (!originalOwnerAlive()) return true;
   for (const sig of ['SIGTERM', 'SIGKILL']) {
+    // Never signal a recycled PID or process group after the recorded owner has
+    // exited. The identity check is repeated immediately before each signal.
+    if (!originalOwnerAlive()) return true;
     try { process.kill(-pid, sig); } catch { try { process.kill(pid, sig); } catch {} }
     const deadline = Date.now() + 3000;
-    while (Date.now() < deadline && pidAlive(pid)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    if (!pidAlive(pid)) return true;
+    while (Date.now() < deadline && originalOwnerAlive()) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    if (!originalOwnerAlive()) return true;
   }
-  return !pidAlive(pid);
+  return !originalOwnerAlive();
+}
+
+function readTerminalOutcome(job) {
+  // Jobs dispatched after this contract was introduced carry an explicit
+  // semantic outcome. Older queue records retain their exit-code behavior.
+  if (job.terminal_outcome === undefined) return { kind: 'legacy' };
+
+  const expected = `org/jobs/${job.id}.outcome.json`;
+  if (job.terminal_outcome !== expected) {
+    return { kind: 'invalid', detail: `outcome metadata path must be ${expected}` };
+  }
+
+  const file = path.join(root, expected);
+  if (!fs.existsSync(file)) return { kind: 'missing', detail: 'outcome metadata is missing' };
+
+  let metadata;
+  try {
+    metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return { kind: 'malformed', detail: 'outcome metadata is malformed JSON' };
+  }
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) ||
+      metadata.version !== 1 || metadata.job_id !== String(job.id) ||
+      !['completed', 'blocked', 'failed'].includes(metadata.outcome) ||
+      typeof metadata.detail !== 'string' || !metadata.detail.trim()) {
+    return { kind: 'malformed', detail: 'outcome metadata is malformed' };
+  }
+  return { kind: metadata.outcome, detail: metadata.detail.trim() };
 }
 
 function finishJob(job, rc, detail) {
-  const ok = Number(rc) === 0;
-  job.status = ok ? 'completed' : 'failed';
-  if (ok) job.completed_at = now;
-  else job.failed_at = now;
-  job.result = detail || (ok
-    ? `Exited 0; log at org/jobs/${job.id}.log`
-    : `Exited ${rc}; log at org/jobs/${job.id}.log`);
+  if (Number(rc) !== 0) {
+    job.status = 'failed';
+    job.failed_at = now;
+    job.result = detail || `Exited ${rc}; log at org/jobs/${job.id}.log`;
+    return;
+  }
+
+  const terminal = readTerminalOutcome(job);
+  if (terminal.kind === 'legacy' || terminal.kind === 'completed') {
+    job.status = 'completed';
+    job.completed_at = now;
+    job.result = terminal.kind === 'completed'
+      ? terminal.detail
+      : (detail || `Exited 0; log at org/jobs/${job.id}.log`);
+    return;
+  }
+  if (terminal.kind === 'blocked') {
+    job.status = 'blocked';
+    job.blocked_at = now;
+    job.result = terminal.detail;
+    return;
+  }
+
+  job.status = 'failed';
+  job.failed_at = now;
+  job.result = `${terminal.detail}; refusing to treat exit 0 as success. Log: org/jobs/${job.id}.log`;
 }
 
 function readExitCode(job) {
@@ -227,13 +276,13 @@ function markRunningJobs() {
     }
 
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-    if (!isNaN(pid) && pidAlive(pid)) {
+    if (!isNaN(pid) && jobProcessAlive(job, pid)) {
       // Still running — enforce per-job timeout (job.max_runtime_seconds wins).
       const limit = parseInt(job.max_runtime_seconds || JOB_MAX_RUNTIME, 10);
       const started = Date.parse(job.started_at || now) || Date.parse(now);
       const ageSec = (Date.now() - started) / 1000;
       if (ageSec > limit) {
-        const killed = killJobGroup(pid);
+        const killed = killJobGroup(pid, jobProcessIdentity(job));
         job.status     = 'failed';
         job.failed_at  = now;
         job.result     = `Timed out after ${Math.round(ageSec)}s (limit ${limit}s); ` +
@@ -414,15 +463,19 @@ function dispatchQueuedJobs() {
     const heartbeatFile = path.join(jobsDir, `${job.id}.heartbeat`);
     const resourceFile = path.join(jobsDir, `${job.id}.resource`);
     const resourceUsageFile = path.join(jobsDir, `${job.id}.usage.json`);
+    const terminalOutcomeFile = path.join(jobsDir, `${job.id}.outcome.json`);
+    const resourceClass = normalizeResourceClass(job);
     const maxRssMb = parsePositiveInt(job.max_rss_mb, jobIsHeavy(job) ? HEAVY_JOB_MAX_RSS_MB : DEFAULT_JOB_MAX_RSS_MB);
     const maxProcesses = parsePositiveInt(job.max_processes, jobIsHeavy(job) ? HEAVY_JOB_MAX_PROCESSES : DEFAULT_JOB_MAX_PROCESSES);
+    const maxRuntimeSeconds = parsePositiveInt(job.max_runtime_seconds, parsePositiveInt(process.env.OMP_JOB_MAX_RUNTIME, 3600));
 
-    let outFd, spawnedPid;
+    let outFd, spawnedPid, spawnedIdentity, pidTmp;
     try {
       try { fs.unlinkSync(rcFile); } catch {}
       try { fs.unlinkSync(heartbeatFile); } catch {}
       try { fs.unlinkSync(resourceFile); } catch {}
       try { fs.unlinkSync(resourceUsageFile); } catch {}
+      try { fs.unlinkSync(terminalOutcomeFile); } catch {}
       outFd = fs.openSync(logFile, 'a');
       const childEnv = Object.assign(
         {},
@@ -431,9 +484,10 @@ function dispatchQueuedJobs() {
           OMP_JOB_ID: String(job.id),
           OMP_JOB_TYPE: String(job.type),
           OMP_JOB_DESCRIPTION: String(job.description || ''),
-          OMP_RESOURCE_CLASS: jobIsHeavy(job) ? 'heavy' : 'normal',
+          OMP_RESOURCE_CLASS: resourceClass,
           OMP_PROJECT_ID: String(job.project_id),
           OMP_RC_FILE: rcFile,
+          OMP_OUTCOME_FILE: terminalOutcomeFile,
           OMP_HEARTBEAT_FILE: heartbeatFile,
           OMP_HEARTBEAT_INTERVAL: process.env.OMP_HEARTBEAT_INTERVAL || '30',
           OMP_RESOURCE_FILE: resourceFile,
@@ -441,6 +495,7 @@ function dispatchQueuedJobs() {
           OMP_RESOURCE_CHECK_INTERVAL: String(RESOURCE_CHECK_INTERVAL),
           OMP_JOB_MAX_RSS_MB: String(maxRssMb),
           OMP_JOB_MAX_PROCESSES: String(maxProcesses),
+          OMP_JOB_MAX_RUNTIME_SECONDS: String(maxRuntimeSeconds),
           SPIN_PROJECT_AGENT: path.join(root, 'scripts', 'project-ceo-agent.sh'),
         },
         modelEnvFor(job.type),
@@ -516,19 +571,35 @@ function dispatchQueuedJobs() {
       fs.closeSync(outFd); outFd = null;
       spawnedPid = child.pid;
       if (!spawnedPid) throw new Error('spawn returned no pid');
-      fs.writeFileSync(pidFile, String(spawnedPid));
+      spawnedIdentity = runtime.processIdentity(spawnedPid);
+      if (!spawnedIdentity) throw new Error('could not determine spawned process identity');
+      pidTmp = `${pidFile}.tmp.${process.pid}`;
+      fs.writeFileSync(pidTmp, String(spawnedPid));
+      fs.renameSync(pidTmp, pidFile);
+      pidTmp = null;
     } catch (err) {
       if (outFd != null) try { fs.closeSync(outFd); } catch {}
+      if (spawnedPid) {
+        const identityToStop = spawnedIdentity || runtime.processIdentity(spawnedPid);
+        if (identityToStop && runtime.processIdentity(spawnedPid) === identityToStop) {
+          try { process.kill(-spawnedPid, 'SIGTERM'); } catch { try { process.kill(spawnedPid, 'SIGTERM'); } catch {} }
+        }
+      }
+      if (pidTmp) try { fs.unlinkSync(pidTmp); } catch {}
+      try { fs.unlinkSync(pidFile); } catch {}
       job.status = 'failed'; job.result = String(err); continue;
     }
 
     // ── Update job record ───────────────────────────────────────────────────
     job.status     = 'running';
     job.started_at = now;
+    job.process_identity = spawnedIdentity;
+    job.terminal_outcome = `org/jobs/${job.id}.outcome.json`;
     job.log        = `org/jobs/${job.id}.log`;
     job.heartbeat  = `org/jobs/${job.id}.heartbeat`;
     job.resource_usage = `org/jobs/${job.id}.usage.json`;
-    job.resource_class = jobIsHeavy(job) ? 'heavy' : 'normal';
+    job.resource_class = resourceClass;
+    job.max_runtime_seconds = maxRuntimeSeconds;
     job.resource_limits = { max_rss_mb: maxRssMb, max_processes: maxProcesses };
     // Persist before any display work so a crash cannot leave a live detached
     // process represented as queued and eligible for duplicate dispatch.

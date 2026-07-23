@@ -18,7 +18,7 @@ progress from one Mac workspace.
 ## Requirements
 
 - Apple silicon Mac
-- macOS 13 or later
+- macOS 14.0 or later
 - At least one model/provider account supported by OMP
 - Git and the normal development tools used by the managed projects
 

@@ -21,6 +21,9 @@ if [[ -z "$PROJECT" ]]; then
   echo "Usage: $0 <project-id>" >&2
   exit 1
 fi
+case "$PROJECT" in
+  '.'|'..'|*[!A-Za-z0-9._:-]*) echo "[wiki-build] ERROR: invalid project id: $PROJECT" >&2; exit 2 ;;
+esac
 
 PROJECT_DIR="$ROOT/projects/$PROJECT"
 WIKI_DIR="$ROOT/org/wiki/projects"
@@ -39,6 +42,48 @@ TS="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 # Collect files worth indexing: skip build artifacts, lock files, binaries, hidden dirs.
 SKIP_DIRS=".git|node_modules|.next|dist|build|out|.turbo|coverage|__pycache__|.cache|vendor|target|venv|.venv"
 SKIP_FILES="package-lock.json|yarn.lock|pnpm-lock.yaml|Gemfile.lock|Cargo.lock|poetry.lock|*.min.js|*.min.css|*.map|*.ico|*.png|*.jpg|*.svg|*.woff|*.woff2|*.ttf"
+
+find_project_files() {
+  find -L "$PROJECT_DIR" \
+    \( -type d \( \
+      -name .git -o \
+      -name node_modules -o \
+      -name .next -o \
+      -name dist -o \
+      -name build -o \
+      -name out -o \
+      -name .turbo -o \
+      -name coverage -o \
+      -name __pycache__ -o \
+      -name .cache -o \
+      -name vendor -o \
+      -name target -o \
+      -name venv -o \
+      -name .venv \
+    \) -prune \) -o \
+    \( -type f -print \)
+}
+
+find_project_tree() {
+  find -L "$PROJECT_DIR" -maxdepth 2 \
+    \( -type d \( \
+      -name .git -o \
+      -name node_modules -o \
+      -name .next -o \
+      -name dist -o \
+      -name build -o \
+      -name out -o \
+      -name .turbo -o \
+      -name coverage -o \
+      -name __pycache__ -o \
+      -name .cache -o \
+      -name vendor -o \
+      -name target -o \
+      -name venv -o \
+      -name .venv \
+    \) -prune \) -o \
+    -print
+}
 
 file_purpose() {
   local f="$1"
@@ -115,8 +160,7 @@ build_index() {
     local rel="${f#$PROJECT_DIR/}"
     echo "| \`$rel\` | $(file_purpose "$f") |"
   done < <(
-    find -L "$PROJECT_DIR" -type f \
-      | grep -vE "/($SKIP_DIRS)/" \
+    find_project_files \
       | grep -vE "($(echo "$SKIP_FILES" | tr '|' '\n' | sed 's/\./\\./g; s/\*/.*/g' | tr '\n' '|' | sed 's/|$//'))$" \
       | grep -vE '/\.[^/]+$' \
       | sort \
@@ -130,8 +174,7 @@ build_tree() {
   if command -v tree &>/dev/null; then
     tree -l "$PROJECT_DIR" -L 3 -I "$(echo "$SKIP_DIRS" | tr '|' '|')" --noreport 2>/dev/null | head -40
   else
-    find -L "$PROJECT_DIR" -maxdepth 2 -not -path "*/.git/*" \
-      | grep -vE "/($SKIP_DIRS)($|/)" \
+    find_project_tree \
       | sed "s|$PROJECT_DIR/||" | sort | head -40
   fi
 }
