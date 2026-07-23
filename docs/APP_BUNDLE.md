@@ -243,8 +243,9 @@ SPIN.app/Contents/Resources/app/release-compat.json
 - cmux upstream source path and commit when available at build time;
 - bundled OMP package, package version, vendor metadata hash, lockfile hash,
   binary hash, native addon hash, and upstream commit;
-- the state boundary: runtime code is replaceable, while `org/` and `logs/`
-  are preserved user state.
+- the state boundary: runtime code and the SPIN-owned `org/.spin-version`
+  marker are refreshable, while every other `org/` file and `logs/` remain
+  preserved user state.
 
 `scripts/package-macos-app.sh` writes the manifest during app staging.
 `scripts/package-macos-release.sh` regenerates it after signing bundled binaries
@@ -264,10 +265,11 @@ Update channels are intentionally narrow:
   builds without an explicit force path in a future updater.
 
 Rollback policy follows the same boundary as launcher refresh: app-managed code
-can be replaced, but provider credentials, model account state, `org/`, logs,
-approvals, receipts, and remembered cmux workspace refs remain user state. A
-future app updater should read the installed and candidate compatibility
-manifests first, write rollback metadata, then replace only app-owned code.
+and the installed-version marker can be replaced, but provider credentials,
+model account state, all other `org/` files, logs, approvals, receipts, and
+remembered cmux workspace refs remain user state. A future app updater should
+read the installed and candidate compatibility manifests first, write rollback
+metadata, then replace only app-owned code.
 
 ## App Update Planning
 

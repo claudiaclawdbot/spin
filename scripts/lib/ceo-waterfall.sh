@@ -22,16 +22,48 @@ CEO_LOCKOUT_SECS="${CEO_LOCKOUT_SECS:-86400}"   # 24h
 
 source "$CEO_ROOT/scripts/lib/spin-runtime.sh"
 
-# Owner-provided secrets (Gemini API key, etc.). Lives OUTSIDE the repo at
-# ~/.config/omp.env (chmod 600), so the autonomous agents — which all source this
-# lib — inherit GEMINI_API_KEY regardless of how the driver was launched (nohup,
-# launchd, cmux pane). Never commit secrets to the repo.
+# Organization-scoped model policy. This lets one SPIN installation choose its
+# own defaults without changing global OMP behavior. Snapshot invocation-specific
+# values before loading either defaults file so precedence stays:
+# process/job environment > workspace.env > ~/.config/omp.env.
+_spin_invocation_env_names=()
+_spin_invocation_env_values=()
+for _spin_invocation_env_name in \
+  PROJECT_CEO_PROVIDER MODEL \
+  CEO_CODEX_MODEL CEO_CODEX_REASONING CEO_CLAUDE_MODEL CEO_SCOUT_MODEL \
+  CEO_CURSOR_MODEL CEO_GEMINI_MODEL CEO_GEMINI_PRO_MODEL CEO_OLLAMA_MODEL \
+  CEO_OMP_MODEL CEO_PROVIDER_TIMEOUT_SECS \
+  SPIN_OMP_CONFIG SPIN_OMP_DEFAULT_MODEL SPIN_OMP_SMOL_MODEL \
+  SPIN_OMP_SLOW_MODEL SPIN_OMP_PLAN_MODEL SPIN_OMP_TASK_MODEL \
+  SPIN_OMP_DEFAULT_FALLBACKS SPIN_OMP_SMOL_FALLBACKS \
+  SPIN_OMP_SLOW_FALLBACKS SPIN_OMP_PROVIDER_ORDER \
+  SPIN_OMP_RETRY_MAX_RETRIES SPIN_OMP_RETRY_BASE_DELAY_MS \
+  SPIN_OMP_RETRY_MAX_DELAY_MS SPIN_OMP_FALLBACK_REVERT_POLICY
+do
+  if [[ "${!_spin_invocation_env_name+x}" == "x" ]]; then
+    _spin_invocation_env_names[${#_spin_invocation_env_names[@]}]="$_spin_invocation_env_name"
+    _spin_invocation_env_values[${#_spin_invocation_env_values[@]}]="${!_spin_invocation_env_name}"
+  fi
+done
+
+# Owner-provided secrets and machine-wide model defaults live outside the repo
+# at ~/.config/omp.env (chmod 600). Never commit secrets to the repo.
 [[ -f "$HOME/.config/omp.env" ]] && source "$HOME/.config/omp.env" 2>/dev/null || true
 
-# Organization-scoped model policy. This lets one SPIN installation choose its
-# own defaults without changing global OMP behavior. Project agents source their
-# project.env after this file, so per-project routes remain the final override.
+# Workspace defaults override machine-wide defaults. Invocation values are
+# restored below, and project agents source project.env after this file so
+# per-project routes remain the final override.
 [[ -f "$CEO_ROOT/org/ceo/workspace.env" ]] && source "$CEO_ROOT/org/ceo/workspace.env" 2>/dev/null || true
+
+for ((_spin_invocation_env_index = 0;
+      _spin_invocation_env_index < ${#_spin_invocation_env_names[@]};
+      _spin_invocation_env_index++)); do
+  printf -v "${_spin_invocation_env_names[$_spin_invocation_env_index]}" '%s' \
+    "${_spin_invocation_env_values[$_spin_invocation_env_index]}"
+  export "${_spin_invocation_env_names[$_spin_invocation_env_index]}"
+done
+unset _spin_invocation_env_name _spin_invocation_env_index
+unset _spin_invocation_env_names _spin_invocation_env_values
 
 # Model defaults (override via env before sourcing, or per-call)
 # OMP is the primary harness. It owns model/provider retry and fallback through

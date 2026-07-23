@@ -230,7 +230,8 @@ function buildManifest(previous = {}) {
       stateModel: 'plain-file-org-v1',
       refreshPolicy: {
         replaceable: ['Resources/runtime except org/', 'Resources/runtime except logs/'],
-        preserved: ['Resources/runtime/org/', 'Resources/runtime/logs/'],
+        preserved: ['Writable runtime org/ except org/.spin-version', 'Writable runtime logs/'],
+        refreshedMetadata: ['Writable runtime org/.spin-version'],
       },
     },
     cmux: {
@@ -281,7 +282,7 @@ function buildManifest(previous = {}) {
     compatibility: {
       updateStateModel: 'plain-file-org-v1',
       updateChannels: ['local-dev', 'ad-hoc', 'production'],
-      rollbackBoundary: 'Runtime code may be replaced across app versions; org/ and logs/ are preserved user state.',
+      rollbackBoundary: 'Runtime code and the SPIN-owned org/.spin-version marker may refresh; all other org/ state and logs/ are preserved.',
     },
   };
 }

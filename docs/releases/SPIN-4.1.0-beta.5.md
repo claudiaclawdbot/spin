@@ -18,6 +18,9 @@ This public beta is ad-hoc signed and is not Apple-notarized.
 - Generates a separate OMP model-policy overlay for Coordinator, project floor,
   queued job, one-shot, and Navigator chat lanes so concurrent agents cannot
   replace one another's provider configuration.
+- Preserves the supervisor's explicit per-job model tier over organization
+  defaults while still letting each project's own allowlisted policy remain the
+  final project-level override.
 - Binds singleton locks and detached jobs to process-start identities. Atomic
   hardlink acquisition closes empty-lock races, recycled PIDs cannot impersonate
   live work, and coordinated shutdown keeps replacement daemons out until the
@@ -57,6 +60,8 @@ This public beta is ad-hoc signed and is not Apple-notarized.
 - Stamps the outer launcher and nested SPIN UI as version `4.1.0`, build `5`,
   and verifies their matching version, build, macOS minimum, and Mach-O
   deployment targets before release.
+- Refreshes the SPIN-owned installed-version marker on app launch so
+  `spin version` cannot combine current runtime code with stale install metadata.
 - Makes all shipped JavaScript checks, focused Node tests, and error-level
   ShellCheck required CI gates.
 
